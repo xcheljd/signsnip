@@ -99,7 +99,7 @@ function SignoApp() {
   const checkKey = JSON.stringify([batch.items, brands.map((b) => [b.id, b.logoScale, b.logo?.width, b.logo?.background]), templates.map((t) => t.updatedAt), rules]);
   useEffect(() => {
     if (!batch.items.length) { setWarnings([]); return; }
-    const t = setTimeout(() => { api.check(batch.items).then(setWarnings).catch(() => {}); }, 400);
+    const t = setTimeout(() => { api.check(batch.items).then(setWarnings).catch((e) => console.error("sign check failed:", e)); }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkKey]);
