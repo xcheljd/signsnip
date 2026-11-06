@@ -97,7 +97,7 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files[0]); }}
           >
-            {logo ? <img className="max-h-16 max-w-full object-contain" src={`/api/logos/${b.id}?v=${logo.width}-${logo.background}-${logo.hasOriginal}`} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
+            {logo ? <img className="max-h-16 max-w-full rounded-sm bg-white object-contain p-1" src={`/api/logos/${b.id}?v=${logo.width}-${logo.background}-${logo.hasOriginal}`} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
             <span>{logo ? "Drop a new logo to replace" : "Drop a logo here or click to choose"}</span>
             <input type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
           </label>

@@ -12,6 +12,10 @@ import { downloadPdf, printPdf } from "./print";
 import { SheetView } from "./SheetView";
 import { SignEditor } from "./SignEditor";
 import { useBatch } from "./useBatch";
+import { useTheme } from "./theme";
+import { MonitorIcon, MoonIcon, SignpostIcon, SunIcon } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +49,7 @@ export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1
 
 export function App() {
   const [tab, setTab] = useState("make");
+  const { theme, setTheme, resolved } = useTheme();
   const [brands, setBrands] = useState<api.BrandWithLogo[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [saved, setSaved] = useState<api.SavedSummary[]>([]);
@@ -160,13 +165,18 @@ export function App() {
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
       <header className="sticky top-0 z-10 flex items-center gap-5 border-b bg-card px-6 py-3 shadow-xs">
-        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><span aria-hidden>🪧</span> Sign-O-Matic</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><SignpostIcon aria-hidden className="size-5 text-primary" /> Sign-O-Matic</h1>
         <TabsList>
           <TabsTrigger value="make">Make signs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
         </TabsList>
         <Badge variant="secondary" className="ml-auto">47 × 70 mm · sample data only</Badge>
+        <ToggleGroup variant="outline" size="sm" spacing={0} value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
+          <ToggleGroupItem value="light" aria-label="Light theme"><SunIcon /></ToggleGroupItem>
+          <ToggleGroupItem value="system" aria-label="Match system theme"><MonitorIcon /></ToggleGroupItem>
+          <ToggleGroupItem value="dark" aria-label="Dark theme"><MoonIcon /></ToggleGroupItem>
+        </ToggleGroup>
       </header>
 
       <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-6" keepMounted>
@@ -235,6 +245,8 @@ export function App() {
           </CardContent>
         </Card>
       </TabsContent>
+
+      <Toaster position="bottom-right" theme={resolved} />
 
       <Dialog open={presetDialog} onOpenChange={setPresetDialog}>
         <DialogContent className="sm:max-w-sm">

@@ -380,7 +380,7 @@ export function TemplatesTab({
               {issues.filter((i) => i.level !== "info").map((i, k) => (
                 <li key={k}>
                   <button type="button" className={cn("flex items-start gap-2 text-left", i.level === "error" ? "text-destructive" : "text-foreground")} onClick={() => i.objectId && setSelected(i.objectId)}>
-                    <TriangleAlertIcon className={cn("mt-0.5 size-4 shrink-0", i.level === "warn" && "text-[oklch(0.7_0.16_70)]")} />{i.message}
+                    <TriangleAlertIcon className={cn("mt-0.5 size-4 shrink-0", i.level === "warn" && "text-warning")} />{i.message}
                   </button>
                 </li>
               ))}

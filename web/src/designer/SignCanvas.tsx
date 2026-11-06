@@ -124,7 +124,7 @@ export function SignCanvas({
   const sel = template.objects.find((o) => o.id === selectedId);
   const tone = (id: string) => {
     const lvl = issues?.get(id);
-    return lvl === "error" ? "var(--destructive)" : lvl === "warn" ? "oklch(0.7 0.16 70)" : "var(--primary)";
+    return lvl === "error" ? "var(--destructive)" : lvl === "warn" ? "var(--warning)" : "var(--nord10)";
   };
 
   return (
@@ -149,15 +149,15 @@ export function SignCanvas({
       </defs>
       <rect x={0} y={0} width={SIGN_W_MM} height={SIGN_H_MM} fill="white" filter={readOnly ? undefined : "url(#paper-shadow)"} />
       {!readOnly && m > 0 && (
-        <rect x={m} y={m} width={SIGN_W_MM - 2 * m} height={SIGN_H_MM - 2 * m} fill="none" stroke="oklch(0.75 0.02 85)" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+        <rect x={m} y={m} width={SIGN_W_MM - 2 * m} height={SIGN_H_MM - 2 * m} fill="none" stroke="var(--nord9)" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
       )}
 
       {placed.logo && (logoPlaced && logo ? (
         <image href={logo.url} x={logoPlaced.x} y={logoPlaced.y} width={logoPlaced.w} height={logoPlaced.h} preserveAspectRatio="none" />
       ) : (
         <g>
-          <rect {...placed.logo.box} fill="oklch(0.95 0.01 85)" />
-          <text x={placed.logo.box.x + placed.logo.box.w / 2} y={placed.logo.box.y + placed.logo.box.h / 2 + 1.2} textAnchor="middle" fontSize={3.4} fill="oklch(0.6 0.02 85)" fontFamily="Carlito">LOGO</text>
+          <rect {...placed.logo.box} fill="var(--nord5)" />
+          <text x={placed.logo.box.x + placed.logo.box.w / 2} y={placed.logo.box.y + placed.logo.box.h / 2 + 1.2} textAnchor="middle" fontSize={3.4} fill="var(--nord3)" fontFamily="Carlito">LOGO</text>
         </g>
       ))}
 
@@ -182,8 +182,8 @@ export function SignCanvas({
             key={o.id}
             data-object={o.id}
             x={o.x} y={o.y} width={o.w} height={o.h}
-            fill={active ? "oklch(0.63 0.19 45 / 0.06)" : "transparent"}
-            stroke={visible ? (lvl && lvl !== "info" ? tone(o.id) : active ? "var(--primary)" : "oklch(0.7 0.05 60 / 0.55)") : "transparent"}
+            fill={active ? "color-mix(in srgb, var(--nord10) 8%, transparent)" : "transparent"}
+            stroke={visible ? (lvl && lvl !== "info" ? tone(o.id) : active ? "var(--nord10)" : "color-mix(in srgb, var(--nord3) 45%, transparent)") : "transparent"}
             strokeWidth={active ? 1.5 : 1}
             strokeDasharray={active ? undefined : "3 2"}
             vectorEffect="non-scaling-stroke"
@@ -206,15 +206,15 @@ export function SignCanvas({
         const cursor = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize", move: "move" }[hd];
         return (
           <rect key={hd} data-handle={hd} x={cx - hs / 2} y={cy - hs / 2} width={hs} height={hs} rx={hs * 0.2}
-            fill="white" stroke="var(--primary)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor }}
+            fill="white" stroke="var(--nord10)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor }}
             onPointerDown={(e) => onDown(e, sel.id, hd)} />
         );
       })}
 
       {guides.map((g, i) => g.axis === "x" ? (
-        <line key={i} x1={g.at} x2={g.at} y1={-PAD} y2={SIGN_H_MM + PAD} stroke="oklch(0.6 0.2 300)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line key={i} x1={g.at} x2={g.at} y1={-PAD} y2={SIGN_H_MM + PAD} stroke="var(--guide)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       ) : (
-        <line key={i} y1={g.at} y2={g.at} x1={-PAD} x2={SIGN_W_MM + PAD} stroke="oklch(0.6 0.2 300)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line key={i} y1={g.at} y2={g.at} x1={-PAD} x2={SIGN_W_MM + PAD} stroke="var(--guide)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       ))}
     </svg>
   );
@@ -236,7 +236,7 @@ function ThumbBody({ template, sign, logo }: { template: Template; sign: Sign; l
   return (
     <>
       {lp && logo ? <image href={logo.url} x={lp.x} y={lp.y} width={lp.w} height={lp.h} preserveAspectRatio="none" />
-        : placed.logo && <rect {...placed.logo.box} fill="oklch(0.93 0.01 85)" />}
+        : placed.logo && <rect {...placed.logo.box} fill="var(--nord5)" />}
       {placed.lines.map((l, i) => (
         <text key={i} x={l.x} y={l.cy + l.sizePt * PT * 0.32} fontSize={l.sizePt * PT} fontFamily="Carlito" fontWeight={l.weight === "bold" ? 700 : 400} fill={l.color} style={{ whiteSpace: "pre" }}>{l.text}</text>
       ))}

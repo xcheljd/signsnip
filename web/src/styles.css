@@ -25,6 +25,8 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-warning: var(--warning);
+    --color-guide: var(--guide);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -48,73 +50,91 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Nord palette — https://www.nordtheme.com/docs/colors-and-palettes
+   Polar Night: nord0 #2E3440  nord1 #3B4252  nord2 #434C5E  nord3 #4C566A
+   Snow Storm:  nord4 #D8DEE9  nord5 #E5E9F0  nord6 #ECEFF4
+   Frost:       nord7 #8FBCBB  nord8 #88C0D0  nord9 #81A1C1  nord10 #5E81AC
+   Aurora:      nord11 #BF616A nord12 #D08770 nord13 #EBCB8B nord14 #A3BE8C nord15 #B48EAD
+   Only the app UI uses these. Printed signs stay black on white paper.
+   Three same-hue shades are deepened/lightened so text passes WCAG AA (4.5:1); see --nord10-deep etc. */
 :root {
-    --background: oklch(0.962 0.01 85);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(0.992 0.005 85);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.63 0.19 45);
-    --primary-foreground: oklch(0.99 0 0);
-    --secondary: oklch(0.945 0.02 80);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.945 0.012 85);
-    --muted-foreground: oklch(0.5 0.015 85);
-    --accent: oklch(0.93 0.04 55);
-    --accent-foreground: oklch(0.35 0.1 45);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.9 0.015 85);
-    --input: oklch(0.86 0.015 85);
-    --ring: oklch(0.7 0.15 50);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --nord0: #2e3440; --nord1: #3b4252; --nord2: #434c5e; --nord3: #4c566a;
+    --nord4: #d8dee9; --nord5: #e5e9f0; --nord6: #eceff4;
+    --nord7: #8fbcbb; --nord8: #88c0d0; --nord9: #81a1c1; --nord10: #5e81ac;
+    --nord11: #bf616a; --nord12: #d08770; --nord13: #ebcb8b; --nord14: #a3be8c; --nord15: #b48ead;
+    /* contrast-tuned shades (same hue as the Nord colour, lightness adjusted) */
+    --nord10-deep: #4a6990;  /* nord10: 4.9:1 under nord6 text (nord10 itself is 3.5:1) */
+    --nord11-deep: #ac4650;  /* nord11 as text on Snow Storm: 4.9:1 (nord11 is 3.6:1) */
+    --nord11-light: #e0b3b7; /* nord11 as text on Polar Night: 5.4:1 (nord11 is 2.5:1) */
+    --nord12-deep: #a85237;  /* nord12 for warning icons/lines on light surfaces */
+
+    /* light: Snow Storm surfaces, Polar Night text, Frost accents */
+    --background: var(--nord5);
+    --foreground: var(--nord0);
+    --card: var(--nord6);
+    --card-foreground: var(--nord0);
+    --popover: var(--nord6);
+    --popover-foreground: var(--nord0);
+    --primary: var(--nord10-deep);
+    --primary-foreground: var(--nord6);
+    --secondary: var(--nord4);
+    --secondary-foreground: var(--nord0);
+    --muted: var(--nord4);
+    --muted-foreground: var(--nord3);
+    --accent: var(--nord8);
+    --accent-foreground: var(--nord0);
+    --destructive: var(--nord11-deep);
+    --border: var(--nord4);
+    --input: #c5cddb;
+    --ring: var(--nord9);
+    --warning: var(--nord12-deep);
+    --guide: var(--nord15);
+    --chart-1: var(--nord10);
+    --chart-2: var(--nord8);
+    --chart-3: var(--nord14);
+    --chart-4: var(--nord13);
+    --chart-5: var(--nord15);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar: var(--nord6);
+    --sidebar-foreground: var(--nord0);
+    --sidebar-primary: var(--nord10-deep);
+    --sidebar-primary-foreground: var(--nord6);
+    --sidebar-accent: var(--nord5);
+    --sidebar-accent-foreground: var(--nord0);
+    --sidebar-border: var(--nord4);
+    --sidebar-ring: var(--nord9);
 }
 
+/* dark: Polar Night surfaces, Snow Storm text, Frost accents */
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: var(--nord0);
+    --foreground: var(--nord6);
+    --card: var(--nord1);
+    --card-foreground: var(--nord6);
+    --popover: var(--nord1);
+    --popover-foreground: var(--nord6);
+    --primary: var(--nord8);
+    --primary-foreground: var(--nord0);
+    --secondary: var(--nord2);
+    --secondary-foreground: var(--nord6);
+    --muted: var(--nord2);
+    --muted-foreground: var(--nord4);
+    --accent: var(--nord10-deep);
+    --accent-foreground: var(--nord6);
+    --destructive: var(--nord11-light);
+    --border: var(--nord2);
+    --input: var(--nord3);
+    --ring: var(--nord9);
+    --warning: var(--nord13);
+    --guide: var(--nord15);
+    --sidebar: var(--nord1);
+    --sidebar-foreground: var(--nord6);
+    --sidebar-primary: var(--nord8);
+    --sidebar-primary-foreground: var(--nord0);
+    --sidebar-accent: var(--nord2);
+    --sidebar-accent-foreground: var(--nord6);
+    --sidebar-border: var(--nord2);
+    --sidebar-ring: var(--nord9);
 }
 
 @layer base {

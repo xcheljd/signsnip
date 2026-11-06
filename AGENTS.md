@@ -19,3 +19,4 @@
 - Template-set import: same id + same layout = skipped; same design under another id = skipped ("as <id>"); otherwise keep-both (renamed copy) or replace.
 - base-nova `AlertDialogAction` is a plain Button: it does NOT close the dialog. Close it yourself in onClick.
 - Designer keyboard shortcuts are window-level and only active on the Templates tab; App's Ctrl+Z/Ctrl+P only on Make signs.
+- Theme = Nord (web/src/styles.css). Use the --nordN variables/semantic tokens, never raw colours. Three contrast-tuned shades (--nord10-deep, --nord11-deep/-light, --nord12-deep) keep text at WCAG AA. The printed sign is always black on white paper; on-paper overlays (SignCanvas) use --nord10 directly, not --primary (which is light in dark mode). Light/system/dark toggle lives in web/src/theme.ts (localStorage signo.theme).
