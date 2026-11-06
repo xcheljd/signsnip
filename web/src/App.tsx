@@ -77,6 +77,7 @@ function SignoApp() {
   const [presetDialog, setPresetDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [focusBrand, setFocusBrand] = useState<string | null>(null);
+  const [focusTemplate, setFocusTemplate] = useState<{ row: number; n: number } | null>(null);
   const [calibrated, setCalibratedState] = useState(() => (localStorage.getItem("signsnip.calibrated") ?? localStorage.getItem("signo.calibrated")) === "1");
   const setCalibrated = (v: boolean) => { localStorage.setItem("signsnip.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
@@ -212,7 +213,7 @@ function SignoApp() {
 
       <main>
       <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-3 sm:p-6" keepMounted>
-        <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} rules={rules} />
+        <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} rules={rules} focus={focusTemplate} />
       </TabsContent>
 
       <TabsContent value="rules" className="mx-auto w-full max-w-7xl p-3 sm:p-6">
@@ -255,6 +256,7 @@ function SignoApp() {
           editingId={editing} selected={selected} setSelected={setSelected} onEdit={edit}
           onPrint={() => print()} onExport={() => exportPdf()} onCalibrate={calibrate} onFixBg={fixBg}
           onGoToBrand={(id) => { setFocusBrand(id); setTab("brands"); }} refresh={refresh}
+          onOpenTemplate={(row) => { setFocusTemplate((f) => ({ row, n: (f?.n ?? 0) + 1 })); setTab("templates"); }}
           calibrated={calibrated} setCalibrated={setCalibrated}
         />
 

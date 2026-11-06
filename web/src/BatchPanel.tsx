@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, GripVerticalIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
+  ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, GripVerticalIcon, InfoIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,13 +51,13 @@ function IconButton({ label, children, ...props }: { label: string } & React.Com
 
 export function BatchPanel({
   batch, update, undo, canUndo, brands, saved, warnings, templates, editingId, selected, setSelected,
-  onEdit, onPrint, onExport, onCalibrate, onFixBg, onGoToBrand, refresh, calibrated, setCalibrated,
+  onEdit, onPrint, onExport, onCalibrate, onFixBg, onGoToBrand, onOpenTemplate, refresh, calibrated, setCalibrated,
 }: {
   batch: Batch; update: Update; undo: () => void; canUndo: boolean;
   brands: api.BrandWithLogo[]; saved: api.SavedSummary[]; warnings: Warning[]; templates: Template[];
   editingId: string | null; selected: Set<string>; setSelected: (s: Set<string>) => void;
   onEdit: (i: number) => void; onPrint: () => void; onExport: () => void; onCalibrate: () => void;
-  onFixBg: (brandId: string) => void; onGoToBrand: (brandId: string) => void; refresh: () => Promise<unknown>;
+  onFixBg: (brandId: string) => void; onGoToBrand: (brandId: string) => void; onOpenTemplate: (row: number) => void; refresh: () => Promise<unknown>;
   calibrated: boolean; setCalibrated: (v: boolean) => void;
 }) {
   const items = batch.items;
@@ -112,6 +112,19 @@ export function BatchPanel({
           </Alert>
         )}
 
+        {warnings.some((w) => w.code === "spill") && (
+          <Alert>
+            <InfoIcon />
+            <AlertTitle>Tight fits that still print fine</AlertTitle>
+            <AlertDescription>
+              <ul className="flex flex-col gap-0.5">
+                {warnings.filter((w) => w.code === "spill").slice(0, 6).map((w, i) => <li key={i}>{w.message}</li>)}
+              </ul>
+            </AlertDescription>
+            <AlertAction><Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(warnings.find((w) => w.code === "spill")!.items[0]!)}>See it in the designer</Button></AlertAction>
+          </Alert>
+        )}
+
         {warnings.filter((w) => w.level === "warn").map((w, i) => (
           <Alert key={i} variant="destructive">
             <TriangleAlertIcon />
@@ -119,6 +132,7 @@ export function BatchPanel({
             <AlertAction>
               {w.code === "logo-background" && <Button type="button" size="sm" variant="outline" onClick={() => onFixBg(w.brandId)}><WandSparklesIcon data-icon="inline-start" />Remove background</Button>}
               {(w.code === "low-res-logo" || w.code === "no-logo") && <Button type="button" size="sm" variant="outline" onClick={() => onGoToBrand(w.brandId)}>Open brand</Button>}
+              {w.code === "small-text" && /too big for its box/.test(w.message) && <Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(w.items[0]!)}>See it in the designer</Button>}
               {(w.code === "small-text" || w.code === "was-price") && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
             </AlertAction>
           </Alert>

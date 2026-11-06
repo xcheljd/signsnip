@@ -4,7 +4,8 @@ import {
   ScanEyeIcon, SquareDashedIcon, Trash2Icon, TriangleAlertIcon, TypeIcon, Undo2Icon, UploadIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { DEFAULT_TEMPLATES, FIELD_LABELS, isBuiltin, newObjectId, resolveTemplate, templateIssues } from "../../../src/core/template";
+import { DEFAULT_TEMPLATES, FIELD_LABELS, describeOverflow, fitSign, isBuiltin, newObjectId, overflowDetails, resolveTemplate, templateIssues } from "../../../src/core/template";
+import { fitLogo } from "../../../src/core/layout";
 import { DEFAULT_RULES, TEXT_FIELDS, type Rules, type Sign, type Template, type TemplateObject, type TextField } from "../../../src/core/types";
 import * as api from "../api";
 import { usePdf } from "../App";
@@ -73,9 +74,11 @@ function IconTip({ label, children, ...p }: { label: string } & React.ComponentP
 
 export function TemplatesTab({
   active, templates, brands, items, refresh, rules = DEFAULT_RULES,
-}: { active: boolean; templates: Template[]; brands: api.BrandWithLogo[]; items: Sign[]; refresh: () => Promise<unknown>; rules?: Rules }) {
+  focus,
+}: { active: boolean; templates: Template[]; brands: api.BrandWithLogo[]; items: Sign[]; refresh: () => Promise<unknown>; rules?: Rules; focus?: { row: number; n: number } | null }) {
   const fontsReady = useSignFonts();
   const [currentId, setCurrentId] = useState(templates[0]?.id ?? "percent");
+  const [previewRow, setPreviewRow] = useState<number | null>(null);
   const saved = templates.find((t) => t.id === currentId) ?? templates[0];
   const [draft, setDraftState] = useState<Template | null>(saved ? structuredClone(saved) : null);
   const draftRef = useRef(draft);
@@ -111,7 +114,9 @@ export function TemplatesTab({
   const dirty = !!draft && strip(draft) !== strip(saved);
   // follow the saved copy (after save / CLI edits) when nothing local is pending
   useEffect(() => {
-    if (saved && !dirty && strip(saved) !== strip(draftRef.current)) setDraft(structuredClone(saved));
+    // "nothing pending" = not dirty, or no edits made yet (the first render starts from the built-in
+    // layouts before the saved ones arrive, which would otherwise look like unsaved changes)
+    if (saved && (!dirty || !past.current.length) && strip(saved) !== strip(draftRef.current)) setDraft(structuredClone(saved));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved?.id, strip(saved)]);
 
@@ -122,6 +127,17 @@ export function TemplatesTab({
     past.current = []; future.current = []; bump((n) => n + 1);
   };
   const requestOpen = (id: string) => { if (id === currentId) return; if (dirty) setPending(id); else open(id); };
+  // "See it in the designer" from Make signs: open that row's template and show the row on the canvas
+  useEffect(() => {
+    if (!focus) return;
+    const s = items[focus.row];
+    if (!s) return;
+    requestOpen(resolveTemplate(s, templates).id);
+    setPreviewRow(focus.row); setBrandId(s.brandId); setLong(false); setView("design");
+    selectProblem.current = focus.row;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.n]);
+  const selectProblem = useRef<number | null>(null);
 
   /** apply an edit with undo history (coalesce = merge rapid edits of one control into one step) */
   const change = useCallback((fn: (t: Template) => Template, coalesce?: string) => {
@@ -174,7 +190,7 @@ export function TemplatesTab({
     const o: TemplateObject = {
       id: newObjectId(t, field === "static" ? "static" : field), type: "text", field, text: field === "static" ? "NEW TEXT" : "",
       x: 4, y: spot.y, w: 39, h: spot.h, size: Math.min(14, Math.max(7, spot.h * 1.9)), minSize: 7, weight: "bold", align: "center", vAlign: "middle",
-      maxLines: field === "heading" ? 3 : field === "collection" ? 2 : 1, balance: false, uppercase: true, strike: field === "was", color: "#000000",
+      maxLines: field === "heading" ? 3 : field === "collection" ? 2 : 1, balance: false, lineSpacing: 1, uppercase: true, strike: field === "was", color: "#000000",
     };
     change((tt) => ({ ...tt, objects: [...tt.objects, o] })); setSelected(o.id);
   };
@@ -232,8 +248,29 @@ export function TemplatesTab({
   });
 
   const brand = brands.find((b) => b.id === brandId) ?? brands[0];
-  const sample = useMemo(() => (draft ? sampleSign(draft, brand, long) : null), [draft, brand, long]);
-  const issues = useMemo(() => (draft && sample && fontsReady ? templateIssues(draft, { sign: sample, measure: browserMeasure, rules, templates }) : []), [draft, sample, fontsReady, rules, templates]);
+  const row = previewRow !== null && items[previewRow] && resolveTemplate(items[previewRow]!, templates).id === draft?.id ? items[previewRow]! : null;
+  const sample = useMemo(() => (draft ? (row ? { ...row, id: "sample", templateId: draft.id, kind: draft.kind } : sampleSign(draft, brand, long)) : null), [draft, brand, long, row]);
+  const logoFor = (b: api.BrandWithLogo | undefined) => (b?.logo ? { aspect: b.logo.aspect, scale: b.logoScale ?? 1 } : null);
+  const issues = useMemo(() => (draft && sample && fontsReady ? templateIssues(draft, { sign: sample, measure: browserMeasure, rules, templates, logo: logoFor(brand) }) : []), [draft, sample, fontsReady, rules, templates, brand]);
+  // the real signs in the batch that use this template and don't fit it (what "Make signs" warns about)
+  const rowProblems = useMemo(() => {
+    if (!draft || !fontsReady) return [];
+    const others = templates.filter((x) => x.id !== draft.id);
+    return items.flatMap((s, i) => {
+      if (resolveTemplate(s, templates).id !== draft.id) return [];
+      const f = fitSign(s, [draft, ...others], browserMeasure, rules, { template: draft });
+      const lg = logoFor(brands.find((b) => b.id === s.brandId));
+      const logo = lg && f.placed.logo ? fitLogo(lg.aspect, f.placed.logo.box, lg.scale) : null;
+      const where = f.template.id === draft.id ? "this template" : `“${f.template.name}” (the fallback it switches to)`;
+      return overflowDetails(f.template, f.placed, logo).map((d) => ({ i, brandId: s.brandId, d, message: describeOverflow(d, where) }));
+    });
+  }, [draft, fontsReady, items, templates, rules, brands]);
+  // after a jump from Make signs, select the object that doesn't fit
+  useEffect(() => {
+    if (selectProblem.current === null) return;
+    const hit = rowProblems.find((p) => p.i === selectProblem.current);
+    if (hit) { setSelected(hit.d.objectId); selectProblem.current = null; }
+  }, [rowProblems]);
   const issueMap = new Map<string, "error" | "warn" | "info">();
   for (const i of issues) if (i.objectId) {
     const rank = { error: 3, warn: 2, info: 1 };
@@ -374,7 +411,13 @@ export function TemplatesTab({
                 <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
               </Select>
             </Field>
-            <Toggle size="sm" variant="outline" pressed={long} onPressedChange={setLong}>Test a long name</Toggle>
+            <Toggle size="sm" variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
+            {row && (
+              <span className="flex items-center gap-2 text-sm">
+                <Badge variant="secondary">Showing row {previewRow! + 1}</Badge>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setPreviewRow(null)}>Back to sample</Button>
+              </span>
+            )}
             <p className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
               <Kbd>←↑→↓</Kbd> 0.1 mm <Kbd>Shift</Kbd> 1 mm <Kbd>Del</Kbd> remove <Kbd>Ctrl S</Kbd> save
             </p>
@@ -390,6 +433,29 @@ export function TemplatesTab({
                 </li>
               ))}
             </ul>
+          )}
+          {rowProblems.length > 0 && (
+            <section aria-label="Batch signs that don't fit" className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+              <p className="font-medium">
+                {(() => {
+                  const bad = new Set(rowProblems.filter((p) => !p.d.harmless).map((p) => p.i)).size;
+                  const tight = new Set(rowProblems.filter((p) => p.d.harmless).map((p) => p.i)).size;
+                  const n = (k: number) => `${k} sign${k === 1 ? "" : "s"}`;
+                  return [bad && `${n(bad)} in your batch ${bad === 1 ? "runs" : "run"} into something`, tight && `${n(tight)} ${tight === 1 ? "is" : "are"} a tight fit but ${tight === 1 ? "prints" : "print"} fine`].filter(Boolean).join(" · ");
+                })()}
+              </p>
+              <ul className="flex flex-col gap-2">
+                {[...rowProblems].sort((a, b) => Number(a.d.harmless) - Number(b.d.harmless)).map((p, k) => (
+                  <li key={k} className="flex items-start gap-2">
+                    <TriangleAlertIcon className={cn("mt-0.5 size-4 shrink-0", p.d.harmless ? "text-muted-foreground" : "text-warning")} />
+                    <span className="min-w-0 flex-1">Row {p.i + 1}: {p.message}</span>
+                    <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => { setPreviewRow(p.i); setBrandId(p.brandId); setLong(false); setSelected(p.d.objectId); setView("design"); }}>
+                      Show it
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {issues.some((i) => i.level === "info") && (
             <p className="text-xs text-muted-foreground">{issues.filter((i) => i.level === "info").map((i) => i.message).join(" ")}</p>

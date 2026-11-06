@@ -3,7 +3,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { cellRect, sheetGeometry, MAX_PAGES } from "./geometry.js";
 import { fitLogo, type Measure } from "./layout.js";
 import { findBrand, listTemplates, logoInfo, readLogo, readRules } from "./store.js";
-import { fitSign, type FittedSign } from "./template.js";
+import { describeOverflow, fitSign, overflowDetails, type FittedSign } from "./template.js";
 import { SIGN_H_MM, SIGN_W_MM, type Options, type Rules, type Sign, type Template, type Warning } from "./types.js";
 
 const MM = 72 / 25.4;
@@ -213,13 +213,19 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
       out.push({ items: idx, brandId, level: "info", code: "logo-background", message: `${name}'s logo has a white background. Invisible on white paper; remove it if you print on coloured stock.` });
     }
   }
+  const logos = new Map<string, Awaited<ReturnType<typeof logoInfo>>>();
+  for (const id of new Set(items.map((s) => s.brandId))) logos.set(id, await logoInfo(id));
   fitted.forEach((f, i) => {
     const s = items[i]!;
     const row = `Row ${i + 1}`;
     if (f.placed.overflow.length) {
-      const what = f.placed.overflow.map((o) => `"${o.text}"`).join(", ");
-      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `${row}: ${what} doesn't fit its box and will run past it. Shorten it, add an abbreviation, or enlarge the box in the template.` });
-    } else if (f.belowMin.length) {
+      const info = logos.get(s.brandId);
+      const logo = info && f.placed.logo ? fitLogo(info.aspect, f.placed.logo.box, findBrand(s.brandId)?.logoScale ?? 1) : null;
+      for (const d of overflowDetails(f.template, f.placed, logo)) {
+        out.push({ items: [i], brandId: s.brandId, level: d.harmless ? "info" : "warn", code: d.harmless ? "spill" : "small-text", message: `${row}: ${describeOverflow(d, `the “${f.template.name}” template`)}` });
+      }
+    }
+    if (f.belowMin.length && !f.placed.overflow.length) {
       const what = f.belowMin.map((l) => `"${l.text}" (${l.sizePt.toFixed(1)}pt)`).join(", ");
       out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `${row}: ${what} ${f.belowMin.length === 1 ? "is" : "are"} below your ${f.min}pt readable minimum. Add an abbreviation, shorten the name, or give the template a long-name fallback.` });
     }

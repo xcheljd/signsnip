@@ -139,6 +139,14 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
         </Field>
       </div>
       {o.maxLines > 1 && (
+        <Field>
+          <FieldLabel htmlFor="obj-spacing">Line spacing</FieldLabel>
+          <NumField id="obj-spacing" stepper="line spacing" className="w-40" after="%" step={5} min={70} max={250}
+            value={Math.round((o.lineSpacing ?? 1) * 100)} onChange={(v) => v && set({ lineSpacing: v / 100 })} />
+          <FieldDescription>Space between wrapped lines. 100% is normal; lower packs them tighter, higher spreads them out.</FieldDescription>
+        </Field>
+      )}
+      {o.maxLines > 1 && (
         <Field orientation="horizontal">
           <Switch id="obj-balance" checked={o.balance} onCheckedChange={(c) => set({ balance: c })} />
           <div className="flex flex-col gap-0.5">

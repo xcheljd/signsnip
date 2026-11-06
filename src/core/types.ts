@@ -65,6 +65,8 @@ export const TextObjectSchema = z.object({
   maxLines: z.number().int().min(1).max(5).default(1),
   /** even out wrapped lines ("SEABIRD / CHRONO GMT" instead of "SEABIRD CHRONO / GMT"); same font size either way */
   balance: z.boolean().default(false),
+  /** space between wrapped lines, as a multiple of the normal spacing (1 = normal, 1.2 = 20% more) */
+  lineSpacing: z.number().min(0.7).max(2.5).default(1),
   uppercase: z.boolean().default(true),
   strike: z.boolean().default(false),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#000000"),
@@ -179,7 +181,7 @@ export interface Warning {
   items: number[];
   brandId: string;
   level: "warn" | "info";
-  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template" | "was-price";
+  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template" | "was-price" | "spill";
   message: string;
 }
 

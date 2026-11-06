@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, wrapWords } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
-import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, fitSign, layoutTemplate, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
+import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
@@ -208,5 +208,47 @@ describe("auto-fit (readable minimum)", () => {
   it("a template's own minimum overrides the store setting", () => {
     const strict = T.map((t) => (t.id === "percent" ? { ...t, readableMin: 13.5 } : t));
     expect(fitSign(sign({ collection: "Field Master Automatic" }), strict, measure, rules(6)).min).toBe(13.5);
+  });
+});
+
+describe("line spacing and spill checks", () => {
+  const base = () => structuredClone(DEFAULT_TEMPLATES.find((t) => t.id === "percent")!);
+  const heading = (t: Template) => t.objects.find((o) => o.id === "heading")! as Extract<Template["objects"][number], { type: "text" }>;
+  const lines = (t: Template, s = sign({ collection: "NORTHWIND SKYLINE" })) => layoutTemplate(t, s, measure).lines.filter((l) => l.objectId === "heading");
+
+  it("line spacing changes the gap between wrapped lines, not the font size", () => {
+    const t = base(); const normal = lines(t);
+    heading(t).lineSpacing = 1.4; const wide = lines(t);
+    expect(wide.length).toBe(normal.length);
+    expect(wide.map((l) => l.sizePt)).toEqual(normal.map((l) => l.sizePt));
+    const gap = (ls: typeof normal) => ls[1]!.cy - ls[0]!.cy;
+    expect(gap(wide) / gap(normal)).toBeCloseTo(1.4, 2);
+  });
+  it("tighter spacing lets more text fit before it has to shrink", () => {
+    const t = base(); const h = heading(t); h.h = 9;
+    const s = sign({ collection: "HARBOR LINE" });
+    const normal = layoutTemplate(t, s, measure).lines.filter((l) => l.objectId === "heading")[0]!.sizePt;
+    h.lineSpacing = 0.8;
+    const tight = layoutTemplate(t, s, measure).lines.filter((l) => l.objectId === "heading")[0]!.sizePt;
+    expect(tight).toBeGreaterThan(normal);
+  });
+  it("text spilling into empty space is a harmless note; spilling onto other text is a warning", () => {
+    const t = base(); const h = heading(t); h.h = 6; h.minSize = 11;
+    const s = sign({ collection: "NORTHWIND SKYLINE" });
+    let d = overflowDetails(t, layoutTemplate(t, s, measure), null);
+    expect(d).toHaveLength(1);
+    expect(d[0]!.by).toBeGreaterThan(0);
+    expect(d[0]!.harmless).toBe(true);
+    expect(describeOverflow(d[0]!, "this template")).toMatch(/prints fine/);
+    const offer = t.objects.find((o) => o.id === "offer")!; offer.y = h.y + 2; // pull the offer up into it
+    d = overflowDetails(t, layoutTemplate(t, s, measure), null);
+    expect(d[0]!.harmless).toBe(false);
+    expect(d[0]!.hits).toContain("the offer");
+    expect(describeOverflow(d[0]!, "this template")).toMatch(/prints over the offer/);
+  });
+  it("old templates without lineSpacing load as normal spacing", () => {
+    const t = base(); delete (heading(t) as { lineSpacing?: number }).lineSpacing;
+    const a = lines(t); const b = lines(base());
+    expect(a.map((l) => l.cy)).toEqual(b.map((l) => l.cy));
   });
 });

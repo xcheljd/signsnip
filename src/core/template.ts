@@ -7,7 +7,7 @@ import {
 // ---------- built-in templates (match the original spreadsheet layout)
 
 const T = (o: Partial<TextObject> & Pick<TextObject, "id" | "field" | "x" | "y" | "w" | "h" | "size">): TextObject => ({
-  type: "text", text: "", minSize: 7, weight: "bold", align: "center", vAlign: "middle", maxLines: 1, balance: false,
+  type: "text", text: "", minSize: 7, weight: "bold", align: "center", vAlign: "middle", maxLines: 1, balance: false, lineSpacing: 1,
   uppercase: true, strike: false, color: "#000000", ...o,
 });
 const LOGO: LogoObject = { id: "logo", type: "logo", x: 4, y: 5, w: 39, h: 15 };
@@ -116,14 +116,17 @@ export interface PlacedLine {
 export interface PlacedSign {
   logo?: { box: { x: number; y: number; w: number; h: number }; objectId: string };
   lines: PlacedLine[];
-  /** text that could not fit even at its minimum size */
-  overflow: { objectId: string; text: string }[];
+  /** text that could not fit even at its minimum size; `by` = how far (mm) it runs past the box */
+  overflow: { objectId: string; text: string; by: number }[];
 }
 
 const ROLE: Record<TextField, PlacedLine["role"]> = {
   heading: "collection", prefix: "prefix", collection: "collection", offer: "big", label: "label", was: "was", footer: "footer", static: "static",
 };
-export const lineHeight = (pt: number) => pt * 0.3528 * 1.18; // pt -> mm line pitch
+export const lineHeight = (pt: number) => pt * 0.3528 * 1.18; // pt -> mm line pitch at normal spacing
+const PT = 0.3528; // mm per pt
+/** half the height of capital letters (mm): the "ink" of a line, for collision checks */
+const capHalf = (pt: number) => pt * PT * 0.36;
 
 /** The text a field prints for this sign, as separately-wrapped segments. */
 export function fieldSegments(o: TextObject, sign: Sign, kind: Sign["kind"]): { text: string; role: PlacedLine["role"] }[] {
@@ -196,9 +199,11 @@ function layoutText(o: TextObject, segments: { text: string; role: PlacedLine["r
       return { lines, size, role: sg.role };
     });
   };
-  const height = (segs: ReturnType<typeof fit>) => segs.reduce((a, s) => a + s.lines.length * lineHeight(s.size), 0);
-  // what must fit inside the box: every line's pitch except the trailing leading under the last line
-  const inked = (segs: ReturnType<typeof fit>) => height(segs) - 0.18 * 0.3528 * (segs.at(-1)?.size ?? 0);
+  const ls = o.lineSpacing ?? 1;
+  const pitch = (pt: number) => lineHeight(pt) * ls;
+  const height = (segs: ReturnType<typeof fit>) => segs.reduce((a, s) => a + s.lines.length * pitch(s.size), 0);
+  // what must fit inside the box: every line's pitch, but the last line only counts its own height
+  const inked = (segs: ReturnType<typeof fit>) => { const last = segs.at(-1)?.size ?? 0; return height(segs) - (pitch(last) - last * PT); };
   let cap = o.size;
   let segs = fit(cap);
   while (inked(segs) > o.h + 1e-6 && cap > min) {
@@ -208,12 +213,12 @@ function layoutText(o: TextObject, segments: { text: string; role: PlacedLine["r
   const total = height(segs);
   let y = o.vAlign === "top" ? o.y : o.vAlign === "bottom" ? o.y + o.h - total : o.y + (o.h - total) / 2;
   const lines: PlacedLine[] = [];
-  let overflow = inked(segs) > o.h + 0.05;
+  let by = Math.max(0, inked(segs) - o.h);
   for (const sg of segs) {
     for (const text of sg.lines) {
-      const lh = lineHeight(sg.size);
+      const lh = pitch(sg.size);
       const w = m(text, sg.size);
-      if (w > o.w + 0.05) overflow = true;
+      by = Math.max(by, w - o.w);
       const x = o.align === "left" ? o.x : o.align === "right" ? o.x + o.w - w : o.x + (o.w - w) / 2;
       lines.push({
         objectId: o.id, text, sizePt: sg.size, wantPt: o.size, x, w, cy: y + lh / 2, cx: x + w / 2,
@@ -222,7 +227,7 @@ function layoutText(o: TextObject, segments: { text: string; role: PlacedLine["r
       y += lh;
     }
   }
-  return { lines, overflow };
+  return { lines, overflow: by > 0.05, by };
 }
 
 /** Place every object of a template for one sign. Pure; `measure(text, pt, weight)` returns mm. */
@@ -237,9 +242,58 @@ export function layoutTemplate(t: Template, sign: Sign, measure: Measure): Place
     if (!segs.length) continue;
     const r = layoutText(o, segs, measure);
     out.lines.push(...r.lines);
-    if (r.overflow) out.overflow.push({ objectId: o.id, text: segs.map((s) => s.text).join(" ") });
+    if (r.overflow) out.overflow.push({ objectId: o.id, text: segs.map((s) => s.text).join(" "), by: r.by });
   }
   return out;
+}
+
+type Rect = { x: number; y: number; w: number; h: number };
+const meets = (a: Rect, b: Rect) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.1;
+const inkOf = (l: PlacedLine): Rect => ({ x: l.x, y: l.cy - capHalf(l.sizePt), w: l.w, h: capHalf(l.sizePt) * 2 });
+/** a little breathing room: text closer than this to something else counts as touching it */
+const CLEAR = 0.25;
+const grow = (r: Rect): Rect => ({ x: r.x - CLEAR, y: r.y - CLEAR, w: r.w + CLEAR * 2, h: r.h + CLEAR * 2 });
+
+export interface OverflowDetail {
+  objectId: string; text: string;
+  /** mm past its box */ by: number;
+  /** the smallest size it was allowed to shrink to (pt) */ minSize: number;
+  /** what the spilled text would print on top of (object labels) */ hits: string[];
+  offEdge: boolean; pastMargin: boolean;
+  /** it only spills into empty space: prints fine */ harmless: boolean;
+}
+
+/**
+ * For text that doesn't fit its box: how far it spills, and whether the spill lands on
+ * other text, the logo, the sign edge or the holder's margin (harmful) or just on empty space.
+ * `logo` = the actually drawn logo rectangle (pass it when the logo is known; otherwise the logo box is used).
+ */
+export function overflowDetails(t: Template, placed: PlacedSign, logo?: Rect | null): OverflowDetail[] {
+  return placed.overflow.map((ov) => {
+    const o = t.objects.find((x) => x.id === ov.objectId);
+    const mine = placed.lines.filter((l) => l.objectId === ov.objectId).map(inkOf);
+    const near = mine.map(grow);
+    const hits = new Set<string>();
+    for (const l of placed.lines) if (l.objectId !== ov.objectId && near.some((r) => meets(r, inkOf(l)))) {
+      const other = t.objects.find((x) => x.id === l.objectId);
+      if (other) hits.add(other.type === "text" && other.field === "static" ? label(other) : `the ${label(other).replace(/ \(.*\)$/, "").toLowerCase()}`);
+    }
+    const logoRect = logo === undefined ? placed.logo?.box : logo;
+    if (logoRect && near.some((r) => meets(r, logoRect))) hits.add("the logo");
+    const m = t.safeMargin;
+    const offEdge = mine.some((r) => r.x < -0.05 || r.y < -0.05 || r.x + r.w > SIGN_W_MM + 0.05 || r.y + r.h > SIGN_H_MM + 0.05);
+    const pastMargin = !offEdge && mine.some((r) => r.x < m - 0.05 || r.y < m - 0.05 || r.x + r.w > SIGN_W_MM - m + 0.05 || r.y + r.h > SIGN_H_MM - m + 0.05);
+    const minSize = o && o.type === "text" ? Math.min(o.minSize, o.size) : 0;
+    return { objectId: ov.objectId, text: ov.text, by: ov.by, minSize, hits: [...hits], offEdge, pastMargin, harmless: !hits.size && !offEdge && !pastMargin };
+  });
+}
+
+/** Plain-language "what's wrong and what to change" for a spill. `where` names the template. */
+export function describeOverflow(d: OverflowDetail, where: string): string {
+  const lead = `“${d.text}” is ${d.by.toFixed(1)} mm too big for its box, even at its smallest size (${d.minSize}pt)`;
+  if (d.harmless) return `${lead}. The extra only spills into empty space, so it prints fine. To clear this note, make the box taller or wider, or lower its "Smallest" size, in ${where}.`;
+  const into = d.offEdge ? "runs off the edge of the sign" : d.hits.length ? `prints over ${d.hits.join(" and ")}` : "goes under the holder's edge (past the safe margin)";
+  return `${lead}, and it ${into}. Shorten it, add an abbreviation, or make the box bigger (or its "Smallest" size lower) in ${where}.`;
 }
 
 /** Fit a logo of this aspect into the template's logo box, with the brand's scale. */
@@ -252,7 +306,7 @@ export function placeLogo(box: { x: number; y: number; w: number; h: number }, a
 export interface TemplateIssue { objectId?: string; level: "error" | "warn" | "info"; message: string }
 const label = (o: TemplateObject) => (o.type === "logo" ? "Logo" : o.field === "static" ? `“${o.text || "fixed text"}”` : FIELD_LABELS[o.field]);
 
-export function templateIssues(t: Template, sample?: { sign: Sign; measure: Measure; rules?: Rules; templates?: Template[] }): TemplateIssue[] {
+export function templateIssues(t: Template, sample?: { sign: Sign; measure: Measure; rules?: Rules; templates?: Template[]; logo?: { aspect: number; scale: number } | null }): TemplateIssue[] {
   const out: TemplateIssue[] = [];
   const m = t.safeMargin;
   const ids = new Set<string>();
@@ -287,7 +341,8 @@ export function templateIssues(t: Template, sample?: { sign: Sign; measure: Meas
       if (all.switchedFrom && !all.belowMin.length) out.push({ level: "info", message: `Too small here, so these signs print with “${all.template.name}” instead.` });
       else for (const l of here.belowMin) out.push({ objectId: l.objectId, level: "warn", message: `“${l.text}” prints at ${l.sizePt.toFixed(1)}pt, below the ${here.min}pt readable minimum.` });
     }
-    for (const ov of placed.overflow) out.push({ objectId: ov.objectId, level: "warn", message: `“${ov.text}” doesn't fit its box even at the minimum size.` });
+    const logo = sample.logo && placed.logo ? fitLogo(sample.logo.aspect, placed.logo.box, sample.logo.scale) : undefined;
+    for (const d of overflowDetails(t, placed, logo)) out.push({ objectId: d.objectId, level: d.harmless ? "info" : "warn", message: describeOverflow(d, "this template") });
     const shrunk = new Set(placed.lines.filter((l) => l.sizePt < l.wantPt - 0.01).map((l) => l.objectId));
     for (const id of shrunk) {
       const o = t.objects.find((x) => x.id === id);
