@@ -64,9 +64,13 @@
     --nord11: #bf616a; --nord12: #d08770; --nord13: #ebcb8b; --nord14: #a3be8c; --nord15: #b48ead;
     /* contrast-tuned shades (same hue as the Nord colour, lightness adjusted) */
     --nord10-deep: #4a6990;  /* nord10: 4.9:1 under nord6 text (nord10 itself is 3.5:1) */
-    --nord11-deep: #ac4650;  /* nord11 as text on Snow Storm: 4.9:1 (nord11 is 3.6:1) */
-    --nord11-light: #e0b3b7; /* nord11 as text on Polar Night: 5.4:1 (nord11 is 2.5:1) */
+    --nord11-deep: #9a3e47;  /* nord11 as text on Snow Storm and on its own 10% tint: >= 4.6:1 (nord11 is 3.6:1) */
+    --nord11-light: #e6c0c4; /* nord11 as text on Polar Night and on its own 10% tint: >= 4.6:1 (nord11 is 2.5:1) */
     --nord12-deep: #a85237;  /* nord12 for warning icons/lines on light surfaces */
+    /* control edges (inputs, selects, checkboxes, switches) need 3:1 against the card (WCAG 1.4.11) */
+    --nord3-edge: #78859e;   /* nord3 lightened: 3.2:1 on nord6, 3.1:1 on nord5 (old #c5cddb was 1.4:1) */
+    --nord4-muted: #bbc5d8;  /* nord4 dimmed: muted text on Polar Night 5.0-7.2:1, and 1.5:1 below body text (nord4 was 1.17, too close to nord6) */
+    --nord3-edge-dark: #828ea5; /* nord3 lightened for Polar Night: 3.1:1 on nord1, 3.8:1 on nord0 (nord3 is 1.4:1) */
 
     /* light: Snow Storm surfaces, Polar Night text, Frost accents */
     --background: var(--nord5);
@@ -85,8 +89,8 @@
     --accent-foreground: var(--nord0);
     --destructive: var(--nord11-deep);
     --border: var(--nord4);
-    --input: #c5cddb;
-    --ring: var(--nord9);
+    --input: var(--nord3-edge);
+    --ring: var(--nord10);       /* focus ring: 3.5:1 (nord9 was 2.3:1 on Snow Storm) */
     --warning: var(--nord12-deep);
     --guide: var(--nord15);
     --chart-1: var(--nord10);
@@ -102,7 +106,7 @@
     --sidebar-accent: var(--nord5);
     --sidebar-accent-foreground: var(--nord0);
     --sidebar-border: var(--nord4);
-    --sidebar-ring: var(--nord9);
+    --sidebar-ring: var(--nord10);
 }
 
 /* dark: Polar Night surfaces, Snow Storm text, Frost accents */
@@ -118,13 +122,13 @@
     --secondary: var(--nord2);
     --secondary-foreground: var(--nord6);
     --muted: var(--nord2);
-    --muted-foreground: var(--nord4);
+    --muted-foreground: var(--nord4-muted);
     --accent: var(--nord10-deep);
     --accent-foreground: var(--nord6);
     --destructive: var(--nord11-light);
     --border: var(--nord2);
-    --input: var(--nord3);
-    --ring: var(--nord9);
+    --input: var(--nord3-edge-dark);
+    --ring: var(--nord9);        /* 3.7:1 on nord1 */
     --warning: var(--nord13);
     --guide: var(--nord15);
     --sidebar: var(--nord1);

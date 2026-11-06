@@ -268,7 +268,7 @@ export function TemplatesTab({
                 {fontsReady ? <TemplateThumb template={t.id === currentId ? draft : t} sign={sampleSign(t, brand, false)} logo={logoSource(brand)} width={38} /> : <Skeleton className="h-14 w-[38px]" />}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium">{t.id === currentId ? draft.name || "Untitled" : t.name}</span>
-                  <span className="text-xs text-muted-foreground">{t.kind === "price" ? "Price" : "Percent off"}{n ? ` · ${n} in batch` : ""}</span>
+                  <span className={cn("text-xs", t.id === currentId ? "text-accent-foreground" : "text-muted-foreground")}>{t.kind === "price" ? "Price" : "Percent off"}{n ? ` · ${n} in batch` : ""}</span>
                 </span>
                 {t.id === currentId && dirty && <span className="size-2 rounded-full bg-primary" aria-label="unsaved changes" />}
               </button>
@@ -369,7 +369,7 @@ export function TemplatesTab({
                 <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
               </Select>
             </Field>
-            <Toggle size="sm" variant="outline" pressed={long} onPressedChange={setLong} aria-label="Long collection name">Test a long name</Toggle>
+            <Toggle size="sm" variant="outline" pressed={long} onPressedChange={setLong}>Test a long name</Toggle>
             <p className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
               <Kbd>←↑→↓</Kbd> 0.1 mm <Kbd>Shift</Kbd> 1 mm <Kbd>Del</Kbd> remove <Kbd>Ctrl S</Kbd> save
             </p>

@@ -130,15 +130,15 @@ export function BatchPanel({
                 <BulkNumber label="Price" before="$" decimals={2} min={0.01} max={999999} onApply={(n) => patchSelected({ kind: "price", price: n }, `Set price ${money(n)}`)} />
                 <BulkNumber label="Copies" min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
                 <Field className="w-44">
-                  <FieldLabel>Brand</FieldLabel>
+                  <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
                   <Select items={brands.map((b) => ({ value: b.id, label: b.name }))} value={null as unknown as string}
                     onValueChange={(v) => v && patchSelected({ brandId: v }, `Brand → ${brands.find((b) => b.id === v)?.name}`)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
+                    <SelectTrigger id="bulk-brand" className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
                     <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
                 <Field className="w-48">
-                  <FieldLabel>Template</FieldLabel>
+                  <FieldLabel htmlFor="bulk-template">Template</FieldLabel>
                   <Select items={templates.map((t) => ({ value: t.id, label: t.name }))} value={null as unknown as string}
                     onValueChange={(v) => {
                       const t = templates.find((x) => x.id === v);
@@ -146,7 +146,7 @@ export function BatchPanel({
                       update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, templateId: t.id, kind: t.kind, price: t.kind === "price" ? (s.price ?? 199) : s.price } : s)) }),
                         { undo: `Template → ${t.name} on ${plural(sel.length, "row")}` });
                     }}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
+                    <SelectTrigger id="bulk-template" className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
                     <SelectContent><SelectGroup>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
@@ -164,7 +164,7 @@ export function BatchPanel({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8" />
+                  <TableHead className="w-8"><span className="sr-only">Reorder</span></TableHead>
                   <TableHead className="w-8">
                     <Checkbox aria-label="Select all rows" checked={allSelected} indeterminate={!allSelected && sel.length > 0}
                       onCheckedChange={(c) => setSelected(c ? new Set(items.map((s) => s.id)) : new Set())} />
@@ -298,9 +298,9 @@ function BulkNumber({ label, onApply, ...num }: { label: string; onApply: (n: nu
   const [v, setV] = useState<number | undefined>(undefined);
   return (
     <Field className="w-36">
-      <FieldLabel>{label}</FieldLabel>
+      <FieldLabel htmlFor={`bulk-${label.toLowerCase()}`}>{label}</FieldLabel>
       <div className="flex gap-1">
-        <NumField {...num} allowEmpty className="min-w-0 flex-1" value={v} onChange={setV}
+        <NumField {...num} id={`bulk-${label.toLowerCase()}`} allowEmpty className="min-w-0 flex-1" value={v} onChange={setV}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter" && v) { e.preventDefault(); onApply(v); } }} />
         <Button type="button" variant="outline" disabled={!v} onClick={() => v && onApply(v)}>Set</Button>
       </div>
@@ -325,7 +325,7 @@ function SavedBatches({ batch, saved, update, refresh }: { batch: Batch; saved: 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<Button type="button" variant="outline" size="sm" />}><ArchiveIcon data-icon="inline-start" />Saved batches</PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" className="w-80" aria-label="Saved batches">
         <div className="flex flex-col gap-3">
           <Field>
             <FieldLabel htmlFor="save-name">Save this batch</FieldLabel>

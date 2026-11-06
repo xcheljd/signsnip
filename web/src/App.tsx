@@ -179,6 +179,7 @@ export function App() {
         </ToggleGroup>
       </header>
 
+      <main>
       <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-6" keepMounted>
         <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} />
       </TabsContent>
@@ -245,6 +246,8 @@ export function App() {
           </CardContent>
         </Card>
       </TabsContent>
+
+      </main>
 
       <Toaster position="bottom-right" theme={resolved} />
 

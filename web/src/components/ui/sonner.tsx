@@ -33,6 +33,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          // sonner's default action button is grey-on-grey (3.7-4.3:1); use the primary pair
+          actionButton: "!bg-primary !text-primary-foreground !font-medium",
+          cancelButton: "!bg-muted !text-foreground",
         },
       }}
       {...props}

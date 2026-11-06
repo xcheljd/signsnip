@@ -110,7 +110,7 @@ export function SignEditor({
 
             {uses.has("collection") && <Field>
               <FieldLabel htmlFor="collection">Collection</FieldLabel>
-              <Autocomplete items={suggestions} value={draft.collection} onValueChange={(v) => set({ collection: v })} openOnInputClick
+              <Autocomplete items={suggestions} value={draft.collection} onValueChange={(v) => set({ collection: v })} openOnInputClick modal={false}
                 // show the whole list while the box still holds a known collection; filter once you type something else
                 filter={(item: string, query: string) => {
                   const q = query.trim().toLowerCase();

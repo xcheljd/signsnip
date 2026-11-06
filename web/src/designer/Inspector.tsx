@@ -99,7 +99,7 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
           <FieldLabel htmlFor="obj-size">Font size</FieldLabel>
           <NumField id="obj-size" className="w-24" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
         </div>
-        <Slider min={6} max={60} step={0.5} value={[Math.min(60, o.size)]} aria-label="Font size"
+        <Slider min={6} max={60} step={0.5} value={[Math.min(60, o.size)]} aria-label="Font size" thumbLabel="Font size"
           onValueChange={(v) => { const s = Array.isArray(v) ? v[0]! : (v as number); set({ size: s, minSize: Math.min(o.minSize, s) }); }} />
         <FieldDescription>The size it prints at when the text fits. Longer text shrinks, down to the minimum.</FieldDescription>
       </Field>

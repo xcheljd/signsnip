@@ -127,7 +127,7 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
                 <FieldLabel>Logo size on sign</FieldLabel>
                 <span className="text-xs tabular-nums text-muted-foreground">{Math.round(scale * 100)}%</span>
               </div>
-              <Slider min={0.5} max={maxScale} step={0.05} value={[Math.min(scale, maxScale)]} aria-label="Logo size"
+              <Slider min={0.5} max={maxScale} step={0.05} value={[Math.min(scale, maxScale)]} aria-label="Logo size" thumbLabel={`${b.name} logo size`}
                 onValueChange={(v) => setScale(Array.isArray(v) ? v[0]! : (v as number))}
                 onValueCommitted={(v) => {
                   const k = Math.round((Array.isArray(v) ? v[0]! : (v as number)) * 100) / 100;
