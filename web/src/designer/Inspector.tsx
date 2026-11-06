@@ -34,7 +34,7 @@ function BoxFields({ o, set }: { o: TemplateObject; set: (p: Partial<TemplateObj
   const n = (k: "x" | "y" | "w" | "h", label: string, min: number, max: number) => (
     <Field>
       <FieldLabel htmlFor={`box-${k}`}>{label}</FieldLabel>
-      <NumField id={`box-${k}`} after="mm" decimals={1} step={0.5} min={min} max={max} value={o[k]} onChange={(v) => v !== undefined && set({ [k]: v })} />
+      <NumField id={`box-${k}`} stepper={label.toLowerCase()} compact after="mm" decimals={1} step={0.5} min={min} max={max} value={o[k]} onChange={(v) => v !== undefined && set({ [k]: v })} />
     </Field>
   );
   return (
@@ -97,7 +97,7 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
       <Field>
         <div className="flex items-center justify-between">
           <FieldLabel htmlFor="obj-size">Font size</FieldLabel>
-          <NumField id="obj-size" className="w-24" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
+          <NumField id="obj-size" stepper="font size" className="w-36" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
         </div>
         <Slider min={6} max={60} step={0.5} value={[Math.min(60, o.size)]} aria-label="Font size" thumbLabel="Font size"
           onValueChange={(v) => { const s = Array.isArray(v) ? v[0]! : (v as number); set({ size: s, minSize: Math.min(o.minSize, s) }); }} />
@@ -106,11 +106,11 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
       <div className="grid grid-cols-2 gap-3">
         <Field>
           <FieldLabel htmlFor="obj-min">Smallest</FieldLabel>
-          <NumField id="obj-min" after="pt" decimals={1} step={0.5} min={3} max={o.size} value={o.minSize} onChange={(v) => v && set({ minSize: v })} />
+          <NumField id="obj-min" stepper="smallest size" compact after="pt" decimals={1} step={0.5} min={3} max={o.size} value={o.minSize} onChange={(v) => v && set({ minSize: v })} />
         </Field>
         <Field>
           <FieldLabel htmlFor="obj-lines">Max lines</FieldLabel>
-          <NumField id="obj-lines" min={1} max={5} value={o.maxLines} onChange={(v) => v && set({ maxLines: v })} />
+          <NumField id="obj-lines" stepper="max lines" compact min={1} max={5} value={o.maxLines} onChange={(v) => v && set({ maxLines: v })} />
         </Field>
       </div>
       <Field>
@@ -193,13 +193,13 @@ export function TemplateInspector({
       </Field>
       <Field>
         <FieldLabel htmlFor="tpl-margin">Safe margin</FieldLabel>
-        <NumField id="tpl-margin" className="w-28" after="mm" decimals={1} step={0.5} min={0} max={10} value={t.safeMargin} onChange={(v) => v !== undefined && set({ safeMargin: v })} />
+        <NumField id="tpl-margin" stepper="safe margin" className="w-40" after="mm" decimals={1} step={0.5} min={0} max={10} value={t.safeMargin} onChange={(v) => v !== undefined && set({ safeMargin: v })} />
         <FieldDescription>The dashed line. Keep things inside it so the holder's edge doesn't cover them.</FieldDescription>
       </Field>
       <FieldSeparator />
       <Field>
         <FieldLabel htmlFor="tpl-min">Readable minimum</FieldLabel>
-        <NumField id="tpl-min" className="w-28" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={String(storeMin)}
+        <NumField id="tpl-min" stepper="template readable minimum" emptyStart={storeMin} className="w-40" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={String(storeMin)}
           value={t.readableMin} onChange={(v) => set({ readableMin: v })} />
         <FieldDescription>Empty = the store setting ({storeMin}pt, on the Text rules tab). Text that would shrink below this gets your abbreviations, then the template below.</FieldDescription>
       </Field>

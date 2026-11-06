@@ -131,7 +131,7 @@ export function SignEditor({
                 <Field>
                   <FieldLabel htmlFor="percent">Percent off</FieldLabel>
                   <div className="flex flex-wrap items-center gap-2">
-                    <NumField id="percent" className="w-36" after="%" value={draft.percent} min={1} max={99} onChange={(n) => n && set({ percent: n })} />
+                    <NumField id="percent" stepper="percent" className="w-40" after="%" value={draft.percent} min={1} max={99} onChange={(n) => n && set({ percent: n })} />
                     <ToggleGroup variant="outline" size="sm" spacing={1} className="flex-wrap" value={[String(draft.percent)]}
                       onValueChange={(v) => { if (v[0]) set({ percent: Number(v[0]) }); }}>
                       {PERCENTS.map((p) => <ToggleGroupItem key={p} value={String(p)} type="button">{p}%</ToggleGroupItem>)}
@@ -145,11 +145,11 @@ export function SignEditor({
               </div>
             ) : (
               <>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_9rem]">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_11rem]">
                   <Field>
                     <FieldLabel htmlFor="price">Price</FieldLabel>
                     <div className="flex flex-wrap items-center gap-2">
-                      <NumField id="price" className="w-36" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
+                      <NumField id="price" stepper="price" className="w-44" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
                       <ToggleGroup variant="outline" size="sm" spacing={1} className="flex-wrap" value={[String(draft.price ?? "")]}
                         onValueChange={(v) => { if (v[0]) set({ price: Number(v[0]) }); }}>
                         {PRICES.map((p) => <ToggleGroupItem key={p} value={String(p)} type="button">${p}</ToggleGroupItem>)}
@@ -158,7 +158,7 @@ export function SignEditor({
                   </Field>
                   {uses.has("was") && <Field>
                     <FieldLabel htmlFor="was">Was (optional)</FieldLabel>
-                    <NumField id="was" before="$" decimals={2} allowEmpty value={draft.wasPrice} min={0.01} max={999999} placeholder="—" onChange={(n) => set({ wasPrice: n })} />
+                    <NumField id="was" stepper="was price" emptyStart={draft.price} before="$" decimals={2} allowEmpty value={draft.wasPrice} min={0.01} max={999999} placeholder="—" onChange={(n) => set({ wasPrice: n })} />
                   </Field>}
                 </div>
                 {uses.has("label") && <Field>
@@ -182,7 +182,7 @@ export function SignEditor({
               </Field> : <div />}
               <Field>
                 <FieldLabel htmlFor="copies">Copies</FieldLabel>
-                <NumField id="copies" stepper="copies" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
+                <NumField id="copies" stepper="copies" stepWords={["Fewer", "More"]} value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
               </Field>
             </div>
           </FieldGroup>

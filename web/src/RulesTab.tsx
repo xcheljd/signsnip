@@ -65,7 +65,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
           <CardContent className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <FieldLabel htmlFor="rules-min">Nothing prints smaller than</FieldLabel>
-              <NumField id="rules-min" className="w-28" after="pt" decimals={1} step={0.5} min={4} max={40} value={draft.readableMin}
+              <NumField id="rules-min" stepper="readable minimum" className="w-40" after="pt" decimals={1} step={0.5} min={4} max={40} value={draft.readableMin}
                 onChange={(v) => v && change((r) => ({ ...r, readableMin: v }))} />
             </div>
             <FieldDescription>

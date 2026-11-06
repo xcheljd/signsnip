@@ -8,7 +8,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGr
  * valid values. Clamps on blur. Enter bubbles up so the form can submit.
  */
 export function NumField({
-  value, onChange, min, max, step = 1, decimals = 0, className, before, after, allowEmpty = false, stepper, ...rest
+  value, onChange, min, max, step = 1, decimals = 0, className, before, after, allowEmpty = false, stepper, stepWords = ["Decrease", "Increase"], compact, emptyStart, ...rest
 }: {
   value: number | undefined; onChange: (n: number | undefined) => void; min: number; max: number;
   step?: number; decimals?: number; className?: string;
@@ -16,8 +16,14 @@ export function NumField({
   before?: string; after?: string;
   /** clearing the box means "no value" (e.g. optional was-price) */
   allowEmpty?: boolean;
-  /** show − / + buttons; the string names the value for screen readers ("copies") */
+  /** show − / + buttons; the string names the value for screen readers ("copies", "font size") */
   stepper?: string;
+  /** button wording for screen readers, default Decrease / Increase (copies use Fewer / More) */
+  stepWords?: [string, string];
+  /** smaller buttons for tight spots (table rows, two-column inspector fields) */
+  compact?: boolean;
+  /** what − / + start from when an optional field is empty (default: min) */
+  emptyStart?: number;
 } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "min" | "max" | "step">) {
   const fmt = (n: number | undefined) => (n === undefined ? "" : String(n));
   const [text, setText] = useState(fmt(value));
@@ -31,7 +37,9 @@ export function NumField({
     return t.trim() === "" || !Number.isFinite(n) ? undefined : Number(n.toFixed(decimals));
   };
   const bump = (dir: 1 | -1) => {
-    const c = Math.min(max, Math.max(min, Number(((value ?? min) + dir * step).toFixed(decimals))));
+    const from = value ?? emptyStart;
+    const next = from === undefined ? min : from + (value === undefined ? 0 : dir * step);
+    const c = Math.min(max, Math.max(min, Number(next.toFixed(decimals))));
     setText(fmt(c)); if (c !== value) onChange(c);
   };
   const props = {
@@ -56,16 +64,21 @@ export function NumField({
       ...rest,
   };
   if (stepper) {
-    const small = /\bh-7\b/.test(className ?? "");
-    const btn = small ? "icon-xs" : "icon-sm";
+    const small = compact || /\bh-7\b/.test(className ?? "");
+    const size = small ? "icon-xs" : "icon-sm";
+    const at = value ?? emptyStart;
     return (
       <InputGroup className={className}>
-        <InputGroupAddon>
-          <InputGroupButton size={btn} aria-label={`Fewer ${stepper}`} title={`Fewer ${stepper}`} disabled={(value ?? min) <= min} onClick={() => bump(-1)}><MinusIcon /></InputGroupButton>
+        <InputGroupAddon className={small ? "pl-1" : undefined}>
+          <InputGroupButton size={size} aria-label={`${stepWords[0]} ${stepper}`} title={`${stepWords[0]} ${stepper}`}
+            disabled={at !== undefined && at <= min} onClick={() => bump(-1)}><MinusIcon /></InputGroupButton>
+          {before && <InputGroupText>{before}</InputGroupText>}
         </InputGroupAddon>
-        <InputGroupInput {...props} className="text-center tabular-nums" />
-        <InputGroupAddon align="inline-end">
-          <InputGroupButton size={btn} aria-label={`More ${stepper}`} title={`More ${stepper}`} disabled={(value ?? min) >= max} onClick={() => bump(1)}><PlusIcon /></InputGroupButton>
+        <InputGroupInput {...props} className={before || after ? "tabular-nums" : "text-center tabular-nums"} />
+        <InputGroupAddon align="inline-end" className={small ? "pr-1" : undefined}>
+          {after && <InputGroupText>{after}</InputGroupText>}
+          <InputGroupButton size={size} aria-label={`${stepWords[1]} ${stepper}`} title={`${stepWords[1]} ${stepper}`}
+            disabled={at !== undefined && at >= max} onClick={() => bump(1)}><PlusIcon /></InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
     );

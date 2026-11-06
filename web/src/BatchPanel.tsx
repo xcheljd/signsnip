@@ -140,9 +140,9 @@ export function BatchPanel({
                   <IconButton label="Clear selection" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
                 </div>
                 <Separator orientation="vertical" className="h-8" />
-                <BulkNumber label="Percent" after="%" min={1} max={99} onApply={(n) => patchSelected({ kind: "percent", percent: n }, `Set ${n}% off`)} />
-                <BulkNumber label="Price" before="$" decimals={2} min={0.01} max={999999} onApply={(n) => patchSelected({ kind: "price", price: n }, `Set price ${money(n)}`)} />
-                <BulkNumber label="Copies" min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
+                <BulkNumber label="Percent" after="%" emptyStart={50} min={1} max={99} onApply={(n) => patchSelected({ kind: "percent", percent: n }, `Set ${n}% off`)} />
+                <BulkNumber label="Price" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => patchSelected({ kind: "price", price: n }, `Set price ${money(n)}`)} />
+                <BulkNumber label="Copies" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
                 <Field className="w-44">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
                   <Select items={brands.map((b) => ({ value: b.id, label: b.name }))} value={null as unknown as string}
@@ -238,7 +238,7 @@ export function BatchPanel({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <NumField className="h-7 w-24" stepper={`copies of row ${i + 1}`} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
+                      <NumField className="h-7 w-24" stepper={`copies of row ${i + 1}`} stepWords={["Fewer", "More"]} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
                         onChange={(n) => n && update((b) => ({ ...b, items: b.items.map((x) => (x.id === s.id ? { ...x, copies: n } : x)) }), { coalesce: `qty-${s.id}` })} />
                     </TableCell>
                     <TableCell>
@@ -308,13 +308,13 @@ export function BatchPanel({
   );
 }
 
-function BulkNumber({ label, onApply, ...num }: { label: string; onApply: (n: number) => void } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after">) {
+function BulkNumber({ label, onApply, ...num }: { label: string; onApply: (n: number) => void } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after" | "emptyStart">) {
   const [v, setV] = useState<number | undefined>(undefined);
   return (
-    <Field className="w-36">
+    <Field className="w-52">
       <FieldLabel htmlFor={`bulk-${label.toLowerCase()}`}>{label}</FieldLabel>
       <div className="flex gap-1">
-        <NumField {...num} id={`bulk-${label.toLowerCase()}`} allowEmpty className="min-w-0 flex-1" value={v} onChange={setV}
+        <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className="min-w-0 flex-1" value={v} onChange={setV}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter" && v) { e.preventDefault(); onApply(v); } }} />
         <Button type="button" variant="outline" disabled={!v} onClick={() => v && onApply(v)}>Set</Button>
       </div>
