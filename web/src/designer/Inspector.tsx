@@ -138,6 +138,15 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
           </ToggleGroup>
         </Field>
       </div>
+      {o.maxLines > 1 && (
+        <Field orientation="horizontal">
+          <Switch id="obj-balance" checked={o.balance} onCheckedChange={(c) => set({ balance: c })} />
+          <div className="flex flex-col gap-0.5">
+            <FieldLabel htmlFor="obj-balance">Balance line breaks</FieldLabel>
+            <FieldDescription>Evens out wrapped lines. Same font size, just a tidier shape.</FieldDescription>
+          </div>
+        </Field>
+      )}
       <Field orientation="horizontal">
         <Switch id="obj-upper" checked={o.uppercase} onCheckedChange={(c) => set({ uppercase: c })} />
         <FieldLabel htmlFor="obj-upper">ALL CAPS</FieldLabel>

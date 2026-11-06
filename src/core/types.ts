@@ -63,6 +63,8 @@ export const TextObjectSchema = z.object({
   align: z.enum(["left", "center", "right"]).default("center"),
   vAlign: z.enum(["top", "middle", "bottom"]).default("middle"),
   maxLines: z.number().int().min(1).max(5).default(1),
+  /** even out wrapped lines ("SEABIRD / CHRONO GMT" instead of "SEABIRD CHRONO / GMT"); same font size either way */
+  balance: z.boolean().default(false),
   uppercase: z.boolean().default(true),
   strike: z.boolean().default(false),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#000000"),

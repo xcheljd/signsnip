@@ -169,7 +169,7 @@ export function TemplatesTab({
     const o: TemplateObject = {
       id: newObjectId(t, field === "static" ? "static" : field), type: "text", field, text: field === "static" ? "NEW TEXT" : "",
       x: 4, y: spot.y, w: 39, h: spot.h, size: Math.min(14, Math.max(7, spot.h * 1.9)), minSize: 7, weight: "bold", align: "center", vAlign: "middle",
-      maxLines: field === "heading" ? 3 : field === "collection" ? 2 : 1, uppercase: true, strike: field === "was", color: "#000000",
+      maxLines: field === "heading" ? 3 : field === "collection" ? 2 : 1, balance: false, uppercase: true, strike: field === "was", color: "#000000",
     };
     change((tt) => ({ ...tt, objects: [...tt.objects, o] })); setSelected(o.id);
   };

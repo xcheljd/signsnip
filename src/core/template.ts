@@ -6,7 +6,7 @@ import {
 // ---------- built-in templates (match the original spreadsheet layout)
 
 const T = (o: Partial<TextObject> & Pick<TextObject, "id" | "field" | "x" | "y" | "w" | "h" | "size">): TextObject => ({
-  type: "text", text: "", minSize: 7, weight: "bold", align: "center", vAlign: "middle", maxLines: 1,
+  type: "text", text: "", minSize: 7, weight: "bold", align: "center", vAlign: "middle", maxLines: 1, balance: false,
   uppercase: true, strike: false, color: "#000000", ...o,
 });
 const LOGO: LogoObject = { id: "logo", type: "logo", x: 4, y: 5, w: 39, h: 15 };
@@ -131,6 +131,39 @@ export function fieldSegments(o: TextObject, sign: Sign, kind: Sign["kind"]): { 
   }
 }
 
+/**
+ * Re-split words into exactly `count` lines so the widest line is as narrow as possible.
+ * Greedy wrapping already found the largest size that fits, so this never changes the size,
+ * only evens out the shape. Tiny DP: sign text is a handful of words.
+ */
+export function balanceLines(m: Measure, text: string, size: number, count: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const n = words.length;
+  if (count <= 1 || n <= count) return count <= 1 ? [words.join(" ")] : words.slice(0, n);
+  const width = (i: number, j: number) => m(words.slice(i, j).join(" "), size);
+  // best[k][i] = minimal max-width splitting words[i..] into k lines; cut[k][i] = end of first line
+  const best: number[][] = Array.from({ length: count + 1 }, () => new Array(n + 1).fill(Infinity));
+  const cut: number[][] = Array.from({ length: count + 1 }, () => new Array(n + 1).fill(n));
+  for (let i = 0; i < n; i++) best[1]![i] = width(i, n);
+  for (let k = 2; k <= count; k++) {
+    for (let i = 0; i <= n - k; i++) {
+      for (let j = i + 1; j <= n - k + 1; j++) {
+        const v = Math.max(width(i, j), best[k - 1]![j]!);
+        // prefer the later cut on ties so the top line is the longer one (reads better)
+        if (v < best[k]![i]! - 1e-9 || (Math.abs(v - best[k]![i]!) < 1e-9 && j > cut[k]![i]!)) { best[k]![i] = v; cut[k]![i] = j; }
+      }
+    }
+  }
+  const out: string[] = [];
+  let i = 0;
+  for (let k = count; k >= 1; k--) {
+    const j = k === 1 ? n : cut[k]![i]!;
+    out.push(words.slice(i, j).join(" "));
+    i = j;
+  }
+  return out;
+}
+
 function layoutText(o: TextObject, segments: { text: string; role: PlacedLine["role"] }[], measure: Measure) {
   const m: Measure = (t, s) => measure(t, s, o.weight);
   const min = Math.min(o.minSize, o.size);
@@ -146,6 +179,7 @@ function layoutText(o: TextObject, segments: { text: string; role: PlacedLine["r
         size = Math.max(min, size - 0.25);
         lines = wrapWords(m, sg.text, size, o.w, maxL);
       }
+      if (o.balance && lines.length > 1) lines = balanceLines(m, sg.text, size, lines.length);
       budget -= lines.length;
       return { lines, size, role: sg.role };
     });

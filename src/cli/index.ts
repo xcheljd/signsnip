@@ -44,7 +44,7 @@ Templates (layouts: what goes where, font sizes)
   signo templates show <tpl>                every object with position/size (mm) and font size (pt)
   signo templates set <tpl> offer.size=34 heading.y=20 footer.weight=regular ...
                                             object = id or field name; props: x y w h size minSize weight
-                                            align vAlign maxLines uppercase strike color text
+                                            align vAlign maxLines balance uppercase strike color text
   signo templates duplicate <tpl> "New name"
   signo templates rename <tpl> "New name"
   signo templates reset <percent|price|bogo|final-sale>   back to the original layout
@@ -103,7 +103,7 @@ export function describe(s: Sign, n: number) {
 }
 
 const TEXT_PROPS: Record<string, "num" | "int" | "bool" | "str" | readonly string[]> = {
-  x: "num", y: "num", w: "num", h: "num", size: "num", minSize: "num", maxLines: "int", uppercase: "bool", strike: "bool",
+  x: "num", y: "num", w: "num", h: "num", size: "num", minSize: "num", maxLines: "int", uppercase: "bool", strike: "bool", balance: "bool",
   color: "str", text: "str", weight: ["bold", "regular"], align: ["left", "center", "right"], vAlign: ["top", "middle", "bottom"],
 };
 const LOGO_PROPS = new Set(["x", "y", "w", "h"]);
@@ -133,7 +133,7 @@ function showTemplate(t: Template) {
     const box = `x ${o.x} y ${o.y}  ${o.w}×${o.h} mm`;
     if (o.type === "logo") { log(`  ${o.id.padEnd(12)} logo                     ${box}`); continue; }
     const what = o.field === "static" ? `"${o.text}"` : FIELD_LABELS[o.field];
-    log(`  ${o.id.padEnd(12)} ${what.padEnd(24)} ${box}  ${o.size}pt (min ${o.minSize}) ${o.weight} ${o.align}/${o.vAlign}${o.maxLines > 1 ? ` ${o.maxLines} lines` : ""}${o.strike ? " strike" : ""}${o.color !== "#000000" ? ` ${o.color}` : ""}`);
+    log(`  ${o.id.padEnd(12)} ${what.padEnd(24)} ${box}  ${o.size}pt (min ${o.minSize}) ${o.weight} ${o.align}/${o.vAlign}${o.maxLines > 1 ? ` ${o.maxLines} lines${o.balance ? " balanced" : ""}` : ""}${o.strike ? " strike" : ""}${o.color !== "#000000" ? ` ${o.color}` : ""}`);
   }
 }
 

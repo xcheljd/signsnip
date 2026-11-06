@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, smallLines, wrapWords } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
-import { DEFAULT_TEMPLATES, layoutTemplate, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
+import { balanceLines, DEFAULT_TEMPLATES, layoutTemplate, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
@@ -132,6 +132,21 @@ describe("templates", () => {
     const col = placed.lines.filter((l) => l.role === "collection");
     expect(col.length).toBe(2);
     for (const l of col) expect(l.w).toBeLessThanOrEqual(39 + 1e-6);
+  });
+  it("balance is off by default and evens out lines without changing the size", () => {
+    const off = layoutTemplate(percent, sign({ collection: "SEABIRD CHRONO GMT DIVER" }), measure).lines.filter((l) => l.role === "collection");
+    const on = layoutTemplate(edit((t) => { (t.objects.find((o) => o.id === "heading") as { balance: boolean }).balance = true; }),
+      sign({ collection: "SEABIRD CHRONO GMT DIVER" }), measure).lines.filter((l) => l.role === "collection");
+    expect(off.length).toBe(on.length);
+    expect(on[0]!.sizePt).toBe(off[0]!.sizePt);
+    const spread = (ls: typeof on) => Math.max(...ls.map((l) => l.w)) - Math.min(...ls.map((l) => l.w));
+    expect(spread(on)).toBeLessThanOrEqual(spread(off));
+    expect(on.map((l) => l.text).join(" ")).toBe("SEABIRD CHRONO GMT DIVER");
+  });
+  it("balanceLines minimises the widest line", () => {
+    const m = (t: string) => t.length;
+    expect(balanceLines(m, "SEABIRD CHRONO GMT", 1, 2)).toEqual(["SEABIRD", "CHRONO GMT"]);
+    expect(balanceLines(m, "HARBOR LINE DIVE COLLECTION", 1, 2)).toEqual(["HARBOR LINE", "DIVE COLLECTION"]);
   });
   it("prints fixed text and lists the fields a template uses", () => {
     const bogo = DEFAULT_TEMPLATES.find((t) => t.id === "bogo")!;
