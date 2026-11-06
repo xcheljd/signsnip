@@ -1,0 +1,51 @@
+[
+  {
+    "id": "northwind",
+    "name": "Northwind Watch Co.",
+    "collections": [
+      "Harbor Line",
+      "Deckhand",
+      "Lighthouse",
+      "Seabird Chrono"
+    ]
+  },
+  {
+    "id": "kestrel-vale",
+    "name": "Kestrel & Vale",
+    "collections": [
+      "Falcon",
+      "Moorland",
+      "Ridgeback",
+      "Field Master Automatic"
+    ]
+  },
+  {
+    "id": "tidemark",
+    "name": "tidemark",
+    "collections": [
+      "Tidepool",
+      "Reef Diver",
+      "Driftwood",
+      "Low Tide"
+    ]
+  },
+  {
+    "id": "orbital",
+    "name": "ORBITAL",
+    "collections": [
+      "Comet",
+      "Nebula",
+      "Perihelion",
+      "Deep Field Chronograph"
+    ]
+  },
+  {
+    "id": "lumen-atelier",
+    "name": "Lumen Atelier",
+    "collections": [
+      "Dusk",
+      "Ember",
+      "Lantern"
+    ]
+  }
+]

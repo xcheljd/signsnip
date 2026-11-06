@@ -1,0 +1,38 @@
+[
+  {
+    "id": "sale-50",
+    "name": "Select models 50%",
+    "sign": {
+      "brandId": "northwind",
+      "prefix": "SELECT",
+      "collection": "MODELS",
+      "percent": 50,
+      "offLabel": "OFF*",
+      "footer": "*MSRP"
+    }
+  },
+  {
+    "id": "tidal-40",
+    "name": "Tidepool 40%",
+    "sign": {
+      "brandId": "tidemark",
+      "prefix": "SELECT",
+      "collection": "TIDEPOOL",
+      "percent": 40,
+      "offLabel": "OFF*",
+      "footer": "*MSRP"
+    }
+  },
+  {
+    "id": "orbital-60",
+    "name": "Comet 60%",
+    "sign": {
+      "brandId": "orbital",
+      "prefix": "SELECT",
+      "collection": "COMET",
+      "percent": 60,
+      "offLabel": "OFF*",
+      "footer": "*MSRP"
+    }
+  }
+]
