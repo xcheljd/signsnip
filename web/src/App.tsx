@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
-import type { Preset, Sign, Warning } from "../../src/core/types";
+import type { Preset, Sign, Template, Warning } from "../../src/core/types";
+import { DEFAULT_TEMPLATES } from "../../src/core/template";
+import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
 import { BatchPanel, moveItem } from "./BatchPanel";
 import { BrandsTab } from "./BrandsTab";
@@ -22,18 +24,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const uid = () => crypto.randomUUID();
 const fail = (e: unknown) => toast.error((e as Error).message);
 const blank = (brandId: string): Sign => ({
-  id: uid(), brandId, kind: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*",
+  id: uid(), brandId, kind: "percent", templateId: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*",
   priceLabel: "", footer: "*MSRP", copies: 1,
 });
 
-export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1], mode: "sheet" | "single", version = "") {
+export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1], mode: "sheet" | "single", version = "", templates?: Template[]) {
   const [pdf, setPdf] = useState<api.Pdf | null>(null);
   const [err, setErr] = useState("");
   const key = JSON.stringify([items, options, mode, version]);
   useEffect(() => {
     if (!items.length) { setPdf(null); return; }
     const t = setTimeout(() => {
-      api.fetchPdf(items, options, mode).then((p) => { setPdf(p); setErr(""); }).catch((e) => setErr(e.message));
+      api.fetchPdf(items, options, mode, templates).then((p) => { setPdf(p); setErr(""); }).catch((e) => setErr(e.message));
     }, 150);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,6 +48,7 @@ export function App() {
   const [brands, setBrands] = useState<api.BrandWithLogo[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [saved, setSaved] = useState<api.SavedSummary[]>([]);
+  const [templates, setTemplates] = useState<Template[]>(DEFAULT_TEMPLATES);
   const [draft, setDraft] = useState<Sign | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -57,7 +60,7 @@ export function App() {
   const setCalibrated = (v: boolean) => { localStorage.setItem("signo.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
   const onRemote = useCallback((s: api.State) => {
-    setBrands(s.brands); setPresets(s.presets); setSaved(s.saved);
+    setBrands(s.brands); setPresets(s.presets); setSaved(s.saved); setTemplates(s.templates);
     setDraft((d) => d ?? blank(s.brands[0]?.id ?? ""));
   }, []);
   const { batch, update, undo, canUndo, refresh } = useBatch(onRemote);
@@ -71,7 +74,7 @@ export function App() {
   }, [batch.items, editing]);
 
   // pre-print checks (debounced)
-  const checkKey = JSON.stringify([batch.items, brands.map((b) => [b.id, b.logoScale, b.logo?.width, b.logo?.background])]);
+  const checkKey = JSON.stringify([batch.items, brands.map((b) => [b.id, b.logoScale, b.logo?.width, b.logo?.background]), templates.map((t) => t.updatedAt)]);
   useEffect(() => {
     if (!batch.items.length) { setWarnings([]); return; }
     const t = setTimeout(() => { api.check(batch.items).then(setWarnings).catch(() => {}); }, 400);
@@ -81,7 +84,8 @@ export function App() {
 
   const brand = brands.find((b) => b.id === draft?.brandId);
   const single = useMemo(() => (draft && brand ? [draft] : []), [draft, brand]);
-  const logoKey = brands.map((b) => `${b.id}:${b.logoScale}:${b.logo?.width}:${b.logo?.background}`).join("|");
+  const logoKey = brands.map((b) => `${b.id}:${b.logoScale}:${b.logo?.width}:${b.logo?.background}`).join("|")
+    + templates.map((t) => `${t.id}@${t.updatedAt ?? ""}`).join("|");
   // logoKey: re-render when a logo is replaced, rescaled or has its background removed
   const singlePdf = usePdf(single, batch.options, "single", logoKey);
   const sheetPdf = usePdf(batch.items, batch.options, "sheet", logoKey);
@@ -131,7 +135,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
+      if (!mod || tab !== "make") return; // the template designer has its own shortcuts
       const t = e.target as HTMLElement;
       const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
       if (e.key.toLowerCase() === "z" && !e.shiftKey && !typing) { e.preventDefault(); undo(); }
@@ -139,7 +143,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, print]);
+  }, [undo, print, tab]);
 
   const savePreset = async () => {
     if (!draft || !presetName.trim()) return;
@@ -159,10 +163,15 @@ export function App() {
         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><span aria-hidden>🪧</span> Sign-O-Matic</h1>
         <TabsList>
           <TabsTrigger value="make">Make signs</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
         </TabsList>
         <Badge variant="secondary" className="ml-auto">47 × 70 mm · sample data only</Badge>
       </header>
+
+      <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-6" keepMounted>
+        <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} />
+      </TabsContent>
 
       <TabsContent value="brands" className="mx-auto w-full max-w-7xl p-6">
         <BrandsTab brands={brands} refresh={async () => { await refresh(); }} focusBrand={focusBrand} />
@@ -172,7 +181,8 @@ export function App() {
         <div className="grid grid-cols-1 items-start gap-4 lg:col-span-2 lg:grid-cols-[1fr_20rem]">
         {draft && (
           <SignEditor
-            draft={draft} set={set} brands={brands} presets={presets} editing={!!editing}
+            draft={draft} set={set} brands={brands} presets={presets} templates={templates} editing={!!editing}
+            onEditTemplate={() => setTab("templates")}
             onSubmit={submit} onCancel={cancelEdit}
             onSavePreset={() => { setPresetName(`${draft.collection} ${draft.kind === "price" ? `$${draft.price}` : `${draft.percent}%`}`); setPresetDialog(true); }}
             onPickPreset={(p) => { setDraft({ ...p.sign, id: editing ?? uid(), copies: draft.copies }); }}
@@ -195,7 +205,7 @@ export function App() {
         </div>
 
         <BatchPanel
-          batch={batch} update={update} undo={undo} canUndo={canUndo} brands={brands} saved={saved} warnings={warnings}
+          batch={batch} update={update} undo={undo} canUndo={canUndo} brands={brands} saved={saved} warnings={warnings} templates={templates}
           editingId={editing} selected={selected} setSelected={setSelected} onEdit={edit}
           onPrint={print} onExport={exportPdf} onCalibrate={calibrate} onFixBg={fixBg}
           onGoToBrand={(id) => { setFocusBrand(id); setTab("brands"); }} refresh={refresh}

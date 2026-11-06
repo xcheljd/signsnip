@@ -40,6 +40,23 @@ First run copies `seed/` into `data/` (your working copy). Reset by deleting `da
 **Print sheet**: click any sign to edit it, drag signs onto each other to rearrange, click an empty slot
 to drop in the sign you're building.
 
+**Templates** (the visual designer): every sign prints with a template, which decides what goes where
+and how big. Built in: *Percent off* and *Price* (can be edited and reset, not deleted), plus two
+examples: *Buy one get one* and *Final sale*.
+- Click an object on the sign to select it. Drag it to move, and pull its handles to resize. Snaps to 0.5 mm,
+  the centre, the safe margin and other objects' edges (hold **Alt** to drag freely).
+- **Arrow keys** nudge 0.1 mm, **Shift+Arrow** 1 mm. **Del** removes, **Ctrl+D** duplicates,
+  **Ctrl+Z / Ctrl+Shift+Z** undo/redo, **Ctrl+S** saves.
+- Inspector: what the text shows (lead word + collection, offer, label, was-price, footer, or fixed text),
+  font size (it prints at this size and shrinks down to *Smallest* only if needed), max lines, bold/regular,
+  alignment, vertical position in its box, ALL CAPS, strike-through, colour, exact mm position.
+- The canvas uses the same layout engine and font as the PDF; *Print preview* shows the real PDF.
+- Warnings: off the paper, past the safe margin (dashed line), text that can't fit its box.
+- Saving updates every sign that uses the template. The Make-signs form only shows the fields the
+  chosen template prints.
+- **Export** writes a template set (`*.signo.json`) with the templates you pick. **Import** shows what's new,
+  what you already have, and what differs from yours (keep both, or replace yours).
+
 **Brands & logos**: drop in a PNG/JPG/WebP/SVG (margins auto-trimmed), see pixel size and printed dpi,
 a live sample sign, a **logo size slider** (capped where the logo would hit the text), and
 **Remove background / Restore original**.
@@ -59,6 +76,11 @@ signo batch                           # rows + page fill
 signo bulk --rows 1,3-5 --percent 60  # or --price / --brand / --footer / --copies; --rows all
 signo fill                            # top up the last page
 signo save "Holiday sale" ; signo batches ; signo load holiday
+signo templates                       # list; show <tpl>; set <tpl> offer.size=34 heading.y=20 ...
+signo templates duplicate bogo "Holiday BOGO" ; signo templates reset percent ; signo templates rm <tpl>
+signo templates export bogo final-sale --name "Holiday set" -o holiday.signo.json
+signo templates import holiday.signo.json [--replace]
+signo add --template bogo --brand orbital --collection Comet --percent 50
 signo check                           # pre-print warnings
 signo calibrate                       # printer check page
 signo export -o out/signs.pdf [--grid portrait-4x3] [--paper a4] [--no-cut-marks]
@@ -66,6 +88,9 @@ signo export -o out/signs.pdf [--grid portrait-4x3] [--paper a4] [--no-cut-marks
 
 ## How it's built
 
+- `src/core/template.ts`: templates (objects in mm, sizes in pt), built-ins, `layoutTemplate()` (wrap,
+  shrink-to-fit by width *and* height, alignment), designer checks. `layout.ts`: shared text/logo fitting
+  helpers.
 - `src/core/layout.ts`: pure sign geometry (logo box + scale, text sizes 14/30/13 pt like the old
   spreadsheet, auto-shrink and word-wrap, price lines). `geometry.ts`: sheet grid, shared by the
   PDF and the UI's click/drag overlay. `pdf.ts`: draws with pdf-lib + embedded Carlito Bold (OFL);

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { findBrand, listPresets, readBatch, writeBatch } from "./store.js";
+import { findBrand, findTemplate, listPresets, readBatch, writeBatch } from "./store.js";
 import { SignSchema, type Sign } from "./types.js";
 
 export interface AddInput {
@@ -7,6 +7,8 @@ export interface AddInput {
   percent?: number; offLabel?: string; footer?: string; copies?: number;
   /** giving a price makes it a price-point sign */
   price?: number; wasPrice?: number; priceLabel?: string;
+  /** template id or name; its kind (percent/price) wins */
+  template?: string;
 }
 
 /** Build a validated Sign from loose input (CLI flags, CSV rows). Throws friendly errors. */
@@ -21,12 +23,16 @@ export function buildSign(input: AddInput): Sign {
   if (!brandRef) throw new Error("Need a brand (--brand <id|name>) or a --preset");
   const brand = findBrand(brandRef);
   if (!brand) throw new Error(`No brand matching "${brandRef}". Try: signo brands`);
-  const kind = input.price !== undefined ? "price" : input.percent !== undefined ? "percent" : (base.kind ?? "percent");
+  const tpl = input.template ? findTemplate(input.template) : undefined;
+  if (input.template && !tpl) throw new Error(`No template matching "${input.template}". Try: signo templates`);
+  const kind = tpl?.kind ?? (input.price !== undefined ? "price" : input.percent !== undefined ? "percent" : (base.kind ?? "percent"));
+  if (kind === "price" && input.price === undefined && base.price === undefined) throw new Error("Need --price for a price template");
   if (kind === "percent" && input.percent === undefined && base.percent === undefined) throw new Error("Need --percent (or --price for a price sign)");
   const parsed = SignSchema.safeParse({
     id: randomUUID(),
     brandId: brand.id,
     kind,
+    templateId: tpl?.id ?? base.templateId,
     prefix: input.prefix ?? base.prefix ?? "SELECT",
     collection: input.collection ?? base.collection ?? "MODELS",
     percent: input.percent ?? base.percent ?? 50,
@@ -49,7 +55,7 @@ export function addToBatch(signs: Sign[]) {
   return writeBatch({ ...b, items: [...b.items, ...signs] });
 }
 
-/** Minimal CSV (quotes supported) with a header row: brand,collection,percent|price[,was,price_label,copies,prefix,footer]. */
+/** Minimal CSV (quotes supported) with a header row: brand,collection,percent|price[,was,price_label,template,copies,prefix,footer]. */
 export function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = [];
   let row: string[] = [], cell = "", q = false;
@@ -89,6 +95,7 @@ export function csvToSigns(text: string): Sign[] {
         price: r.price ? money(r.price) : undefined,
         wasPrice: r.was ? money(r.was) : undefined,
         priceLabel: r.price_label || undefined,
+        template: r.template || undefined,
         footer: r.footer || undefined, copies: r.copies ? Number(r.copies) : undefined,
       });
     } catch (e) {

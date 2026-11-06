@@ -9,8 +9,11 @@ import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/
 import {
   deleteBrand, deleteSavedBatch, findBrand, findSavedBatch, listBrands, listPresets, listSavedBatches, logoInfo,
   readBatch, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
+  deleteTemplate, duplicateTemplate, exportTemplateSet, findTemplate, importTemplateSet, listTemplates, parseTemplateSet,
+  resetTemplate, saveTemplate,
 } from "../core/store.js";
-import { GridSchema, PaperSchema, type Sign } from "../core/types.js";
+import { FIELD_LABELS, isBuiltin, resolveTemplate } from "../core/template.js";
+import { GridSchema, PaperSchema, TemplateSchema, type Sign, type Template } from "../core/types.js";
 
 const HELP = `signo - Sign-O-Matic CLI (47x70mm shelf signs -> print-ready PDF)
 
@@ -28,12 +31,26 @@ Batch (shared live with the web UI)
   signo add --brand <id|name> --collection "Harbor Line" --percent 50 [--prefix SELECT] [--footer "*MSRP"] [--copies 2]
   signo add --brand <b> --collection Comet --price 199 [--was 395] [--price-label NOW]   price-point sign
   signo add --preset <id|name> [--copies 4]
+  signo add --template bogo --brand <b> --collection Comet --percent 50   any template
   signo import <file.csv>                   columns: brand,collection,percent|price[,was,price_label,copies,prefix,footer]
   signo batch                               show the current batch + page fill
-  signo bulk [--rows 1,3-5|all] --percent 50 | --price 199 | --brand <b> | --footer "x" | --copies 2
+  signo bulk [--rows 1,3-5|all] --percent 50 | --price 199 | --brand <b> | --template <t> | --footer "x" | --copies 2
   signo fill                                top up the last page with copies of the last row
   signo rm <row#>                           remove one row (1-based)
   signo clear                               empty the batch
+
+Templates (layouts: what goes where, font sizes)
+  signo templates                           list templates (+ how many batch rows use each)
+  signo templates show <tpl>                every object with position/size (mm) and font size (pt)
+  signo templates set <tpl> offer.size=34 heading.y=20 footer.weight=regular ...
+                                            object = id or field name; props: x y w h size minSize weight
+                                            align vAlign maxLines uppercase strike color text
+  signo templates duplicate <tpl> "New name"
+  signo templates rename <tpl> "New name"
+  signo templates reset <percent|price|bogo|final-sale>   back to the original layout
+  signo templates rm <tpl>
+  signo templates export [tpl ...] [-o file.signo.json] [--name "Holiday set"]
+  signo templates import <file> [--replace]  default keeps both when a template differs
 
 Saved batches
   signo batches                             list saved batches
@@ -57,6 +74,7 @@ const opts = {
   brand: { type: "string" }, preset: { type: "string" }, collection: { type: "string" }, prefix: { type: "string" },
   percent: { type: "string" }, footer: { type: "string" }, copies: { type: "string" }, off: { type: "string" },
   price: { type: "string" }, was: { type: "string" }, "price-label": { type: "string" }, rows: { type: "string" },
+  template: { type: "string" }, name: { type: "string" }, replace: { type: "boolean" },
   logo: { type: "string" }, collections: { type: "string" }, o: { type: "string", short: "o" }, grid: { type: "string" },
   paper: { type: "string" }, "no-cut-marks": { type: "boolean" }, help: { type: "boolean", short: "h" },
 } as const;
@@ -71,6 +89,7 @@ function signFromFlags(v: Flags): Sign {
     prefix: v.prefix as string | undefined, percent: num(v.percent), offLabel: v.off as string | undefined,
     footer: v.footer as string | undefined, copies: num(v.copies),
     price: cash(v.price), wasPrice: cash(v.was), priceLabel: v["price-label"] as string | undefined,
+    template: v.template as string | undefined,
   });
 }
 
@@ -79,7 +98,43 @@ export function describe(s: Sign, n: number) {
   const offer = s.kind === "price" && s.price
     ? [s.priceLabel.toUpperCase(), fmtMoney(s.price), s.wasPrice ? `(was ${fmtMoney(s.wasPrice)})` : ""].filter(Boolean).join(" ")
     : `${s.percent}% ${s.offLabel}`;
-  return `${String(n).padStart(2)}. ${b} | ${[s.prefix, s.collection].filter(Boolean).join(" ")} | ${offer} | ${s.footer || "-"} | x${s.copies}`;
+  const tpl = s.templateId && s.templateId !== s.kind ? ` [${resolveTemplate(s, listTemplates()).name}]` : "";
+  return `${String(n).padStart(2)}. ${b} | ${[s.prefix, s.collection].filter(Boolean).join(" ")} | ${offer} | ${s.footer || "-"} | x${s.copies}${tpl}`;
+}
+
+const TEXT_PROPS: Record<string, "num" | "int" | "bool" | "str" | readonly string[]> = {
+  x: "num", y: "num", w: "num", h: "num", size: "num", minSize: "num", maxLines: "int", uppercase: "bool", strike: "bool",
+  color: "str", text: "str", weight: ["bold", "regular"], align: ["left", "center", "right"], vAlign: ["top", "middle", "bottom"],
+};
+const LOGO_PROPS = new Set(["x", "y", "w", "h"]);
+
+/** "offer.size=34" -> mutate the template; object = id, else first object with that field ("logo" works too). */
+export function applyTemplateSet(t: Template, assignment: string): Template {
+  const m = /^([\w-]+)\.(\w+)=(.*)$/.exec(assignment);
+  if (!m) die(`bad assignment "${assignment}" - use object.prop=value, e.g. offer.size=34`);
+  const [, ref, prop, raw] = m as unknown as [string, string, string, string];
+  const obj = t.objects.find((o) => o.id === ref) ?? t.objects.find((o) => (o.type === "logo" ? ref === "logo" : o.field === ref));
+  if (!obj) die(`no object "${ref}" in ${t.id}. Objects: ${t.objects.map((o) => o.id).join(", ")}`);
+  const kind = obj.type === "logo" ? (LOGO_PROPS.has(prop) ? "num" : undefined) : TEXT_PROPS[prop];
+  if (!kind) die(`"${prop}" isn't a property of ${obj.type === "logo" ? "a logo" : "text"}. Try: ${obj.type === "logo" ? [...LOGO_PROPS].join(" ") : Object.keys(TEXT_PROPS).join(" ")}`);
+  let value: unknown = raw;
+  if (kind === "num" || kind === "int") { value = Number(raw.replace(/mm|pt$/, "")); if (!Number.isFinite(value as number)) die(`${prop} needs a number`); if (kind === "int") value = Math.round(value as number); }
+  else if (kind === "bool") value = /^(1|true|yes|on)$/i.test(raw);
+  else if (Array.isArray(kind) && !kind.includes(raw)) die(`${prop} must be one of: ${kind.join(", ")}`);
+  const next = { ...t, objects: t.objects.map((o) => (o === obj ? { ...o, [prop]: value } : o)) };
+  const r = TemplateSchema.safeParse(next);
+  if (!r.success) die(r.error.issues.map((i) => `${i.path.slice(2).join(".")}: ${i.message}`).join("; "));
+  return r.data;
+}
+
+function showTemplate(t: Template) {
+  log(`${t.name} (${t.id}) · ${t.kind === "price" ? "price" : "percent off"} · safe margin ${t.safeMargin} mm${isBuiltin(t.id) ? " · built-in" : ""}`);
+  for (const o of t.objects) {
+    const box = `x ${o.x} y ${o.y}  ${o.w}×${o.h} mm`;
+    if (o.type === "logo") { log(`  ${o.id.padEnd(12)} logo                     ${box}`); continue; }
+    const what = o.field === "static" ? `"${o.text}"` : FIELD_LABELS[o.field];
+    log(`  ${o.id.padEnd(12)} ${what.padEnd(24)} ${box}  ${o.size}pt (min ${o.minSize}) ${o.weight} ${o.align}/${o.vAlign}${o.maxLines > 1 ? ` ${o.maxLines} lines` : ""}${o.strike ? " strike" : ""}${o.color !== "#000000" ? ` ${o.color}` : ""}`);
+  }
 }
 
 /** "1,3-5" -> [0,2,3,4] (0-based); "all"/undefined -> every row */
@@ -202,10 +257,15 @@ async function main() {
       if (v.was !== undefined) patch.wasPrice = v.was === "" ? undefined : cash(v.was);
       if (v["price-label"] !== undefined) patch.priceLabel = v["price-label"];
       if (brand) patch.brandId = brand.id;
+      if (v.template !== undefined) {
+        const t = findTemplate(v.template) ?? die(`No template matching "${v.template}"`);
+        Object.assign(patch, { templateId: t.id, kind: t.kind });
+        if (t.kind === "price" && rows.some((i) => !b.items[i]!.price) && v.price === undefined) die("those rows have no price - add --price too");
+      }
       if (v.footer !== undefined) patch.footer = v.footer;
       if (v.prefix !== undefined) patch.prefix = v.prefix;
       if (v.copies !== undefined) patch.copies = num(v.copies);
-      if (!Object.keys(patch).length) die("nothing to change - pass --percent, --price, --brand, --footer, --prefix or --copies");
+      if (!Object.keys(patch).length) die("nothing to change - pass --percent, --price, --brand, --template, --footer, --prefix or --copies");
       for (const i of rows) b.items[i] = { ...b.items[i]!, ...patch };
       writeBatch(b);
       return log(`updated ${rows.length} row(s)`);
@@ -244,6 +304,56 @@ async function main() {
     case "load": {
       const s = findSavedBatch(p[0] ?? "") ?? die(`No saved batch matching "${p[0] ?? ""}". Try: signo batches`);
       writeBatch(s.batch); return log(`loaded "${s.name}" (${s.batch.items.length} rows)`);
+    }
+    case "templates": {
+      const [sub, a, ...more] = p;
+      if (!sub) {
+        const items = readBatch().items;
+        for (const t of listTemplates()) {
+          const used = items.filter((s) => resolveTemplate(s, listTemplates()).id === t.id).length;
+          log(`${t.id.padEnd(18)} ${t.name.padEnd(24)} ${t.kind.padEnd(8)} ${String(t.objects.length).padStart(2)} objects${used ? ` · used by ${used} row(s)` : ""}${isBuiltin(t.id) ? " · built-in" : ""}`);
+        }
+        return;
+      }
+      const t = sub === "import" || sub === "export" ? undefined : findTemplate(a ?? "");
+      const need = () => t ?? die(`No template matching "${a ?? ""}". Try: signo templates`);
+      if (sub === "show") return showTemplate(need());
+      if (sub === "set") {
+        if (!more.length) die("usage: signo templates set <tpl> offer.size=34 [heading.y=20 ...]");
+        let next = need();
+        for (const as of more) next = applyTemplateSet(next, as);
+        saveTemplate(next);
+        log(`updated ${next.id}:`); return showTemplate(next);
+      }
+      if (sub === "duplicate") { const c = duplicateTemplate(need().id, more[0]); return log(`created ${c.id} ("${c.name}")`); }
+      if (sub === "rename") {
+        const name = more[0] ?? die('usage: signo templates rename <tpl> "New name"');
+        saveTemplate({ ...need(), name }); return log(`renamed ${need().id} to "${name}"`);
+      }
+      if (sub === "reset") { const r = resetTemplate(need().id); return log(`${r.id} is back to its original layout`); }
+      if (sub === "rm") { deleteTemplate(need().id); return log(`deleted template ${need().id}; rows that used it fall back to the built-in layout`); }
+      if (sub === "export") {
+        const ids = [a, ...more].filter((x): x is string => !!x).map((r) => (findTemplate(r) ?? die(`No template matching "${r}"`)).id);
+        const set = exportTemplateSet(ids, v.name);
+        const out = path.resolve(String(v.o ?? path.join(OUT_DIR, `${(v.name ?? "sign-templates").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.signo.json`)));
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, JSON.stringify(set, null, 2) + "\n");
+        return log(`wrote ${out} (${set.templates.length} template${set.templates.length === 1 ? "" : "s"}: ${set.templates.map((x) => x.id).join(", ")})`);
+      }
+      if (sub === "import") {
+        if (!a) die("usage: signo templates import <file.signo.json> [--replace]");
+        let raw: unknown;
+        try { raw = JSON.parse(fs.readFileSync(a, "utf8")); } catch { die(`can't read ${a} as JSON`); }
+        const r = importTemplateSet(parseTemplateSet(raw), v.replace ? "replace" : "keep-both");
+        const parts = [
+          r.added.length && `added ${r.added.join(", ")}`,
+          r.replaced.length && `replaced ${r.replaced.join(", ")}`,
+          r.renamed.length && `kept both for ${r.renamed.map((x) => `${x.from} → ${x.to}`).join(", ")}`,
+          r.unchanged.length && `already had ${r.unchanged.join(", ")}`,
+        ].filter(Boolean);
+        return log(parts.join("; ") || "nothing to import");
+      }
+      return die(`unknown templates subcommand "${sub}"`);
     }
     case "check": {
       const b = readBatch();

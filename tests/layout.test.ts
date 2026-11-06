@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, smallLines, wrapWords } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
-import type { Sign } from "../src/core/types";
+import type { Sign, Template } from "../src/core/types";
+import { DEFAULT_TEMPLATES, layoutTemplate, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
@@ -101,5 +102,48 @@ describe("sheet geometry", () => {
     expect(slotOwners([2, 1, 3])).toEqual([0, 0, 1, 2, 2, 2]);
     expect(pageFill(13, 10)).toEqual({ pages: 2, lastUsed: 3, empty: 7 });
     expect(pageFill(20, 10)).toEqual({ pages: 2, lastUsed: 10, empty: 0 });
+  });
+});
+
+describe("templates", () => {
+  const percent = DEFAULT_TEMPLATES.find((t) => t.id === "percent")!;
+  const edit = (f: (t: Template) => void) => { const t = structuredClone(percent); f(t); return t; };
+  it("resolves unknown or missing templates to the built-in for the kind", () => {
+    expect(resolveTemplate({ kind: "price" }, DEFAULT_TEMPLATES).id).toBe("price");
+    expect(resolveTemplate({ kind: "percent", templateId: "gone" }, DEFAULT_TEMPLATES).id).toBe("percent");
+    expect(resolveTemplate({ kind: "percent", templateId: "bogo" }, DEFAULT_TEMPLATES).id).toBe("bogo");
+  });
+  it("honours font size, alignment and position from the template", () => {
+    const t = edit((t) => { const o = t.objects.find((o) => o.id === "offer")!; Object.assign(o, { size: 20, align: "left", x: 5 }); });
+    const big = layoutTemplate(t, sign(), measure).lines.find((l) => l.role === "big")!;
+    expect(big.sizePt).toBe(20);
+    expect(big.x).toBeCloseTo(5);
+  });
+  it("shrinks text to its box height, and reports text that can't fit at all", () => {
+    const t = edit((t) => { const o = t.objects.find((o) => o.id === "offer")!; Object.assign(o, { h: 6, minSize: 8 }); });
+    const big = layoutTemplate(t, sign(), measure).lines.find((l) => l.role === "big")!;
+    expect(big.sizePt).toBeLessThan(30);
+    const tiny = edit((t) => { const o = t.objects.find((o) => o.id === "offer")!; Object.assign(o, { h: 1, minSize: 20 }); });
+    expect(layoutTemplate(tiny, sign(), measure).overflow.map((x) => x.objectId)).toEqual(["offer"]);
+  });
+  it("re-wraps as it shrinks, so a long name balances over its lines instead of overflowing", () => {
+    const placed = layoutTemplate(percent, sign({ collection: "EXTRAORDINARILY LONG COLLECTION NAME DELUXE EDITION" }), measure);
+    expect(placed.overflow).toEqual([]);
+    const col = placed.lines.filter((l) => l.role === "collection");
+    expect(col.length).toBe(2);
+    for (const l of col) expect(l.w).toBeLessThanOrEqual(39 + 1e-6);
+  });
+  it("prints fixed text and lists the fields a template uses", () => {
+    const bogo = DEFAULT_TEMPLATES.find((t) => t.id === "bogo")!;
+    expect(layoutTemplate(bogo, sign(), measure).lines.map((l) => l.text).slice(0, 3)).toEqual(["BUY ONE", "GET ONE", "50% OFF*"]);
+    expect(usedFields(bogo).has("prefix")).toBe(false);
+    expect(usedFields(percent).has("prefix")).toBe(true);
+  });
+  it("flags objects outside the safe margin or off the paper", () => {
+    const t = edit((t) => { t.objects[0]!.x = 0.5; t.objects[1]!.x = 60; });
+    const issues = templateIssues(t);
+    expect(issues.some((i) => i.level === "warn" && i.objectId === "logo")).toBe(true);
+    expect(issues.some((i) => i.level === "error" && i.objectId === "heading")).toBe(true);
+    expect(templateIssues(percent).filter((i) => i.level !== "info")).toEqual([]);
   });
 });

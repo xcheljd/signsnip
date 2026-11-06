@@ -4,9 +4,10 @@ import sharp from "sharp";
 import { z } from "zod";
 import { DATA_DIR, SEED_DIR } from "./paths.js";
 import {
-  BatchSchema, BrandSchema, DEFAULT_OPTIONS, PresetSchema, SavedBatchSchema,
-  type Batch, type Brand, type Preset, type SavedBatch,
+  BatchSchema, BrandSchema, DEFAULT_OPTIONS, PresetSchema, SavedBatchSchema, TemplateSchema, TemplateSetSchema,
+  type Batch, type Brand, type Preset, type SavedBatch, type Template, type TemplateSet,
 } from "./types.js";
+import { DEFAULT_TEMPLATES, isBuiltin } from "./template.js";
 
 const f = (...p: string[]) => path.join(DATA_DIR, ...p);
 
@@ -203,3 +204,103 @@ export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedB
   return saved;
 }
 export function deleteSavedBatch(id: string): void { fs.rmSync(batchFile(id), { force: true }); }
+
+// ---------- templates
+const templatesFile = () => f("templates.json");
+
+/** All templates. Built-ins are always present (restored from defaults if missing). */
+export function listTemplates(): Template[] {
+  const saved = readJson(templatesFile(), z.array(TemplateSchema), DEFAULT_TEMPLATES);
+  const missing = DEFAULT_TEMPLATES.filter((d) => isBuiltin(d.id) && !saved.some((t) => t.id === d.id));
+  return [...missing, ...saved];
+}
+function writeTemplates(all: Template[]) { writeJson(templatesFile(), all); }
+
+export function findTemplate(ref: string): Template | undefined {
+  const r = ref.trim().toLowerCase();
+  const all = listTemplates();
+  return all.find((t) => t.id === r) ?? all.find((t) => t.name.toLowerCase() === r) ?? all.find((t) => t.name.toLowerCase().includes(r));
+}
+
+export function saveTemplate(t: Template): Template {
+  const parsed = TemplateSchema.parse({ ...t, updatedAt: new Date().toISOString() });
+  const all = listTemplates();
+  const i = all.findIndex((x) => x.id === parsed.id);
+  if (i >= 0) all[i] = parsed; else all.push(parsed);
+  writeTemplates(all);
+  return parsed;
+}
+
+export function uniqueTemplateId(base: string, taken = listTemplates()): string {
+  const root = slugify(base).slice(0, 34) || "template";
+  if (!taken.some((t) => t.id === root)) return root;
+  let n = 2;
+  while (taken.some((t) => t.id === `${root}-${n}`)) n++;
+  return `${root}-${n}`;
+}
+
+export function duplicateTemplate(id: string, name?: string): Template {
+  const src = listTemplates().find((t) => t.id === id);
+  if (!src) throw new Error(`No template "${id}"`);
+  const newName = name?.trim() || `${src.name} copy`;
+  return saveTemplate({ ...structuredClone(src), id: uniqueTemplateId(newName), name: newName });
+}
+
+/** Built-ins can't be deleted (signs fall back to them); they can be reset instead. */
+export function deleteTemplate(id: string): void {
+  if (isBuiltin(id)) throw new Error(`"${id}" is built in - you can reset it, but not delete it`);
+  writeTemplates(listTemplates().filter((t) => t.id !== id));
+}
+export function resetTemplate(id: string): Template {
+  const d = DEFAULT_TEMPLATES.find((t) => t.id === id);
+  if (!d) throw new Error(`"${id}" has no original to reset to`);
+  return saveTemplate(structuredClone(d));
+}
+
+export function exportTemplateSet(ids?: string[], name?: string): TemplateSet {
+  const all = listTemplates();
+  const pick = ids?.length ? ids.map((id) => all.find((t) => t.id === id) ?? (() => { throw new Error(`No template "${id}"`); })()) : all;
+  return TemplateSetSchema.parse({ format: "sign-o-matic/template-set", version: 1, name, exportedAt: new Date().toISOString(), templates: pick });
+}
+
+const sameLayout = (a: Template, b: Template) =>
+  JSON.stringify({ ...a, updatedAt: undefined }) === JSON.stringify({ ...b, updatedAt: undefined });
+/** same design regardless of id/name (catches re-importing something already imported as a copy) */
+const sameDesign = (a: Template, b: Template) =>
+  JSON.stringify([a.kind, a.safeMargin, a.objects]) === JSON.stringify([b.kind, b.safeMargin, b.objects]);
+
+export interface ImportResult { added: string[]; replaced: string[]; renamed: { from: string; to: string }[]; unchanged: string[] }
+
+/** Parse a template-set file (throws a friendly error if it isn't one). */
+export function parseTemplateSet(raw: unknown): TemplateSet {
+  if (!raw || typeof raw !== "object" || (raw as { format?: string }).format !== "sign-o-matic/template-set") {
+    throw new Error("That file isn't a Sign-O-Matic template set");
+  }
+  const r = TemplateSetSchema.safeParse(raw);
+  if (!r.success) throw new Error(`The template set is damaged: ${r.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+  return r.data;
+}
+
+/**
+ * Bring templates in. Same id + same layout = skipped. Same id + different layout =
+ * "keep-both" (imported as a copy, renamed) or "replace" (overwrite yours).
+ */
+export function importTemplateSet(set: TemplateSet, mode: "keep-both" | "replace" = "keep-both", only?: string[]): ImportResult {
+  const res: ImportResult = { added: [], replaced: [], renamed: [], unchanged: [] };
+  const all = listTemplates();
+  for (const t of set.templates) {
+    if (only && !only.includes(t.id)) continue;
+    const mine = all.find((x) => x.id === t.id);
+    if (!mine) { all.push(t); res.added.push(t.id); continue; }
+    if (sameLayout(mine, t)) { res.unchanged.push(t.id); continue; }
+    if (mode === "replace") { all[all.indexOf(mine)] = t; res.replaced.push(t.id); continue; }
+    const copy = all.find((x) => x.id !== t.id && sameDesign(x, t));
+    if (copy) { res.unchanged.push(`${t.id} (as ${copy.id})`); continue; }
+    const name = `${t.name} (imported)`.slice(0, 60);
+    const id = uniqueTemplateId(name, all);
+    all.push({ ...t, id, name });
+    res.renamed.push({ from: t.id, to: id });
+  }
+  writeTemplates(all.map((t) => TemplateSchema.parse(t)));
+  return res;
+}

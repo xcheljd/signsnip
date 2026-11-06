@@ -1,6 +1,7 @@
 import { useRef } from "react";
-import { PlusIcon, SaveIcon, XIcon } from "lucide-react";
-import type { Preset, Sign } from "../../src/core/types";
+import { PencilRulerIcon, PlusIcon, SaveIcon, XIcon } from "lucide-react";
+import { resolveTemplate, usedFields } from "../../src/core/template";
+import type { Preset, Sign, Template } from "../../src/core/types";
 import type { BrandWithLogo } from "./api";
 import { NumField } from "./NumField";
 import { Button } from "@/components/ui/button";
@@ -19,9 +20,10 @@ const PRICES = [49, 99, 149, 199, 249, 299, 399];
 const PRICE_LABELS = ["NOW", "ONLY", "STARTING AT", "UNDER"];
 
 export function SignEditor({
-  draft, set, brands, presets, editing, onSubmit, onCancel, onSavePreset, onPickPreset, onDeletePreset,
+  draft, set, brands, presets, templates, editing, onSubmit, onCancel, onSavePreset, onPickPreset, onDeletePreset, onEditTemplate,
 }: {
-  draft: Sign; set: (patch: Partial<Sign>) => void; brands: BrandWithLogo[]; presets: Preset[]; editing: boolean;
+  draft: Sign; set: (patch: Partial<Sign>) => void; brands: BrandWithLogo[]; presets: Preset[]; templates: Template[]; editing: boolean;
+  onEditTemplate: () => void;
   onSubmit: () => void; onCancel: () => void; onSavePreset: () => void;
   onPickPreset: (p: Preset) => void; onDeletePreset: (p: Preset) => void;
 }) {
@@ -29,12 +31,17 @@ export function SignEditor({
   const collectionRef = useRef<HTMLInputElement>(null);
   const brandItems = brands.map((b) => ({ value: b.id, label: b.name }));
   const suggestions = ["MODELS", ...(brand?.collections ?? []).filter((c) => c.toUpperCase() !== "MODELS")];
-  const isPrice = draft.kind === "price";
+  const template = resolveTemplate(draft, templates);
+  const uses = usedFields(template);
+  const isPrice = template.kind === "price";
+  const templateItems = templates.map((t) => ({ value: t.id, label: t.name }));
 
-  const switchKind = (kind: Sign["kind"]) => {
-    if (kind === draft.kind) return;
-    if (kind === "price") set({ kind, price: draft.price ?? 199, footer: draft.footer === "*MSRP" ? "" : draft.footer });
-    else set({ kind, footer: draft.footer === "" ? "*MSRP" : draft.footer });
+  const switchTemplate = (id: string) => {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    if (t.kind === draft.kind) { set({ templateId: id }); return; }
+    if (t.kind === "price") set({ templateId: id, kind: "price", price: draft.price ?? 199, footer: draft.footer === "*MSRP" ? "" : draft.footer });
+    else set({ templateId: id, kind: "percent", footer: draft.footer === "" ? "*MSRP" : draft.footer });
   };
 
   const submit = () => {
@@ -74,16 +81,22 @@ export function SignEditor({
                   <SelectContent><SelectGroup>{brandItems.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </Field>
-              <Field>
-                <FieldLabel>Sign type</FieldLabel>
-                <ToggleGroup variant="outline" spacing={0} value={[draft.kind]} onValueChange={(v) => v[0] && switchKind(v[0] as Sign["kind"])}>
-                  <ToggleGroupItem value="percent" type="button">Percent off</ToggleGroupItem>
-                  <ToggleGroupItem value="price" type="button">Price</ToggleGroupItem>
-                </ToggleGroup>
+              <Field className="sm:w-60">
+                <FieldLabel htmlFor="template">Template</FieldLabel>
+                <div className="flex gap-1">
+                  <Select value={template.id} items={templateItems} onValueChange={(v) => v && switchTemplate(v)}>
+                    <SelectTrigger id="template" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>{templates.filter((t) => t.kind === "percent").map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup>
+                      <SelectGroup>{templates.filter((t) => t.kind === "price").map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="ghost" size="icon" aria-label="Edit this template" title="Edit this template" onClick={onEditTemplate}><PencilRulerIcon /></Button>
+                </div>
               </Field>
             </div>
 
-            <Field>
+            {uses.has("prefix") && <Field>
               <FieldLabel htmlFor="prefix">Lead word</FieldLabel>
               <div className="flex flex-wrap items-center gap-2">
                 <Input id="prefix" className="w-36" value={draft.prefix} maxLength={24} placeholder="(none)" onChange={(e) => set({ prefix: e.target.value })} />
@@ -93,9 +106,9 @@ export function SignEditor({
                   <ToggleGroupItem value="none" type="button">none</ToggleGroupItem>
                 </ToggleGroup>
               </div>
-            </Field>
+            </Field>}
 
-            <Field>
+            {uses.has("collection") && <Field>
               <FieldLabel htmlFor="collection">Collection</FieldLabel>
               <Autocomplete items={suggestions} value={draft.collection} onValueChange={(v) => set({ collection: v })} openOnInputClick
                 // show the whole list while the box still holds a known collection; filter once you type something else
@@ -111,7 +124,7 @@ export function SignEditor({
                   </AutocompleteList>
                 </AutocompleteContent>
               </Autocomplete>
-            </Field>
+            </Field>}
 
             {!isPrice ? (
               <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
@@ -143,12 +156,12 @@ export function SignEditor({
                       </ToggleGroup>
                     </div>
                   </Field>
-                  <Field>
+                  {uses.has("was") && <Field>
                     <FieldLabel htmlFor="was">Was (optional)</FieldLabel>
                     <NumField id="was" before="$" decimals={2} allowEmpty value={draft.wasPrice} min={0.01} max={999999} placeholder="—" onChange={(n) => set({ wasPrice: n })} />
-                  </Field>
+                  </Field>}
                 </div>
-                <Field>
+                {uses.has("label") && <Field>
                     <FieldLabel htmlFor="plabel">Above the price</FieldLabel>
                     <div className="flex flex-wrap items-center gap-2">
                       <Input id="plabel" className="w-36" value={draft.priceLabel} maxLength={24} placeholder="(none)" onChange={(e) => set({ priceLabel: e.target.value })} />
@@ -158,15 +171,15 @@ export function SignEditor({
                         {PRICE_LABELS.map((l) => <ToggleGroupItem key={l} value={l} type="button">{l}</ToggleGroupItem>)}
                       </ToggleGroup>
                     </div>
-                </Field>
+                </Field>}
               </>
             )}
 
             <div className="grid grid-cols-[1fr_6rem] gap-4">
-              <Field>
+              {uses.has("footer") ? <Field>
                 <FieldLabel htmlFor="footer">Footer</FieldLabel>
                 <Input id="footer" value={draft.footer} maxLength={40} placeholder="(none)" onChange={(e) => set({ footer: e.target.value })} />
-              </Field>
+              </Field> : <div />}
               <Field>
                 <FieldLabel htmlFor="copies">Copies</FieldLabel>
                 <NumField id="copies" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />

@@ -4,22 +4,28 @@ import { createRequire } from "node:module";
 import { PDFDocument, PrintScaling, degrees, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { cellRect, sheetGeometry } from "./geometry.js";
-import { fitLogo, layoutSign, smallLines, type Measure } from "./layout.js";
-import { findBrand, logoInfo, readLogo } from "./store.js";
-import { SIGN_H_MM, SIGN_W_MM, type Options, type Sign, type Warning } from "./types.js";
+import { fitLogo, smallLines, type Measure } from "./layout.js";
+import { findBrand, listTemplates, logoInfo, readLogo } from "./store.js";
+import { layoutTemplate, resolveTemplate } from "./template.js";
+import { SIGN_H_MM, SIGN_W_MM, type Options, type Sign, type Template, type Warning } from "./types.js";
 
 const MM = 72 / 25.4;
 const mm = (v: number) => v * MM;
 
-let fontBytes: Buffer | undefined;
-function boldFontBytes(): Buffer {
-  if (!fontBytes) {
+const fontCache = new Map<string, Buffer>();
+function fontBytes(weight: "bold" | "regular"): Buffer {
+  const file = `carlito-latin-${weight === "bold" ? 700 : 400}-normal.woff`;
+  let b = fontCache.get(file);
+  if (!b) {
     const req = createRequire(import.meta.url);
     const dir = path.dirname(req.resolve("@fontsource/carlito/package.json"));
-    fontBytes = fs.readFileSync(path.join(dir, "files", "carlito-latin-700-normal.woff"));
+    b = fs.readFileSync(path.join(dir, "files", file));
+    fontCache.set(file, b);
   }
-  return fontBytes;
+  return b;
 }
+type Fonts = Record<"bold" | "regular", PDFFont>;
+const hex = (c: string) => rgb(parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255);
 
 async function newDoc(title: string) {
   const doc = await PDFDocument.create();
@@ -28,9 +34,13 @@ async function newDoc(title: string) {
   doc.setProducer("Sign-O-Matic");
   // Ask viewers to default the print dialog to "Actual size" (honoured by Acrobat/most PDF viewers).
   doc.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
-  const font = await doc.embedFont(boldFontBytes(), { subset: true });
-  const measure: Measure = (t, size) => font.widthOfTextAtSize(t, size) / MM;
-  return { doc, font, measure };
+  const fonts: Fonts = {
+    bold: await doc.embedFont(fontBytes("bold"), { subset: true }),
+    regular: await doc.embedFont(fontBytes("regular"), { subset: true }),
+  };
+  const font = fonts.bold;
+  const measure: Measure = (t, size, weight = "bold") => fonts[weight].widthOfTextAtSize(t, size) / MM;
+  return { doc, font, fonts, measure };
 }
 
 let measureCache: Measure | undefined;
@@ -48,22 +58,24 @@ export function expandCopies(items: Sign[]): Sign[] {
 interface Logo { img: PDFImage; aspect: number; scale: number }
 
 /** The single source of truth for what a sign looks like on paper. */
-function drawSign(page: PDFPage, font: PDFFont, ox: number, oy: number, sign: Sign, logo: Logo | undefined, measure: Measure) {
+function drawSign(page: PDFPage, fonts: Fonts, ox: number, oy: number, sign: Sign, template: Template, logo: Logo | undefined, measure: Measure) {
   // (ox, oy) = top-left corner of the sign in pt, y measured up from page bottom
-  const layout = layoutSign(sign, measure);
-  if (logo) {
-    const r = fitLogo(logo.aspect, layout.logoBox, logo.scale);
+  const placed = layoutTemplate(template, sign, measure);
+  if (logo && placed.logo) {
+    const r = fitLogo(logo.aspect, placed.logo.box, logo.scale);
     page.drawImage(logo.img, { x: ox + mm(r.x), y: oy - mm(r.y + r.h), width: mm(r.w), height: mm(r.h) });
   }
-  for (const l of layout.lines) {
-    const w = font.widthOfTextAtSize(l.text, l.sizePt);
+  for (const l of placed.lines) {
+    const font = fonts[l.weight];
+    const color = hex(l.color);
     // cy is the optical centre of the caps; baseline sits ~0.32em below it for caps/digits
     const baseline = oy - mm(l.cy) - l.sizePt * 0.32;
-    const x = ox + mm(l.cx) - w / 2;
-    page.drawText(l.text, { x, y: baseline, size: l.sizePt, font, color: rgb(0, 0, 0) });
+    const x = ox + mm(l.x);
+    page.drawText(l.text, { x, y: baseline, size: l.sizePt, font, color });
     if (l.strike) {
+      const w = mm(l.w);
       const y = baseline + l.sizePt * 0.3;
-      page.drawLine({ start: { x: x - 1, y }, end: { x: x + w + 1, y }, thickness: Math.max(0.7, l.sizePt * 0.07), color: rgb(0, 0, 0) });
+      page.drawLine({ start: { x: x - 1, y }, end: { x: x + w + 1, y }, thickness: Math.max(0.7, l.sizePt * 0.07), color });
     }
   }
 }
@@ -79,14 +91,18 @@ async function embedLogos(doc: PDFDocument, signs: Sign[]) {
   return logos;
 }
 
-export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" | "single" = "sheet"): Promise<PdfInfo> {
-  const { doc, font, measure } = await newDoc("Sign-O-Matic");
+/** `templates` overrides the saved ones (the designer previews unsaved edits this way). */
+export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" | "single" = "sheet", templates?: Template[]): Promise<PdfInfo> {
+  const { doc, fonts, measure } = await newDoc("Sign-O-Matic");
   const logos = await embedLogos(doc, signs);
+  const saved = listTemplates();
+  const all = templates ? [...templates, ...saved.filter((t) => !templates.some((o) => o.id === t.id))] : saved;
+  const tpl = (s: Sign) => resolveTemplate(s, all);
 
   if (mode === "single") {
     const s = signs[0];
     const page = doc.addPage([mm(SIGN_W_MM), mm(SIGN_H_MM)]);
-    if (s) drawSign(page, font, 0, mm(SIGN_H_MM), s, logos.get(s.brandId), measure);
+    if (s) drawSign(page, fonts, 0, mm(SIGN_H_MM), s, tpl(s), logos.get(s.brandId), measure);
     return { bytes: await doc.save(), pages: 1, signs: s ? 1 : 0 };
   }
 
@@ -97,7 +113,7 @@ export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" |
     const chunk = signs.slice(p * g.perPage, (p + 1) * g.perPage);
     chunk.forEach((s, i) => {
       const r = cellRect(g, i);
-      drawSign(page, font, mm(r.x), mm(g.pageH - r.y), s, logos.get(s.brandId), measure);
+      drawSign(page, fonts, mm(r.x), mm(g.pageH - r.y), s, tpl(s), logos.get(s.brandId), measure);
     });
     if (options.cutMarks) {
       // hairline grid over every cell (full grid, so empty slots still show the cut lines)
@@ -169,6 +185,7 @@ export async function renderCalibration(paper: Options["paper"] = "letter"): Pro
 /** Pre-print checks: low-res logos, opaque logo boxes, text that had to shrink a lot, missing logos. */
 export async function checkSigns(items: Sign[]): Promise<Warning[]> {
   const measure = await getMeasure();
+  const templates = listTemplates();
   const out: Warning[] = [];
   const byBrand = new Map<string, number[]>();
   items.forEach((s, i) => byBrand.set(s.brandId, [...(byBrand.get(s.brandId) ?? []), i]));
@@ -180,7 +197,9 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
       out.push({ items: idx, brandId, level: "warn", code: "no-logo", message: `${name} has no logo yet - those signs print without one.` });
       continue;
     }
-    const r = fitLogo(info.aspect, undefined, brand?.logoScale ?? 1);
+    const box = layoutTemplate(resolveTemplate(items[idx[0]!]!, templates), items[idx[0]!]!, measure).logo?.box;
+    if (!box) continue; // this brand's signs use templates without a logo
+    const r = fitLogo(info.aspect, box, brand?.logoScale ?? 1);
     const dpi = Math.round(info.width / (r.w / 25.4));
     if (dpi < 250) {
       out.push({ items: idx, brandId, level: "warn", code: "low-res-logo", message: `${name}'s logo is low resolution (~${dpi} dpi at print size) and may print soft. Upload a bigger file - 300 dpi or more (at least ${Math.ceil((r.w / 25.4) * 300)} px wide).` });
@@ -192,8 +211,12 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
     }
   }
   items.forEach((s, i) => {
-    const small = smallLines(layoutSign(s, measure));
-    if (small.length) {
+    const placed = layoutTemplate(resolveTemplate(s, templates), s, measure);
+    const small = smallLines(placed);
+    if (placed.overflow.length) {
+      const what = placed.overflow.map((o) => `"${o.text}"`).join(", ");
+      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `Row ${i + 1}: ${what} doesn't fit its box and will run past it. Shorten it or enlarge the box in the template.` });
+    } else if (small.length) {
       const what = small.map((l) => `"${l.text}" (${l.sizePt.toFixed(1)}pt)`).join(", ");
       out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `Row ${i + 1}: ${what} had to shrink to fit and may be hard to read. Try a shorter name.` });
     }

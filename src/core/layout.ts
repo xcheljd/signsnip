@@ -1,29 +1,19 @@
 import { SIGN_W_MM, type Sign } from "./types.js";
+import { defaultTemplate, layoutTemplate, type PlacedLine, type PlacedSign } from "./template.js";
 
 /** Measures text width in millimetres at a given font size (pt). Injected so layout is testable. */
-export type Measure = (text: string, sizePt: number) => number;
-
-export interface TextLine {
-  text: string;
-  sizePt: number;
-  /** size the line wanted before shrink-to-fit */
-  wantPt: number;
-  /** centre x/y in mm from the sign's top-left corner */
-  cx: number;
-  cy: number;
-  strike?: boolean;
-  role: "prefix" | "collection" | "big" | "label" | "was" | "footer";
-}
-export interface SignLayout {
-  logoBox: { x: number; y: number; w: number; h: number };
-  lines: TextLine[];
-}
+export type Measure = (text: string, sizePt: number, weight?: "bold" | "regular") => number;
 
 const PAD = 4; // mm side padding
 export const MAX_TEXT_W = SIGN_W_MM - PAD * 2;
 export const LOGO_BOX = { x: PAD, y: 5, w: SIGN_W_MM - PAD * 2, h: 15 };
-/** Hard limits a scaled-up logo may grow into (keeps clear of the header text). */
-export const LOGO_MAX = { x: 2.5, y: 3, w: SIGN_W_MM - 5, h: 18 };
+/** How far a scaled-up logo may grow past its box (mm): 1.5 each side, 3 in height. */
+export const growArea = (box: { x: number; y: number; w: number; h: number }) => {
+  const x = Math.max(0, box.x - 1.5), y = Math.max(0, box.y - 2);
+  return { x, y, w: Math.min(SIGN_W_MM - x, box.w + 3), h: box.h + 3 };
+};
+/** Hard limits a scaled-up logo in the default box may grow into (keeps clear of the header text). */
+export const LOGO_MAX = growArea(LOGO_BOX);
 
 /** Largest size <= want (and >= min) at which `text` fits in maxW. */
 export function fitSize(measure: Measure, text: string, want: number, maxW: number, min = 7): number {
@@ -62,16 +52,18 @@ export function fitLogo(aspect: number, box = LOGO_BOX, scale = 1) {
     w = h * aspect;
   }
   w *= scale; h *= scale;
-  const k = Math.min(1, LOGO_MAX.w / w, LOGO_MAX.h / h);
+  const max = growArea(box);
+  const k = Math.min(1, max.w / w, max.h / h);
   w *= k; h *= k;
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-  return { x: cx - w / 2, y: Math.max(LOGO_MAX.y, cy - h / 2), w, h };
+  return { x: cx - w / 2, y: Math.max(max.y, cy - h / 2), w, h };
 }
 
 /** Largest useful scale for a logo of this shape (beyond it, LOGO_MAX clamps and nothing changes). */
 export function maxLogoScale(aspect: number, box = LOGO_BOX): number {
   const base = fitLogo(aspect, box, 1);
-  return Math.max(1, Math.floor(Math.min(1.6, LOGO_MAX.w / base.w, LOGO_MAX.h / base.h) * 20) / 20);
+  const max = growArea(box);
+  return Math.max(1, Math.floor(Math.min(1.6, max.w / base.w, max.h / base.h) * 20) / 20);
 }
 
 export const percentText = (s: Pick<Sign, "percent" | "offLabel">) =>
@@ -83,54 +75,12 @@ export function money(n: number): string {
   return "$" + n.toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 });
 }
 
-const lh = (pt: number) => pt * 0.3528 * 1.18; // pt -> mm line pitch
-
-/** Compute every text line's size and position. Pure. */
-export function layoutSign(sign: Sign, measure: Measure): SignLayout {
-  const lines: TextLine[] = [];
-  const cx = SIGN_W_MM / 2;
-  const prefix = sign.prefix.trim().toUpperCase();
-  const collection = sign.collection.trim().toUpperCase();
-  const kind = sign.kind ?? "percent";
-
-  // --- header block (prefix + collection), vertically centred on y=28mm
-  const HEAD = 14;
-  const head: Omit<TextLine, "cx" | "cy">[] = [];
-  if (prefix) head.push({ text: prefix, sizePt: fitSize(measure, prefix, HEAD, MAX_TEXT_W), wantPt: HEAD, role: "prefix" });
-  if (collection) {
-    const wrapped = wrapWords(measure, collection, HEAD, MAX_TEXT_W, 2);
-    const size = Math.min(...wrapped.map((l) => fitSize(measure, l, HEAD, MAX_TEXT_W)));
-    for (const l of wrapped) head.push({ text: l, sizePt: size, wantPt: HEAD, role: "collection" });
-  }
-  // price signs with a label/was line need the header a touch higher
-  const busy = kind === "price" && (sign.priceLabel.trim() || sign.wasPrice);
-  const centre = busy ? 27 : 28;
-  const total = head.reduce((a, l) => a + lh(l.sizePt), 0);
-  let y = centre - total / 2;
-  for (const l of head) {
-    lines.push({ ...l, cx, cy: y + lh(l.sizePt) / 2 });
-    y += lh(l.sizePt);
-  }
-
-  if (kind === "price" && sign.price) {
-    const label = sign.priceLabel.trim().toUpperCase();
-    const big = money(sign.price);
-    const was = sign.wasPrice ? `WAS ${money(sign.wasPrice)}` : "";
-    if (label) lines.push({ text: label, sizePt: fitSize(measure, label, 11, MAX_TEXT_W), wantPt: 11, cx, cy: 39.5, role: "label" });
-    lines.push({ text: big, sizePt: fitSize(measure, big, 30, MAX_TEXT_W, 14), wantPt: 30, cx, cy: label ? 47 : 46, role: "big" });
-    if (was) lines.push({ text: was, sizePt: fitSize(measure, was, 11, MAX_TEXT_W), wantPt: 11, cx, cy: 55, strike: true, role: "was" });
-  } else {
-    const pct = percentText(sign);
-    lines.push({ text: pct, sizePt: fitSize(measure, pct, 30, MAX_TEXT_W, 14), wantPt: 30, cx, cy: 46, role: "big" });
-  }
-
-  const footer = sign.footer.trim();
-  if (footer) lines.push({ text: footer, sizePt: fitSize(measure, footer, 13, MAX_TEXT_W, 8), wantPt: 13, cx, cy: 62, role: "footer" });
-
-  return { logoBox: LOGO_BOX, lines };
+/** Lay out a sign with its kind's built-in template (kept for callers that don't pass templates). */
+export function layoutSign(sign: Sign, measure: Measure) {
+  return layoutTemplate(defaultTemplate(sign.kind ?? "percent"), sign, measure);
 }
 
 /** Lines that had to shrink enough to hurt readability across a shop floor. */
-export function smallLines(l: SignLayout): TextLine[] {
-  return l.lines.filter((t) => (t.role === "big" ? t.sizePt < 22 : t.sizePt < Math.min(10, t.wantPt * 0.72)));
+export function smallLines(l: PlacedSign): PlacedLine[] {
+  return l.lines.filter((t) => t.sizePt < t.wantPt * 0.72);
 }

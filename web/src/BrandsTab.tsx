@@ -159,7 +159,7 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => run(() => api.removeBrand(b.id), "Brand removed")}>Delete</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={() => { setConfirmDelete(false); run(() => api.removeBrand(b.id), "Brand removed"); }}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

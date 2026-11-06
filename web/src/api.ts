@@ -1,9 +1,9 @@
-import type { Batch, Brand, Options, Preset, SavedBatch, Sign, Warning } from "../../src/core/types";
+import type { Batch, Brand, Options, Preset, SavedBatch, Sign, Template, Warning } from "../../src/core/types";
 
 export interface LogoInfo { width: number; height: number; aspect: number; background: "transparent" | "white" | "solid"; hasOriginal: boolean }
 export type BrandWithLogo = Brand & { logo: LogoInfo | null };
 export interface SavedSummary { id: string; name: string; savedAt: string; signs: number }
-export interface State { brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[] }
+export interface State { brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[]; templates: Template[] }
 
 async function j<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -27,9 +27,24 @@ export const saveBatchAs = (name: string, batch: Batch) => send("/api/batches", 
 export const loadSaved = (id: string) => fetch(`/api/batches/${id}`).then((r) => j<SavedBatch>(r));
 export const deleteSaved = (id: string) => send(`/api/batches/${id}`, undefined, "DELETE").then((r) => j(r));
 
+export const saveTemplate = (t: Template) => send(`/api/templates/${t.id}`, t, "PUT").then((r) => j<Template>(r));
+export const duplicateTemplate = (id: string, name?: string) => send(`/api/templates/${id}/duplicate`, { name }).then((r) => j<Template>(r));
+export const resetTemplate = (id: string) => send(`/api/templates/${id}/reset`).then((r) => j<Template>(r));
+export const deleteTemplate = (id: string) => send(`/api/templates/${id}`, undefined, "DELETE").then((r) => j(r));
+export const templateExportUrl = (ids: string[], name: string) =>
+  `/api/templates/export?ids=${encodeURIComponent(ids.join(","))}${name.trim() ? `&name=${encodeURIComponent(name.trim())}` : ""}`;
+export interface SetPreview {
+  name?: string; exportedAt: string;
+  templates: { id: string; name: string; kind: "percent" | "price"; objects: number; status: "new" | "same" | "conflict"; mine?: string }[];
+}
+export const inspectSet = (set: unknown) => send("/api/templates/inspect", set).then((r) => j<SetPreview>(r));
+export interface ImportResult { added: string[]; replaced: string[]; renamed: { from: string; to: string }[]; unchanged: string[] }
+export const importSet = (set: unknown, mode: "keep-both" | "replace", only: string[]) =>
+  send("/api/templates/import", { set, mode, only }).then((r) => j<ImportResult>(r));
+
 export interface Pdf { bytes: Uint8Array; pages: number; signs: number }
-export async function fetchPdf(items: Sign[], options: Options, mode: "sheet" | "single"): Promise<Pdf> {
-  const res = await send("/api/pdf", { items, options, mode });
+export async function fetchPdf(items: Sign[], options: Options, mode: "sheet" | "single", templates?: Template[]): Promise<Pdf> {
+  const res = await send("/api/pdf", { items, options, mode, templates });
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "PDF failed");
   return { bytes: new Uint8Array(await res.arrayBuffer()), pages: Number(res.headers.get("x-pages")), signs: Number(res.headers.get("x-signs")) };
 }

@@ -14,3 +14,8 @@
 - Logo scale is capped by `maxLogoScale(aspect)` (layout.ts); slider max + CLI both use it, so the control never silently does nothing.
 - Background removal backs up to data/logos/originals/<id>.png; a fresh upload deletes the backup.
 - Browser e2e lives outside the repo for now (Playwright from the Hermes install); run it against `pnpm start` with a fresh `data/`.
+- Templates: `src/core/template.ts` is the single layout engine (PDF, designer canvas, checks). The designer measures text in the browser with Carlito via canvas (`web/src/designer/measure.ts`); keep fonts identical to the PDF's embedded ones or the canvas will lie.
+- Built-in template ids `percent`/`price` can't be deleted; signs whose template is missing fall back to them. `Sign.templateId` is optional (old batches still load).
+- Template-set import: same id + same layout = skipped; same design under another id = skipped ("as <id>"); otherwise keep-both (renamed copy) or replace.
+- base-nova `AlertDialogAction` is a plain Button: it does NOT close the dialog. Close it yourself in onClick.
+- Designer keyboard shortcuts are window-level and only active on the Templates tab; App's Ctrl+Z/Ctrl+P only on Make signs.

@@ -66,13 +66,39 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     const r = signo("check");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("white background");
-    expect(r.stdout).toContain("shrink to fit");
+    expect(r.stdout).toMatch(/shrink to fit|doesn't fit its box/);
   });
   it("removes a logo background and restores it", () => {
     expect(signo("brands", "fix-bg", "orbital").stdout).toContain("now transparent");
     expect(signo("brands").stdout).not.toMatch(/ORBITAL.*white bg/);
     expect(signo("brands", "restore", "orbital").status).toBe(0);
     expect(signo("brands").stdout).toMatch(/ORBITAL.*white bg/);
+  });
+  it("edits, duplicates, exports and re-imports templates", () => {
+    signo("clear");
+    expect(signo("templates").stdout).toMatch(/percent .*built-in/);
+    const set = signo("templates", "set", "percent", "offer.size=34", "footer.weight=regular");
+    expect(set.status).toBe(0);
+    expect(signo("templates", "show", "percent").stdout).toMatch(/offer .*34pt .*\n.*footer .*regular/);
+    expect(signo("templates", "set", "percent", "offer.weight=italic").stderr).toContain("bold, regular");
+    expect(signo("templates", "duplicate", "bogo", "Holiday BOGO").stdout).toContain("holiday-bogo");
+    expect(signo("add", "--template", "holiday", "--brand", "orbital", "--collection", "Comet", "--percent", "50").stdout).toContain("[Holiday BOGO]");
+    signo("templates", "set", "holiday-bogo", "offer.size=26", "static-1.text=TREAT ONE");
+    const file = path.join(data, "set.signo.json");
+    expect(signo("templates", "export", "percent", "holiday-bogo", "--name", "My set", "-o", file).stdout).toContain("2 templates");
+    // change mine, then import: differing one is kept as a copy, re-import adds nothing more
+    signo("templates", "set", "holiday-bogo", "offer.size=20");
+    expect(signo("templates", "import", file).stdout).toContain("holiday-bogo → holiday-bogo-imported");
+    expect(signo("templates", "import", file).stdout).not.toContain("→");
+    expect(signo("templates", "import", file, "--replace").stdout).toContain("replaced holiday-bogo");
+    expect(signo("templates", "show", "holiday-bogo").stdout).toContain("26pt");
+    expect(signo("templates", "show", "holiday-bogo").stdout).toContain('"TREAT ONE"');
+    expect(signo("export", "-o", path.join(data, "t.pdf")).status).toBe(0);
+    expect(signo("templates", "rm", "percent").stderr).toContain("built in");
+    expect(signo("templates", "reset", "percent").status).toBe(0);
+    expect(signo("templates", "show", "percent").stdout).toMatch(/offer .*30pt/);
+    fs.writeFileSync(path.join(data, "bad.json"), '{"hello":1}');
+    expect(signo("templates", "import", path.join(data, "bad.json")).stderr).toContain("isn't a Sign-O-Matic template set");
   });
   it("accepts a JPG logo and fits it", () => {
     const r = signo("brands", "add", "Test Co", "--logo", path.join(root, "tests/fixtures/orbital.jpg"), "--collections", "A,B");

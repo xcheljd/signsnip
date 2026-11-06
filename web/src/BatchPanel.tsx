@@ -6,7 +6,8 @@ import {
 import { toast } from "sonner";
 import { pageFill, sheetGeometry } from "../../src/core/geometry";
 import { money } from "../../src/core/layout";
-import type { Batch, Sign, Warning } from "../../src/core/types";
+import { resolveTemplate } from "../../src/core/template";
+import type { Batch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
 import { NumField } from "./NumField";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -49,11 +50,11 @@ function IconButton({ label, children, ...props }: { label: string } & React.Com
 }
 
 export function BatchPanel({
-  batch, update, undo, canUndo, brands, saved, warnings, editingId, selected, setSelected,
+  batch, update, undo, canUndo, brands, saved, warnings, templates, editingId, selected, setSelected,
   onEdit, onPrint, onExport, onCalibrate, onFixBg, onGoToBrand, refresh, calibrated, setCalibrated,
 }: {
   batch: Batch; update: Update; undo: () => void; canUndo: boolean;
-  brands: api.BrandWithLogo[]; saved: api.SavedSummary[]; warnings: Warning[];
+  brands: api.BrandWithLogo[]; saved: api.SavedSummary[]; warnings: Warning[]; templates: Template[];
   editingId: string | null; selected: Set<string>; setSelected: (s: Set<string>) => void;
   onEdit: (i: number) => void; onPrint: () => void; onExport: () => void; onCalibrate: () => void;
   onFixBg: (brandId: string) => void; onGoToBrand: (brandId: string) => void; refresh: () => Promise<unknown>;
@@ -136,6 +137,19 @@ export function BatchPanel({
                     <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
+                <Field className="w-48">
+                  <FieldLabel>Template</FieldLabel>
+                  <Select items={templates.map((t) => ({ value: t.id, label: t.name }))} value={null as unknown as string}
+                    onValueChange={(v) => {
+                      const t = templates.find((x) => x.id === v);
+                      if (!t) return;
+                      update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, templateId: t.id, kind: t.kind, price: t.kind === "price" ? (s.price ?? 199) : s.price } : s)) }),
+                        { undo: `Template → ${t.name} on ${plural(sel.length, "row")}` });
+                    }}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
+                    <SelectContent><SelectGroup>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup></SelectContent>
+                  </Select>
+                </Field>
                 <div className="ml-auto flex gap-2">
                   <Button type="button" variant="outline" onClick={() => update((b) => ({ ...b, items: b.items.flatMap((s) => (selected.has(s.id) ? [s, { ...s, id: uid() }] : [s])) }), { undo: `Duplicated ${plural(sel.length, "row")}` })}>
                     <CopyIcon data-icon="inline-start" />Duplicate
@@ -200,6 +214,7 @@ export function BatchPanel({
                         <span className="uppercase">{[s.prefix, s.collection].filter(Boolean).join(" ")}</span>
                         <Badge variant={s.kind === "price" ? "outline" : "secondary"}>{offerText(s)}</Badge>
                         {s.kind === "price" && s.wasPrice && <span className="text-xs text-muted-foreground line-through">{money(s.wasPrice)}</span>}
+                        {s.templateId && s.templateId !== s.kind && <Badge variant="outline" className="text-muted-foreground">{resolveTemplate(s, templates).name}</Badge>}
                         {warnRows.has(i) && (
                           <Tooltip>
                             <TooltipTrigger render={<span className="text-destructive" />}><TriangleAlertIcon className="size-4" /></TooltipTrigger>
