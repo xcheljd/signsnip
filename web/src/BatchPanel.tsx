@@ -192,7 +192,8 @@ export function BatchPanel({
               </div>
             )}
 
-            <Table>
+            {/* phones: each row reflows into a small card (checkbox · brand · actions / full sign text / qty) */}
+            <Table className="max-md:block max-md:[&_tbody]:block max-md:[&_thead]:hidden">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"><span className="sr-only">Reorder</span></TableHead>
@@ -212,11 +213,12 @@ export function BatchPanel({
                   <TableRow
                     key={s.id}
                     data-state={s.id === editingId || selected.has(s.id) ? "selected" : undefined}
-                    className={cn(drag === i && "opacity-40", overRow === i && drag !== i && "border-t-2 border-t-primary")}
+                    className={cn("max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:items-center max-md:gap-x-2 max-md:gap-y-2 max-md:px-1 max-md:py-3",
+                      drag === i && "opacity-40", overRow === i && drag !== i && "border-t-2 border-t-primary")}
                     onDragOver={(e) => { if (drag !== null) { e.preventDefault(); setOverRow(i); } }}
                     onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) update((b) => ({ ...b, items: moveItem(b.items, drag, i) })); setDrag(null); setOverRow(null); }}
                   >
-                    <TableCell>
+                    <TableCell className="max-md:hidden">
                       <span
                         draggable
                         role="button"
@@ -229,20 +231,21 @@ export function BatchPanel({
                         <GripVerticalIcon className="size-4" />
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:p-0 max-md:pl-1">
                       <Checkbox aria-label={`Select row ${i + 1}`} checked={selected.has(s.id)}
                         onCheckedChange={(c) => { const n = new Set(selected); if (c) n.add(s.id); else n.delete(s.id); setSelected(n); }} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-muted-foreground max-md:hidden">{i + 1}</TableCell>
+                    <TableCell className="max-md:min-w-0 max-md:p-0">
                       <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground tabular-nums md:hidden">{i + 1}</span>
                         <img className="h-5 w-12 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(s.brandId, String(brands.find((b) => b.id === s.brandId)?.logo?.width ?? 0))} alt="" />
                         <span className="truncate">{brands.find((b) => b.id === s.brandId)?.name ?? s.brandId}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="uppercase">{[s.prefix, s.collection].filter(Boolean).join(" ")}</span>
+                    <TableCell className="max-md:col-span-3 max-md:row-start-2 max-md:p-0 max-md:pl-1 max-md:whitespace-normal">
+                      <div className="flex items-center gap-2 max-md:flex-wrap">
+                        <span className="uppercase max-md:font-medium">{[s.prefix, s.collection].filter(Boolean).join(" ")}</span>
                         <Badge variant={s.kind === "price" ? "outline" : "secondary"}>{offerText(s)}</Badge>
                         {s.kind === "price" && s.wasPrice && <span className="text-xs text-muted-foreground line-through">{money(s.wasPrice)}</span>}
                         {s.templateId && s.templateId !== s.kind && <Badge variant="outline" className="text-muted-foreground">{resolveTemplate(s, templates).name}</Badge>}
@@ -254,11 +257,11 @@ export function BatchPanel({
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <NumField className="h-7 w-24" stepper={`copies of row ${i + 1}`} stepWords={["Fewer", "More"]} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
+                    <TableCell className="max-md:col-span-3 max-md:row-start-3 max-md:p-0 max-md:pl-1">
+                      <NumField className="h-7 w-24 max-md:w-40" stepper={`copies of row ${i + 1}`} stepWords={["Fewer", "More"]} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
                         onChange={(n) => n && update((b) => ({ ...b, items: b.items.map((x) => (x.id === s.id ? { ...x, copies: n } : x)) }), { coalesce: `qty-${s.id}` })} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:col-start-3 max-md:row-start-1 max-md:p-0">
                       <div className="flex justify-end">
                         <IconButton label="Edit" onClick={() => onEdit(i)}><PencilIcon /></IconButton>
                         <IconButton label="Duplicate" onClick={() => update((b) => ({ ...b, items: [...b.items.slice(0, i + 1), { ...s, id: uid() }, ...b.items.slice(i + 1)] }))}><CopyIcon /></IconButton>
