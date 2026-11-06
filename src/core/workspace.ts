@@ -15,7 +15,7 @@ import {
  * A workspace backup: everything you made, in one file (logos embedded as base64 PNG).
  * Used by "Back up" / "Restore" in the app, the start page, and `signsnip backup` / `signsnip restore`.
  */
-export const WORKSPACE_FORMAT = "sign-snip/workspace";
+export const WORKSPACE_FORMAT = "signsnip/workspace";
 /** backups made before the rename */
 export const LEGACY_WORKSPACE_FORMAT = "sign-o-matic/workspace";
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
@@ -66,8 +66,8 @@ export function exportWorkspace(): Workspace {
 /** Parse a backup file, with a friendly error when it isn't one (or is a template set). */
 export function parseWorkspace(raw: unknown): Workspace {
   const fmt = raw && typeof raw === "object" ? (raw as { format?: unknown }).format : undefined;
-  if (fmt === "sign-snip/template-set" || fmt === "sign-o-matic/template-set") throw new Error("That's a template set, not a full backup. Import it on the Templates tab instead.");
-  if (fmt !== WORKSPACE_FORMAT && fmt !== LEGACY_WORKSPACE_FORMAT) throw new Error("That file isn't a Sign Snip backup");
+  if (fmt === "signsnip/template-set" || fmt === "sign-o-matic/template-set") throw new Error("That's a template set, not a full backup. Import it on the Templates tab instead.");
+  if (fmt !== WORKSPACE_FORMAT && fmt !== LEGACY_WORKSPACE_FORMAT) throw new Error("That file isn't a SignSnip backup");
   const r = WorkspaceSchema.safeParse(raw);
   if (!r.success) throw new Error(`The backup is damaged: ${r.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   return r.data;

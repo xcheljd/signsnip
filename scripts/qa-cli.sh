@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # CLI / engine edge cases. Each line: what, exit code, first line of output.
 cd "$(dirname "$0")/.."
-export SIGNO_DATA=$(mktemp -d)
-S=bin/signo.mjs; O=$SIGNO_DATA
+export SIGNSNIP_DATA=$(mktemp -d)
+S=bin/signsnip.mjs; O=$SIGNSNIP_DATA
 t() { local name="$1"; shift; out=$("$@" 2>&1); code=$?; printf '%-46s exit=%s  %s\n' "$name" "$code" "$(echo "$out" | head -1 | cut -c1-150)"; }
 $S brands >/dev/null
 # --- adding signs
@@ -68,7 +68,7 @@ t "rm template used in batch" bash -c "$S add --template x --brand orbital --per
 t "export after rm (fallback)" $S export -o $O/rm.pdf
 t "rm fallback target"        bash -c "$S templates rm percent-long && $S templates show percent | sed -n 2p"
 t "export w/ dangling fallback" $S export -o $O/dang.pdf
-echo '{"format":"sign-snip/template-set","version":1,"exportedAt":"x","templates":[]}' > $O/e.json; t "import empty set" $S templates import $O/e.json
+echo '{"format":"signsnip/template-set","version":1,"exportedAt":"x","templates":[]}' > $O/e.json; t "import empty set" $S templates import $O/e.json
 echo 'not json' > $O/n.json;  t "import not json" $S templates import $O/n.json
 python3 -c "import json;d=json.load(open('$O/../$(basename $O)/templates.json')) if False else None" 2>/dev/null
 $S templates export bogo -o $O/b.json >/dev/null

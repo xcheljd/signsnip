@@ -5,13 +5,13 @@ import { spawnSync } from "node:child_process";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const root = path.resolve(__dirname, "..");
-const bin = path.join(root, "bin/signo.mjs");
+const bin = path.join(root, "bin/signsnip.mjs");
 let data: string;
-const signo = (...a: string[]) => spawnSync(process.execPath, [bin, ...a], { env: { ...process.env, SIGNO_DATA: data }, encoding: "utf8" });
+const signo = (...a: string[]) => spawnSync(process.execPath, [bin, ...a], { env: { ...process.env, SIGNSNIP_DATA: data }, encoding: "utf8" });
 
-beforeAll(() => { data = fs.mkdtempSync(path.join(os.tmpdir(), "signo-")); });
+beforeAll(() => { data = fs.mkdtempSync(path.join(os.tmpdir(), "signsnip-")); });
 
-describe("signo CLI end-to-end (isolated data dir)", () => {
+describe("signsnip CLI end-to-end (isolated data dir)", () => {
   it("lists the seeded fake brands", () => {
     const r = signo("brands");
     expect(r.status).toBe(0);
@@ -84,7 +84,7 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("templates", "duplicate", "bogo", "Holiday BOGO").stdout).toContain("holiday-bogo");
     expect(signo("add", "--template", "holiday", "--brand", "orbital", "--collection", "Comet", "--percent", "50").stdout).toContain("[Holiday BOGO]");
     signo("templates", "set", "holiday-bogo", "offer.size=26", "static-1.text=TREAT ONE");
-    const file = path.join(data, "set.signo.json");
+    const file = path.join(data, "set.signsnip.json");
     expect(signo("templates", "export", "percent", "holiday-bogo", "--name", "My set", "-o", file).stdout).toContain("2 templates");
     // change mine, then import: differing one is kept as a copy, re-import adds nothing more
     signo("templates", "set", "holiday-bogo", "offer.size=20");
@@ -98,7 +98,7 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("templates", "reset", "percent").status).toBe(0);
     expect(signo("templates", "show", "percent").stdout).toMatch(/offer .*30pt/);
     fs.writeFileSync(path.join(data, "bad.json"), '{"hello":1}');
-    expect(signo("templates", "import", path.join(data, "bad.json")).stderr).toContain("isn't a Sign Snip template set");
+    expect(signo("templates", "import", path.join(data, "bad.json")).stderr).toContain("isn't a SignSnip template set");
   });
   it("readable-minimum rules: abbreviations, fallback template, strict export", () => {
     signo("clear");
@@ -176,7 +176,7 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     signo("clear"); signo("add", "--brand", "orbital", "--collection", "Round trip", "--percent", "33");
     expect(signo("backup", "-o", file).stdout).toMatch(/backed up \d+ brands \(\d+ logos\)/);
     const ws = JSON.parse(fs.readFileSync(file, "utf8"));
-    expect(ws.format).toBe("sign-snip/workspace");
+    expect(ws.format).toBe("signsnip/workspace");
     expect(Object.keys(ws.logos).length).toBeGreaterThan(0);
     // refuses without --yes, and refuses a template set
     expect(signo("start", "scratch").status).toBe(1);
@@ -199,7 +199,7 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     fs.writeFileSync(path.join(data, "legacy.json"), JSON.stringify(legacy));
     expect(signo("restore", path.join(data, "legacy.json"), "--yes").status).toBe(0);
     const set = JSON.parse(fs.readFileSync(path.join(data, "set.json"), "utf8"));
-    expect(set.format).toBe("sign-snip/template-set");
+    expect(set.format).toBe("signsnip/template-set");
     fs.writeFileSync(path.join(data, "legacy-set.json"), JSON.stringify({ ...set, format: "sign-o-matic/template-set" }));
     expect(signo("templates", "import", path.join(data, "legacy-set.json")).status).toBe(0);
     // samples: made-up brands + a small batch

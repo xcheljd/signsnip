@@ -99,7 +99,7 @@ export type Template = z.infer<typeof TemplateSchema>;
 
 /** A shareable file of templates ("sets I'm happy with"). */
 export const TemplateSetSchema = z.object({
-  format: z.enum(["sign-snip/template-set", "sign-o-matic/template-set"]), // older files used the old name
+  format: z.enum(["signsnip/template-set", "sign-o-matic/template-set"]), // older files used the old name
   version: z.literal(1),
   name: z.string().max(80).optional(),
   exportedAt: z.string(),

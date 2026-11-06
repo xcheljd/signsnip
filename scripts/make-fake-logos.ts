@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-process.env.SIGNO_DATA = path.join(root, "seed"); // write straight into the seed dir
+process.env.SIGNSNIP_DATA = path.join(root, "seed"); // write straight into the seed dir
 fs.rmSync(path.join(root, "seed"), { recursive: true, force: true });
 fs.mkdirSync(path.join(root, "seed"), { recursive: true });
 const { upsertBrand, saveLogo, savePresets } = await import("../src/core/store.js");

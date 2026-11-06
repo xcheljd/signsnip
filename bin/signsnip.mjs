@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Thin launcher so `signo` works from any directory (keeps the caller's cwd for relative file args).
+// Thin launcher so `signsnip` works from any directory (keeps the caller's cwd for relative file args).
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";

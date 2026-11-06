@@ -69,7 +69,7 @@ app.get("/api/calibration", async (c) => {
 
 // whole-workspace backup / restore
 app.get("/api/workspace", () => new Response(JSON.stringify(exportWorkspace()), {
-  headers: { "content-type": "application/json", "content-disposition": `attachment; filename="sign-snip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json"` },
+  headers: { "content-type": "application/json", "content-disposition": `attachment; filename="signsnip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json"` },
 }));
 app.post("/api/workspace/inspect", async (c) => c.json(summarizeWorkspace(parseWorkspace(await c.req.json()))));
 app.post("/api/workspace/restore", async (c) => c.json(restoreWorkspace(await c.req.json())));
@@ -157,4 +157,4 @@ if (fs.existsSync(dist)) {
 }
 
 serve({ fetch: app.fetch, port: API_PORT, hostname: "127.0.0.1" }, () =>
-  console.log(`Sign Snip API on http://127.0.0.1:${API_PORT}${fs.existsSync(dist) ? " (serving built UI)" : ""}`));
+  console.log(`SignSnip API on http://127.0.0.1:${API_PORT}${fs.existsSync(dist) ? " (serving built UI)" : ""}`));

@@ -95,7 +95,7 @@ export async function createBrowserBackend(): Promise<Backend> {
     backup: async () => {
       await r.flush();
       markBackedUp();
-      return { blob: new Blob([JSON.stringify(exportWorkspace())], { type: "application/json" }), filename: `sign-snip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json` };
+      return { blob: new Blob([JSON.stringify(exportWorkspace())], { type: "application/json" }), filename: `signsnip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json` };
     },
     inspectBackup: (raw) => run(() => summarizeWorkspace(parseWorkspace(raw))),
     restoreBackup: (raw) => quietly(async () => {

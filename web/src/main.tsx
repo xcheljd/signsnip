@@ -12,7 +12,7 @@ api.init().then(
   () => root.render(<TooltipProvider><App /></TooltipProvider>),
   (e: Error) => root.render(
     <main className="mx-auto max-w-xl p-8">
-      <h1 className="text-lg font-semibold">Sign Snip couldn't start</h1>
+      <h1 className="text-lg font-semibold">SignSnip couldn't start</h1>
       <p className="mt-2 text-muted-foreground">{e.message}</p>
       <p className="mt-2 text-sm text-muted-foreground">This browser may block site storage (private windows often do). Try a normal window, or another browser.</p>
     </main>,

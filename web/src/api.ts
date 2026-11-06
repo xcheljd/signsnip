@@ -100,7 +100,7 @@ const server: Backend = {
   async backup() {
     const res = await fetch("/api/workspace");
     if (!res.ok) throw new Error("Backup failed");
-    return { blob: await res.blob(), filename: filename(res, "sign-snip-backup.signsnip-backup.json") };
+    return { blob: await res.blob(), filename: filename(res, "signsnip-backup.signsnip-backup.json") };
   },
   inspectBackup: (raw) => send("/api/workspace/inspect", raw).then((r) => j<BackupSummary>(r)),
   restoreBackup: (raw) => send("/api/workspace/restore", raw).then((r) => j<BackupSummary>(r)),

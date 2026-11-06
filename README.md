@@ -1,4 +1,4 @@
-# 🪧 Sign Snip
+# 🪧 SignSnip
 
 Print-ready shelf signs for **47 × 70 mm** holders. Pick a brand, a collection and a percent off
 (or a price), and get a PDF sheet ready to print and cut. Replaces hand-editing a spreadsheet full of text boxes.
@@ -11,7 +11,7 @@ Print-ready shelf signs for **47 × 70 mm** holders. Pick a brand, a collection 
 ```bash
 pnpm install
 pnpm build        # builds the web UI
-pnpm start        # http://127.0.0.1:7047   (or: signo serve)
+pnpm start        # http://127.0.0.1:7047   (or: signsnip serve)
 pnpm dev          # hot-reload UI on :7048, API on :7047
 ```
 
@@ -54,10 +54,10 @@ examples: *Buy one get one* and *Final sale*.
 - Warnings: off the paper, past the safe margin (dashed line), text that can't fit its box.
 - Saving updates every sign that uses the template. The Make-signs form only shows the fields the
   chosen template prints.
-- **Export** writes a template set (`*.signo.json`) with the templates you pick. **Import** shows what's new,
+- **Export** writes a template set (`*.signsnip.json`) with the templates you pick. **Import** shows what's new,
   what you already have, and what differs from yours (keep both, or replace yours).
 
-**Hosted version (no server)**: `pnpm build:static` builds a copy that runs entirely in the browser and can be served by any static host (GitHub Pages workflow included). On first visit it asks how to start: from scratch, with the made-up samples, or by restoring a backup. **The site does not save your work**: nothing is uploaded, and the browser's own temporary copy can be erased without warning. To pick up where you left off, download a backup (**Workspace → Back up everything**, or **Back up now** in the status bar) and restore it next time. The status bar shows whether you have changes since your last backup. Backups move between the hosted app, the local app and the CLI (`signo backup`, `signo restore file --yes`).
+**Hosted version (no server)**: `pnpm build:static` builds a copy that runs entirely in the browser and can be served by any static host (GitHub Pages workflow included). On first visit it asks how to start: from scratch, with the made-up samples, or by restoring a backup. **The site does not save your work**: nothing is uploaded, and the browser's own temporary copy can be erased without warning. To pick up where you left off, download a backup (**Back up now** in the status bar) and use **Restore** next time; **Start over** is next to it and restore it next time. The status bar shows whether you have changes since your last backup. Backups move between the hosted app, the local app and the CLI (`signsnip backup`, `signsnip restore file --yes`).
 
 **Text rules**: a store-wide *readable minimum* (default 10pt) and your own abbreviation list. When text would shrink below the minimum, auto-fit applies abbreviations (only as many as needed), then the template's long-name fallback (set in the designer), and only then warns. Print/Download asks first if anything is still too small. "Try a name" previews the exact result.
 
@@ -65,32 +65,32 @@ examples: *Buy one get one* and *Final sale*.
 a live sample sign, a **logo size slider** (capped where the logo would hit the text), and
 **Remove background / Restore original**.
 
-## CLI (`signo`, shares the batch with the UI live)
+## CLI (`signsnip`, shares the batch with the UI live)
 
 ```bash
-signo brands
-signo brands add "My Brand" --logo ./logo.png --collections "Line A,Line B"
-signo brands scale lumen 1.2          # logo size on every sign for that brand
-signo brands fix-bg orbital           # make a white/solid logo background transparent (restore: brands restore)
-signo add --brand northwind --collection "Harbor Line" --percent 50 --copies 3
-signo add --brand kestrel --collection Falcon --price 249 --was 399 --price-label NOW
-signo add --preset sale-50
-signo import rows.csv                 # brand,collection,percent|price[,was,price_label,copies,prefix,footer]
-signo batch                           # rows + page fill
-signo bulk --rows 1,3-5 --percent 60  # or --price / --brand / --footer / --copies; --rows all
-signo fill                            # top up the last page
-signo save "Holiday sale" ; signo batches ; signo load holiday
-signo templates                       # list; show <tpl>; set <tpl> offer.size=34 heading.y=20 ...
-signo templates duplicate bogo "Holiday BOGO" ; signo templates reset percent ; signo templates rm <tpl>
-signo templates export bogo final-sale --name "Holiday set" -o holiday.signo.json
-signo templates import holiday.signo.json [--replace]
-signo add --template bogo --brand orbital --collection Comet --percent 50
-signo rules ; signo rules min 10 ; signo rules abbr "Chronograph" "Chrono" ; signo rules abbr-rm Chronograph
-signo templates fallback percent percent-long ; signo templates min percent 9
-signo export --strict                 # refuse if anything is below the readable minimum
-signo check                           # pre-print warnings
-signo calibrate                       # printer check page
-signo export -o out/signs.pdf [--grid portrait-4x3] [--paper a4] [--no-cut-marks]
+signsnip brands
+signsnip brands add "My Brand" --logo ./logo.png --collections "Line A,Line B"
+signsnip brands scale lumen 1.2          # logo size on every sign for that brand
+signsnip brands fix-bg orbital           # make a white/solid logo background transparent (restore: brands restore)
+signsnip add --brand northwind --collection "Harbor Line" --percent 50 --copies 3
+signsnip add --brand kestrel --collection Falcon --price 249 --was 399 --price-label NOW
+signsnip add --preset sale-50
+signsnip import rows.csv                 # brand,collection,percent|price[,was,price_label,copies,prefix,footer]
+signsnip batch                           # rows + page fill
+signsnip bulk --rows 1,3-5 --percent 60  # or --price / --brand / --footer / --copies; --rows all
+signsnip fill                            # top up the last page
+signsnip save "Holiday sale" ; signsnip batches ; signsnip load holiday
+signsnip templates                       # list; show <tpl>; set <tpl> offer.size=34 heading.y=20 ...
+signsnip templates duplicate bogo "Holiday BOGO" ; signsnip templates reset percent ; signsnip templates rm <tpl>
+signsnip templates export bogo final-sale --name "Holiday set" -o holiday.signsnip.json
+signsnip templates import holiday.signsnip.json [--replace]
+signsnip add --template bogo --brand orbital --collection Comet --percent 50
+signsnip rules ; signsnip rules min 10 ; signsnip rules abbr "Chronograph" "Chrono" ; signsnip rules abbr-rm Chronograph
+signsnip templates fallback percent percent-long ; signsnip templates min percent 9
+signsnip export --strict                 # refuse if anything is below the readable minimum
+signsnip check                           # pre-print warnings
+signsnip calibrate                       # printer check page
+signsnip export -o out/signs.pdf [--grid portrait-4x3] [--paper a4] [--no-cut-marks]
 ```
 
 ## How it's built

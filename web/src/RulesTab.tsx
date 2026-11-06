@@ -60,7 +60,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
         <Card>
           <CardHeader>
             <CardTitle>Readable minimum</CardTitle>
-            <CardDescription>Text shrinks to fit its box. When it would go below this size, Sign Snip tries your abbreviations, then the template's long-name fallback, and only then warns you.</CardDescription>
+            <CardDescription>Text shrinks to fit its box. When it would go below this size, SignSnip tries your abbreviations, then the template's long-name fallback, and only then warns you.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex items-center gap-3">

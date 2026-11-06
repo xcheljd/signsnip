@@ -19,70 +19,70 @@ import { seedSamples } from "../core/node.js";
 import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
 import { GridSchema, PaperSchema, TemplateSchema, type Sign, type Template } from "../core/types.js";
 
-const HELP = `signsnip - Sign Snip CLI (47x70mm shelf signs -> print-ready PDF). Short alias: signo
+const HELP = `signsnip - SignSnip CLI (47x70mm shelf signs -> print-ready PDF)
 
 Brands
-  signo brands                              list brands, collections, logo status
-  signo brands add "Name" [--logo file] [--collections "A,B,C"]
-  signo brands logo <brand> <file>          set/replace a logo (png/jpg/webp/svg)
-  signo brands collections <brand> "A,B,C"  replace the collection list
-  signo brands scale <brand> <0.5-1.6>      grow/shrink that brand's logo on every sign
-  signo brands fix-bg <brand>               make a logo's solid background transparent
-  signo brands restore <brand>              undo fix-bg
-  signo brands rm <brand>
+  signsnip brands                              list brands, collections, logo status
+  signsnip brands add "Name" [--logo file] [--collections "A,B,C"]
+  signsnip brands logo <brand> <file>          set/replace a logo (png/jpg/webp/svg)
+  signsnip brands collections <brand> "A,B,C"  replace the collection list
+  signsnip brands scale <brand> <0.5-1.6>      grow/shrink that brand's logo on every sign
+  signsnip brands fix-bg <brand>               make a logo's solid background transparent
+  signsnip brands restore <brand>              undo fix-bg
+  signsnip brands rm <brand>
 
 Batch (shared live with the web UI)
-  signo add --brand <id|name> --collection "Harbor Line" --percent 50 [--prefix SELECT] [--footer "*MSRP"] [--copies 2]
-  signo add --brand <b> --collection Comet --price 199 [--was 395] [--price-label NOW]   price-point sign
-  signo add --preset <id|name> [--copies 4]
-  signo add --template bogo --brand <b> --collection Comet --percent 50   any template
-  signo import <file.csv>                   columns: brand,collection,percent|price[,was,price_label,copies,prefix,footer]
-  signo batch                               show the current batch + page fill
-  signo bulk [--rows 1,3-5|all] --percent 50 | --price 199 | --brand <b> | --template <t> | --footer "x" | --copies 2
-  signo fill                                top up the last page with copies of the last row
-  signo rm <row#>                           remove one row (1-based)
-  signo clear                               empty the batch
+  signsnip add --brand <id|name> --collection "Harbor Line" --percent 50 [--prefix SELECT] [--footer "*MSRP"] [--copies 2]
+  signsnip add --brand <b> --collection Comet --price 199 [--was 395] [--price-label NOW]   price-point sign
+  signsnip add --preset <id|name> [--copies 4]
+  signsnip add --template bogo --brand <b> --collection Comet --percent 50   any template
+  signsnip import <file.csv>                   columns: brand,collection,percent|price[,was,price_label,copies,prefix,footer]
+  signsnip batch                               show the current batch + page fill
+  signsnip bulk [--rows 1,3-5|all] --percent 50 | --price 199 | --brand <b> | --template <t> | --footer "x" | --copies 2
+  signsnip fill                                top up the last page with copies of the last row
+  signsnip rm <row#>                           remove one row (1-based)
+  signsnip clear                               empty the batch
 
 Templates (layouts: what goes where, font sizes)
-  signo templates                           list templates (+ how many batch rows use each)
-  signo templates show <tpl>                every object with position/size (mm) and font size (pt)
-  signo templates set <tpl> offer.size=34 heading.y=20 footer.weight=regular ...
+  signsnip templates                           list templates (+ how many batch rows use each)
+  signsnip templates show <tpl>                every object with position/size (mm) and font size (pt)
+  signsnip templates set <tpl> offer.size=34 heading.y=20 footer.weight=regular ...
                                             object = id or field name; props: x y w h size minSize weight
                                             align vAlign maxLines balance uppercase strike color text
-  signo templates duplicate <tpl> "New name"
-  signo templates rename <tpl> "New name"
-  signo templates reset <percent|price|bogo|final-sale>   back to the original layout
-  signo templates rm <tpl>
-  signo templates export [tpl ...] [-o file.signsnip.json] [--name "Holiday set"]
-  signo templates import <file> [--replace]  default keeps both when a template differs
+  signsnip templates duplicate <tpl> "New name"
+  signsnip templates rename <tpl> "New name"
+  signsnip templates reset <percent|price|bogo|final-sale>   back to the original layout
+  signsnip templates rm <tpl>
+  signsnip templates export [tpl ...] [-o file.signsnip.json] [--name "Holiday set"]
+  signsnip templates import <file> [--replace]  default keeps both when a template differs
 
 Readable text (auto-fit)
-  signo rules                               readable minimum + abbreviation list
-  signo rules min 10                        text that would shrink below 10pt gets auto-fixed or flagged
-  signo rules abbr "Chronograph" "Chrono"   add/replace an abbreviation (used only when needed)
-  signo rules abbr-rm "Chronograph"
-  signo templates fallback percent percent-long   use this template when text gets too small (none = off)
-  signo templates min percent 9 | none      per-template readable minimum (none = use the store setting)
-  signo export --strict                     refuse to export if any sign is still below the minimum
+  signsnip rules                               readable minimum + abbreviation list
+  signsnip rules min 10                        text that would shrink below 10pt gets auto-fixed or flagged
+  signsnip rules abbr "Chronograph" "Chrono"   add/replace an abbreviation (used only when needed)
+  signsnip rules abbr-rm "Chronograph"
+  signsnip templates fallback percent percent-long   use this template when text gets too small (none = off)
+  signsnip templates min percent 9 | none      per-template readable minimum (none = use the store setting)
+  signsnip export --strict                     refuse to export if any sign is still below the minimum
 
 Backups (everything: brands, logos, templates, text rules, presets, batches)
-  signo backup [-o file.signsnip-backup.json]  one file you can restore here or in the hosted app
-  signo restore <file> --yes                REPLACES everything with the backup
-  signo start scratch|samples --yes         wipe and start empty, or with the made-up sample brands
+  signsnip backup [-o file.signsnip-backup.json]  one file you can restore here or in the hosted app
+  signsnip restore <file> --yes                REPLACES everything with the backup
+  signsnip start scratch|samples --yes         wipe and start empty, or with the made-up sample brands
 
 Saved batches
-  signo batches                             list saved batches
-  signo save "Holiday sale"                 save the current batch under a name
-  signo load "Holiday sale"                 replace the current batch with a saved one
-  signo batches rm "Holiday sale"
+  signsnip batches                             list saved batches
+  signsnip save "Holiday sale"                 save the current batch under a name
+  signsnip load "Holiday sale"                 replace the current batch with a saved one
+  signsnip batches rm "Holiday sale"
 
 Output
-  signo export [-o out/signs.pdf] [--grid landscape-5x2|portrait-4x3] [--paper letter|a4] [--no-cut-marks]
-  signo make  <same flags as add> [-o file]  one-shot: a sheet from a single spec
-  signo check                               pre-print warnings (low-res logos, tiny text, ...)
-  signo calibrate [-o file] [--paper a4]     printer check page (47x70 box + rulers)
-  signo presets
-  signo serve                               start the web UI (http://127.0.0.1:7047)
+  signsnip export [-o out/signs.pdf] [--grid landscape-5x2|portrait-4x3] [--paper letter|a4] [--no-cut-marks]
+  signsnip make  <same flags as add> [-o file]  one-shot: a sheet from a single spec
+  signsnip check                               pre-print warnings (low-res logos, tiny text, ...)
+  signsnip calibrate [-o file] [--paper a4]     printer check page (47x70 box + rulers)
+  signsnip presets
+  signsnip serve                               start the web UI (http://127.0.0.1:7047)
 `;
 
 const log = (...a: unknown[]) => console.log(...a);
@@ -180,7 +180,7 @@ async function doExport(signs: Sign[], v: Flags) {
     paper: v.paper ? PaperSchema.parse(v.paper) : batch.options.paper,
     cutMarks: v["no-cut-marks"] ? false : batch.options.cutMarks,
   };
-  if (signs.length === 0) die("nothing to export - the batch is empty (signo add ...)");
+  if (signs.length === 0) die("nothing to export - the batch is empty (signsnip add ...)");
   const small = (await checkSigns(signs)).filter((w) => w.code === "small-text");
   if (v.strict && small.length) {
     for (const w of small) console.error(`  ! ${w.message}`);
@@ -213,25 +213,25 @@ async function main() {
         return;
       }
       if (sub === "add") {
-        if (!a) die('usage: signo brands add "Name" [--logo file] [--collections "A,B"]');
+        if (!a) die('usage: signsnip brands add "Name" [--logo file] [--collections "A,B"]');
         const br = upsertBrand({ name: a, collections: v.collections?.split(",").map((s) => s.trim()).filter(Boolean) });
         if (v.logo) await saveLogo(br.id, fs.readFileSync(v.logo));
         return log(`saved brand ${br.id}${v.logo ? " with logo" : ""}`);
       }
       const br = findBrand(a ?? "");
       if (sub === "logo") {
-        if (!br || !b) die("usage: signo brands logo <brand> <file>");
+        if (!br || !b) die("usage: signsnip brands logo <brand> <file>");
         const { aspect } = await saveLogo(br.id, fs.readFileSync(b));
         return log(`logo set for ${br.id} (aspect ${aspect.toFixed(2)})`);
       }
       if (sub === "collections") {
-        if (!br || b === undefined) die('usage: signo brands collections <brand> "A,B,C"');
+        if (!br || b === undefined) die('usage: signsnip brands collections <brand> "A,B,C"');
         upsertBrand({ id: br.id, name: br.name, collections: b.split(",").map((s) => s.trim()).filter(Boolean) });
         return log("collections updated");
       }
       if (sub === "scale") {
         const k = Number(b);
-        if (!br || !(k >= 0.5 && k <= 1.6)) die("usage: signo brands scale <brand> <0.5-1.6>");
+        if (!br || !(k >= 0.5 && k <= 1.6)) die("usage: signsnip brands scale <brand> <0.5-1.6>");
         const info = await logoInfo(br.id);
         const max = info ? maxLogoScale(info.aspect) : 1.6;
         const use = Math.min(Math.round(k * 100) / 100, max);
@@ -239,11 +239,11 @@ async function main() {
         return log(`${br.id} logo scale = ${use}${use < k ? ` (capped: this logo's shape maxes out at ${max})` : ""}`);
       }
       if (sub === "fix-bg") {
-        if (!br) die("usage: signo brands fix-bg <brand>");
+        if (!br) die("usage: signsnip brands fix-bg <brand>");
         const info = await removeLogoBackground(br.id);
-        return log(`background removed for ${br.id} (now ${info.background}); undo with: signo brands restore ${br.id}`);
+        return log(`background removed for ${br.id} (now ${info.background}); undo with: signsnip brands restore ${br.id}`);
       }
-      if (sub === "restore") { if (!br) die("usage: signo brands restore <brand>"); await restoreLogo(br.id); return log(`restored original logo for ${br.id}`); }
+      if (sub === "restore") { if (!br) die("usage: signsnip brands restore <brand>"); await restoreLogo(br.id); return log(`restored original logo for ${br.id}`); }
       if (sub === "rm") { if (!br) die("unknown brand"); deleteBrand(br.id); return log(`removed ${br.id}`); }
       return die(`unknown brands subcommand "${sub}"`);
     }
@@ -259,7 +259,7 @@ async function main() {
       return log(describe(s, b.items.length), `\nbatch now has ${b.items.length} row(s)`);
     }
     case "import": {
-      if (!p[0]) die("usage: signo import <file.csv>");
+      if (!p[0]) die("usage: signsnip import <file.csv>");
       const signs = csvToSigns(fs.readFileSync(p[0], "utf8"));
       const b = addToBatch(signs); return log(`imported ${signs.length} row(s); batch now has ${b.items.length}`);
     }
@@ -269,7 +269,7 @@ async function main() {
       b.items.forEach((s, i) => log(describe(s, i + 1)));
       const total = expandCopies(b.items).length;
       const fill = pageFill(total, sheetGeometry(b.options).perPage);
-      return log(`${total} signs · ${fill.pages} page${fill.pages === 1 ? "" : "s"} · last page ${fill.lastUsed}/${fill.lastUsed + fill.empty}${fill.empty ? ` (${fill.empty} empty - signo fill)` : ""} · ${b.options.paper} ${b.options.grid}`);
+      return log(`${total} signs · ${fill.pages} page${fill.pages === 1 ? "" : "s"} · last page ${fill.lastUsed}/${fill.lastUsed + fill.empty}${fill.empty ? ` (${fill.empty} empty - signsnip fill)` : ""} · ${b.options.paper} ${b.options.grid}`);
     }
     case "bulk": {
       const b = readBatch();
@@ -313,22 +313,22 @@ async function main() {
     case "clear": { const b = readBatch(); writeBatch({ ...b, items: [] }); return log("batch cleared"); }
     case "batches": {
       if (p[0] === "rm") {
-        const s = findSavedBatch(p[1] ?? "") ?? die("usage: signo batches rm <name>");
+        const s = findSavedBatch(p[1] ?? "") ?? die("usage: signsnip batches rm <name>");
         deleteSavedBatch(s.id); return log(`deleted saved batch "${s.name}"`);
       }
       const all = listSavedBatches();
-      if (!all.length) return log('(no saved batches - signo save "Name")');
+      if (!all.length) return log('(no saved batches - signsnip save "Name")');
       for (const s of all) log(`${s.id.padEnd(22)} ${s.name}  · ${expandCopies(s.batch.items).length} signs · saved ${s.savedAt.slice(0, 10)}`);
       return;
     }
     case "save": {
-      const name = p[0] ?? die('usage: signo save "Batch name"');
+      const name = p[0] ?? die('usage: signsnip save "Batch name"');
       const b = readBatch();
       if (!b.items.length) die("the batch is empty - nothing to save");
       const s = saveNamedBatch(name, b); return log(`saved "${s.name}" (${s.id})${s.replaced ? " - replaced the earlier batch with that name" : ""}`);
     }
     case "load": {
-      const s = findSavedBatch(p[0] ?? "") ?? die(`No saved batch matching "${p[0] ?? ""}". Try: signo batches`);
+      const s = findSavedBatch(p[0] ?? "") ?? die(`No saved batch matching "${p[0] ?? ""}". Try: signsnip batches`);
       writeBatch(s.batch); return log(`loaded "${s.name}" (${s.batch.items.length} rows)`);
     }
     case "templates": {
@@ -342,10 +342,10 @@ async function main() {
         return;
       }
       const t = sub === "import" || sub === "export" ? undefined : findTemplate(a ?? "");
-      const need = () => t ?? die(`No template matching "${a ?? ""}". Try: signo templates`);
+      const need = () => t ?? die(`No template matching "${a ?? ""}". Try: signsnip templates`);
       if (sub === "show") return showTemplate(need());
       if (sub === "set") {
-        if (!more.length) die("usage: signo templates set <tpl> offer.size=34 [heading.y=20 ...]");
+        if (!more.length) die("usage: signsnip templates set <tpl> offer.size=34 [heading.y=20 ...]");
         let next = need();
         for (const as of more) next = applyTemplateSet(next, as);
         saveTemplate(next);
@@ -353,11 +353,11 @@ async function main() {
       }
       if (sub === "duplicate") { const c = duplicateTemplate(need().id, more[0]); return log(`created ${c.id} ("${c.name}")`); }
       if (sub === "rename") {
-        const name = more[0] ?? die('usage: signo templates rename <tpl> "New name"');
+        const name = more[0] ?? die('usage: signsnip templates rename <tpl> "New name"');
         saveTemplate({ ...need(), name }); return log(`renamed ${need().id} to "${name}"`);
       }
       if (sub === "fallback") {
-        const to = more[0] ?? die("usage: signo templates fallback <tpl> <other-tpl|none>");
+        const to = more[0] ?? die("usage: signsnip templates fallback <tpl> <other-tpl|none>");
         const cur = need();
         if (to === "none") { saveTemplate({ ...cur, fallbackId: undefined }); return log(`${cur.id}: no fallback`); }
         const fb = findTemplate(to) ?? die(`No template matching "${to}"`);
@@ -367,7 +367,7 @@ async function main() {
         return log(`${cur.id}: when text gets too small, use "${fb.name}"`);
       }
       if (sub === "min") {
-        const v2 = more[0] ?? die("usage: signo templates min <tpl> <pt|none>");
+        const v2 = more[0] ?? die("usage: signsnip templates min <tpl> <pt|none>");
         const cur = need();
         if (v2 === "none") { saveTemplate({ ...cur, readableMin: undefined }); return log(`${cur.id}: uses the store readable minimum (${readRules().readableMin}pt)`); }
         const n = Number(v2.replace(/pt$/, ""));
@@ -385,7 +385,7 @@ async function main() {
         return log(`wrote ${out} (${set.templates.length} template${set.templates.length === 1 ? "" : "s"}: ${set.templates.map((x) => x.id).join(", ")})`);
       }
       if (sub === "import") {
-        if (!a) die("usage: signo templates import <file.signsnip.json> [--replace]");
+        if (!a) die("usage: signsnip templates import <file.signsnip.json> [--replace]");
         let raw: unknown;
         try { raw = JSON.parse(fs.readFileSync(a, "utf8")); } catch { die(`can't read ${a} as JSON`); }
         const r = importTemplateSet(parseTemplateSet(raw), v.replace ? "replace" : "keep-both");
@@ -410,11 +410,11 @@ async function main() {
       }
       if (sub === "min") {
         const n = Number(String(a ?? "").replace(/pt$/, ""));
-        if (!(n >= 4 && n <= 40)) die("usage: signo rules min <4-40>");
+        if (!(n >= 4 && n <= 40)) die("usage: signsnip rules min <4-40>");
         writeRules({ ...r, readableMin: n }); return log(`readable minimum = ${n}pt`);
       }
       if (sub === "abbr") {
-        if (!a || b === undefined) die('usage: signo rules abbr "Word" "Short"');
+        if (!a || b === undefined) die('usage: signsnip rules abbr "Word" "Short"');
         writeRules({ ...r, abbreviations: [...r.abbreviations, { from: a, to: b }] }); return log(`${a} -> ${b || "(removed)"}`);
       }
       if (sub === "abbr-rm") {
@@ -426,25 +426,25 @@ async function main() {
     }
     case "backup": {
       const ws = exportWorkspace();
-      const file = v.o ?? path.join(OUT_DIR, `sign-snip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json`);
+      const file = v.o ?? path.join(OUT_DIR, `signsnip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json`);
       fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
       fs.writeFileSync(file, JSON.stringify(ws));
       const s = summarizeWorkspace(ws);
       return log(`backed up ${s.brands} brands (${s.logos} logos), ${s.templates} templates, ${s.presets} presets, ${s.saved} saved batches, ${s.signs} signs in the batch -> ${file}`);
     }
     case "restore": {
-      if (!p[0]) die("usage: signo restore <file.signsnip-backup.json> --yes");
+      if (!p[0]) die("usage: signsnip restore <file.signsnip-backup.json> --yes");
       let raw: unknown;
       try { raw = JSON.parse(fs.readFileSync(p[0], "utf8")); } catch { die(`can't read ${p[0]} as JSON`); }
       const s = summarizeWorkspace(parseWorkspace(raw));
-      if (!v.yes) die(`this replaces EVERYTHING here with the backup from ${s.exportedAt.slice(0, 10)} (${s.brands} brands, ${s.templates} templates, ${s.saved} saved batches). Run again with --yes, and \`signo backup\` first if you want to keep the current data.`);
+      if (!v.yes) die(`this replaces EVERYTHING here with the backup from ${s.exportedAt.slice(0, 10)} (${s.brands} brands, ${s.templates} templates, ${s.saved} saved batches). Run again with --yes, and \`signsnip backup\` first if you want to keep the current data.`);
       restoreWorkspace(raw);
       return log(`restored: ${s.brands} brands (${s.logos} logos), ${s.templates} templates, ${s.presets} presets, ${s.saved} saved batches, ${s.signs} signs in the batch`);
     }
     case "start": {
       const from = p[0];
-      if (from !== "scratch" && from !== "samples") die("usage: signo start scratch|samples --yes");
-      if (!v.yes) die(`this wipes all brands, logos, templates, batches and rules here. Run again with --yes (and \`signo backup\` first to keep them).`);
+      if (from !== "scratch" && from !== "samples") die("usage: signsnip start scratch|samples --yes");
+      if (!v.yes) die(`this wipes all brands, logos, templates, batches and rules here. Run again with --yes (and \`signsnip backup\` first to keep them).`);
       if (from === "scratch") startFromScratch(); else startWithSamples(seedSamples());
       return log(from === "scratch" ? "started from scratch: no brands, built-in templates, default text rules" : `started with samples: ${listBrands().length} made-up brands and a ${readBatch().items.length}-row batch`);
     }
@@ -467,13 +467,13 @@ async function main() {
     case "make": return doExport([signFromFlags(v)], v);
     case "serve": { await import("../server/index.js"); return; }
     case "save-preset": {
-      const s = signFromFlags(v); const name = p[0] ?? die("usage: signo save-preset <name> <add flags>");
+      const s = signFromFlags(v); const name = p[0] ?? die("usage: signsnip save-preset <name> <add flags>");
       const id = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const { id: _i, copies: _c, ...sign } = s;
       savePresets([...listPresets().filter((x) => x.id !== id), { id, name: String(name), sign }]);
       return log(`saved preset ${id}`);
     }
-    default: die(`unknown command "${cmd}". Run: signo help`);
+    default: die(`unknown command "${cmd}". Run: signsnip help`);
   }
 }
 main().catch((e) => {

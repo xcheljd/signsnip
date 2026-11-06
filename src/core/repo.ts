@@ -1,5 +1,5 @@
 /**
- * Where Sign Snip keeps its data. All business logic (store.ts) talks to this
+ * Where SignSnip keeps its data. All business logic (store.ts) talks to this
  * interface only, so the same code runs on two backends:
  *  - FsRepo (repo-fs.ts): JSON + PNG files in data/, shared by the local server and the CLI
  *  - BrowserRepo (web/src/local): IndexedDB, for the hosted, no-server version

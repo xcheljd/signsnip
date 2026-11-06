@@ -1,18 +1,17 @@
 {
-  "name": "sign-snip",
+  "name": "signsnip",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Print-ready shelf signs for 47x70mm holders. Local web app + CLI.",
+  "description": "SignSnip: print-ready sale signs for 47x70mm holders. Web app (local or hosted) + CLI.",
   "bin": {
-    "signsnip": "./bin/signo.mjs",
-    "signo": "./bin/signo.mjs"
+    "signsnip": "./bin/signsnip.mjs"
   },
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx watch src/server/index.ts\" \"vite\"",
     "build": "vite build",
     "start": "tsx src/server/index.ts",
-    "signo": "tsx src/cli/index.ts",
+    "signsnip": "tsx src/cli/index.ts",
     "seed:logos": "tsx scripts/make-fake-logos.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

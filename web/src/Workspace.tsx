@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ArchiveRestoreIcon, CircleAlertIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, ScissorsIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
+import { ArchiveRestoreIcon, CircleAlertIcon, RotateCcwIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, ScissorsIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as api from "./api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const describe = (s: api.BackupSummary) =>
@@ -23,7 +20,8 @@ export async function downloadBackup() {
  * The three ways in: blank, the made-up samples, or a backup file.
  * `replacing` = shown from the menu over an existing workspace (so it warns first).
  */
-export function StartChoices({ replacing, onDone }: { replacing: boolean; onDone: () => void }) {
+export function StartChoices({ replacing, onDone, only }: { replacing: boolean; onDone: () => void; only?: ("scratch" | "samples" | "backup")[] }) {
+  const show = (k: "scratch" | "samples" | "backup") => !only || only.includes(k);
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"" | "scratch" | "samples" | "backup">("");
   const [pending, setPending] = useState<{ raw: unknown; summary: api.BackupSummary; name: string } | null>(null);
@@ -38,7 +36,7 @@ export function StartChoices({ replacing, onDone }: { replacing: boolean; onDone
       const raw = JSON.parse(await f.text());
       setPending({ raw, summary: await api.inspectBackup(raw), name: f.name });
     } catch (e) {
-      toast.error(e instanceof SyntaxError ? "That file isn't a Sign Snip backup" : (e as Error).message);
+      toast.error(e instanceof SyntaxError ? "That file isn't a SignSnip backup" : (e as Error).message);
     } finally { if (file.current) file.current.value = ""; }
   };
   const restore = async () => {
@@ -59,31 +57,31 @@ export function StartChoices({ replacing, onDone }: { replacing: boolean; onDone
           </AlertDescription>
         </Alert>
       )}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+      <div className={`grid gap-4 ${only?.length === 1 ? "" : only?.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+        {show("scratch") && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><FilePlus2Icon className="size-4 text-primary" />Start from scratch</CardTitle>
             <CardDescription>An empty workspace with the built-in templates and default text rules. Add your own brands and logos.</CardDescription>
           </CardHeader>
           <CardFooter><Button className="w-full" disabled={!!busy} onClick={() => go("scratch")}>{busy === "scratch" ? "Setting up…" : "Start from scratch"}</Button></CardFooter>
-        </Card>
-        <Card>
+        </Card>}
+        {show("samples") && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><SparklesIcon className="size-4 text-primary" />Try the samples</CardTitle>
             <CardDescription>Five made-up watch brands with fake logos, presets and a small batch, to see how everything works.</CardDescription>
           </CardHeader>
           <CardFooter><Button className="w-full" variant="outline" disabled={!!busy} onClick={() => go("samples")}>{busy === "samples" ? "Loading…" : "Load samples"}</Button></CardFooter>
-        </Card>
-        <Card>
+        </Card>}
+        {show("backup") && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ArchiveRestoreIcon className="size-4 text-primary" />Continue your work</CardTitle>
             <CardDescription>Restore a backup file (<code className="whitespace-nowrap text-xs">.signsnip-backup.json</code>) from this app, another computer, or the local version.</CardDescription>
           </CardHeader>
           <CardFooter>
             <input ref={file} type="file" accept=".json,application/json" className="sr-only" aria-label="Backup file" onChange={(e) => pick(e.target.files?.[0])} />
-            <Button className="w-full" variant="outline" disabled={!!busy} onClick={() => file.current?.click()}>Choose backup file…</Button>
+            <Button className="w-full" variant={only?.length === 1 ? "default" : "outline"} disabled={!!busy} onClick={() => file.current?.click()}>Choose backup file…</Button>
           </CardFooter>
-        </Card>
+        </Card>}
       </div>
 
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
@@ -119,9 +117,9 @@ export function HowSavingWorks({ compact = false }: { compact?: boolean }) {
       <p className="flex items-start gap-2">
         <DownloadIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <span>
-          <strong className={strong}>Download a backup to pick up where you left off</strong>: <strong className={`${strong} whitespace-nowrap`}>Workspace → Back up everything</strong> saves
+          <strong className={strong}>Download a backup to pick up where you left off</strong>: <strong className={`${strong} whitespace-nowrap`}>Back up</strong> (top of the app) saves
           your brands, logos, templates, text rules, presets and batches to your computer.
-          Next time, choose <strong className={`${strong} whitespace-nowrap`}>Continue your work</strong> and pick that file.
+          Next time, choose <strong className={`${strong} whitespace-nowrap`}>Continue your work</strong> here, or <strong className={`${strong} whitespace-nowrap`}>Restore</strong> inside the app, and pick that file.
         </span>
       </p>
       <div className="flex items-start gap-2">
@@ -195,7 +193,7 @@ export function StartPage({ onDone }: { onDone: () => void }) {
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-5xl flex-col justify-center gap-6 p-4 sm:p-8">
       <div className="flex flex-col gap-2">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-6 text-primary" />Sign Snip</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-6 text-primary" />SignSnip</h1>
         <p className="text-muted-foreground">Print-ready sale signs for 47 × 70 mm holders. How do you want to start?</p>
       </div>
       <StartChoices replacing={false} onDone={onDone} />
@@ -208,33 +206,34 @@ export function StartPage({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** Header menu: back up, restore, start over. */
-export function WorkspaceMenu() {
-  const [open, setOpen] = useState(false);
+/** Header buttons: Back up / Restore / Start over, each one click away and labelled. */
+export function WorkspaceButtons({ showBackup }: { showBackup: boolean }) {
+  const [open, setOpen] = useState<"" | "restore" | "start">("");
+  const done = () => { setOpen(""); window.location.reload(); };
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
-          <DatabaseIcon data-icon="inline-start" />Workspace
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{api.MODE === "browser" ? "Not saved by this site: back up to keep it" : "Saved on this computer (data/)"}</DropdownMenuLabel>
-            <DropdownMenuItem onClick={downloadBackup}><DownloadIcon />Back up everything</DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setOpen(true)}><ArchiveRestoreIcon />Start over or restore a backup…</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-4xl">
+    <div className="flex items-center gap-2" role="group" aria-label="Your work">
+      {showBackup && (
+        <Button type="button" variant="outline" size="sm" onClick={downloadBackup} aria-label="Back up" title="Back up everything (download a file)">
+          <DownloadIcon data-icon="inline-start" /><span className="hidden sm:inline">Back up</span>
+        </Button>
+      )}
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen("restore")} aria-label="Restore backup" title="Restore a backup file">
+        <ArchiveRestoreIcon data-icon="inline-start" /><span className="hidden sm:inline">Restore backup</span>
+      </Button>
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen("start")} aria-label="Start over" title="Start over: empty, or with the samples">
+        <RotateCcwIcon data-icon="inline-start" /><span className="hidden sm:inline">Start over</span>
+      </Button>
+      <Dialog open={!!open} onOpenChange={(o) => !o && setOpen("")}>
+        <DialogContent className={open === "start" ? "sm:max-w-3xl" : "sm:max-w-lg"}>
           <DialogHeader>
-            <DialogTitle>Start over or restore a backup</DialogTitle>
-            <DialogDescription>Pick a fresh start, the samples, or a backup file.</DialogDescription>
+            <DialogTitle>{open === "start" ? "Start over" : "Restore a backup"}</DialogTitle>
+            <DialogDescription>
+              {open === "start" ? "Begin again with an empty workspace, or with the made-up samples." : "Load a .signsnip-backup.json file to pick up where you left off."}
+            </DialogDescription>
           </DialogHeader>
-          <StartChoices replacing onDone={() => { setOpen(false); window.location.reload(); }} />
+          {open && <StartChoices replacing onDone={done} only={open === "start" ? ["scratch", "samples"] : ["backup"]} />}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

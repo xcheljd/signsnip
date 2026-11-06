@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
 import { DEFAULT_RULES, type Preset, type Rules, type Sign, type Template, type Warning } from "../../src/core/types";
 import { RulesTab } from "./RulesTab";
-import { SavingStatusBar, StartPage, WorkspaceMenu } from "./Workspace";
+import { SavingStatusBar, StartPage, WorkspaceButtons } from "./Workspace";
 import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
@@ -193,15 +193,14 @@ function SignoApp() {
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
       <div className="sticky top-0 z-10">
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
-        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-5 text-primary" /> Sign Snip</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-5 text-primary" /> SignSnip</h1>
         <TabsList className="order-last w-full overflow-x-auto md:order-none md:w-fit">
           <TabsTrigger value="make">Make signs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="rules">Text rules</TabsTrigger>
           <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
         </TabsList>
-        <Badge variant="secondary" className="ml-auto hidden lg:inline-flex">47 × 70 mm · sample data only</Badge>
-        <span className="ml-auto lg:ml-0"><WorkspaceMenu /></span>
+        <span className="ml-auto"><WorkspaceButtons showBackup={api.MODE !== "browser"} /></span>
         <ToggleGroup variant="outline" size="sm" spacing={0} value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
           <ToggleGroupItem value="light" aria-label="Light theme"><SunIcon /></ToggleGroupItem>
           <ToggleGroupItem value="system" aria-label="Match system theme"><MonitorIcon /></ToggleGroupItem>
