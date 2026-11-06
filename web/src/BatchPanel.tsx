@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ArchiveIcon, CopyIcon, DownloadIcon, GripVerticalIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
+  ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, GripVerticalIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -95,6 +95,18 @@ export function BatchPanel({
               <Button type="button" size="sm" variant="outline" onClick={onCalibrate}>Print check page</Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => setCalibrated(true)}>My printer is fine</Button>
             </AlertAction>
+          </Alert>
+        )}
+
+        {warnings.some((w) => w.code === "auto-abbrev" || w.code === "auto-template") && (
+          <Alert>
+            <CheckIcon />
+            <AlertTitle>Auto-fit kept the text readable</AlertTitle>
+            <AlertDescription>
+              <ul className="flex flex-col gap-0.5">
+                {warnings.filter((w) => w.code === "auto-abbrev" || w.code === "auto-template").slice(0, 6).map((w, i) => <li key={i}>{w.message}</li>)}
+              </ul>
+            </AlertDescription>
           </Alert>
         )}
 

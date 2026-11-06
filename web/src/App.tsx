@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
-import type { Preset, Sign, Template, Warning } from "../../src/core/types";
+import { DEFAULT_RULES, type Preset, type Rules, type Sign, type Template, type Warning } from "../../src/core/types";
+import { RulesTab } from "./RulesTab";
 import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
@@ -24,6 +25,10 @@ import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const uid = () => crypto.randomUUID();
 const fail = (e: unknown) => toast.error((e as Error).message);
@@ -54,6 +59,8 @@ export function App() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [saved, setSaved] = useState<api.SavedSummary[]>([]);
   const [templates, setTemplates] = useState<Template[]>(DEFAULT_TEMPLATES);
+  const [rules, setRules] = useState<Rules>(DEFAULT_RULES);
+  const [gate, setGate] = useState<{ action: "print" | "download"; small: Warning[] } | null>(null);
   const [draft, setDraft] = useState<Sign | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -65,7 +72,7 @@ export function App() {
   const setCalibrated = (v: boolean) => { localStorage.setItem("signo.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
   const onRemote = useCallback((s: api.State) => {
-    setBrands(s.brands); setPresets(s.presets); setSaved(s.saved); setTemplates(s.templates);
+    setBrands(s.brands); setPresets(s.presets); setSaved(s.saved); setTemplates(s.templates); setRules(s.rules);
     setDraft((d) => d ?? blank(s.brands[0]?.id ?? ""));
   }, []);
   const { batch, update, undo, canUndo, refresh } = useBatch(onRemote);
@@ -79,7 +86,7 @@ export function App() {
   }, [batch.items, editing]);
 
   // pre-print checks (debounced)
-  const checkKey = JSON.stringify([batch.items, brands.map((b) => [b.id, b.logoScale, b.logo?.width, b.logo?.background]), templates.map((t) => t.updatedAt)]);
+  const checkKey = JSON.stringify([batch.items, brands.map((b) => [b.id, b.logoScale, b.logo?.width, b.logo?.background]), templates.map((t) => t.updatedAt), rules]);
   useEffect(() => {
     if (!batch.items.length) { setWarnings([]); return; }
     const t = setTimeout(() => { api.check(batch.items).then(setWarnings).catch(() => {}); }, 400);
@@ -90,7 +97,7 @@ export function App() {
   const brand = brands.find((b) => b.id === draft?.brandId);
   const single = useMemo(() => (draft && brand ? [draft] : []), [draft, brand]);
   const logoKey = brands.map((b) => `${b.id}:${b.logoScale}:${b.logo?.width}:${b.logo?.background}`).join("|")
-    + templates.map((t) => `${t.id}@${t.updatedAt ?? ""}`).join("|");
+    + templates.map((t) => `${t.id}@${t.updatedAt ?? ""}`).join("|") + JSON.stringify(rules);
   // logoKey: re-render when a logo is replaced, rescaled or has its background removed
   const singlePdf = usePdf(single, batch.options, "single", logoKey);
   const sheetPdf = usePdf(batch.items, batch.options, "sheet", logoKey);
@@ -114,15 +121,26 @@ export function App() {
   };
   const cancelEdit = () => { setEditing(null); setDraft((d) => (d ? { ...d, id: uid() } : d)); };
 
-  const print = useCallback(async () => {
-    if (!batch.items.length) { toast("The batch is empty"); return; }
+  /** soft gate: if any sign would still print below the readable minimum, ask first */
+  const gated = async (action: "print" | "download", force = false) => {
+    if (!batch.items.length) { toast("The batch is empty"); return false; }
+    if (force) return true;
+    try {
+      const small = (await api.check(batch.items)).filter((w) => w.code === "small-text");
+      if (small.length) { setGate({ action, small }); return false; }
+    } catch { /* checks are advisory; never block printing on a failed check */ }
+    return true;
+  };
+  const print = useCallback(async (force = false) => {
+    if (!(await gated("print", force))) return;
     try {
       const p = sheetPdf.pdf ?? await api.fetchPdf(batch.items, batch.options, "sheet");
       printPdf(p.bytes);
       toast(`Printing ${p.signs} signs. Set scale to 100% / Actual size.`);
     } catch (e) { fail(e); }
-  }, [batch, sheetPdf.pdf]);
-  const exportPdf = async () => {
+  }, [batch, sheetPdf.pdf]); // eslint-disable-line react-hooks/exhaustive-deps
+  const exportPdf = async (force = false) => {
+    if (!(await gated("download", force))) return;
     try {
       const p = await api.fetchPdf(batch.items, batch.options, "sheet");
       downloadPdf(p.bytes, `signs-${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -169,6 +187,7 @@ export function App() {
         <TabsList>
           <TabsTrigger value="make">Make signs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="rules">Text rules</TabsTrigger>
           <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
         </TabsList>
         <Badge variant="secondary" className="ml-auto">47 × 70 mm · sample data only</Badge>
@@ -181,7 +200,11 @@ export function App() {
 
       <main>
       <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-6" keepMounted>
-        <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} />
+        <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} rules={rules} />
+      </TabsContent>
+
+      <TabsContent value="rules" className="mx-auto w-full max-w-7xl p-6">
+        <RulesTab rules={rules} templates={templates} items={batch.items} refresh={refresh} />
       </TabsContent>
 
       <TabsContent value="brands" className="mx-auto w-full max-w-7xl p-6">
@@ -218,7 +241,7 @@ export function App() {
         <BatchPanel
           batch={batch} update={update} undo={undo} canUndo={canUndo} brands={brands} saved={saved} warnings={warnings} templates={templates}
           editingId={editing} selected={selected} setSelected={setSelected} onEdit={edit}
-          onPrint={print} onExport={exportPdf} onCalibrate={calibrate} onFixBg={fixBg}
+          onPrint={() => print()} onExport={() => exportPdf()} onCalibrate={calibrate} onFixBg={fixBg}
           onGoToBrand={(id) => { setFocusBrand(id); setTab("brands"); }} refresh={refresh}
           calibrated={calibrated} setCalibrated={setCalibrated}
         />
@@ -250,6 +273,29 @@ export function App() {
       </main>
 
       <Toaster position="bottom-right" theme={resolved} />
+
+      <AlertDialog open={!!gate} onOpenChange={(o) => !o && setGate(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{gate?.small.length} sign{gate?.small.length === 1 ? "" : "s"} will print below {rules.readableMin}pt</AlertDialogTitle>
+            <AlertDialogDescription render={<div />}>
+              <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-left">
+                {gate?.small.slice(0, 5).map((w, i) => <li key={i}>{w.message.replace(/ Add an abbreviation.*$/, "")}</li>)}
+                {(gate?.small.length ?? 0) > 5 && <li>…and {gate!.small.length - 5} more</li>}
+              </ul>
+              <p className="mt-3">Fix them with an abbreviation (Text rules tab), a shorter name, or a long-name fallback template.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button variant="outline" onClick={() => { const a = gate!.action; setGate(null); if (a === "print") print(true); else exportPdf(true); }}>
+              {gate?.action === "print" ? "Print anyway" : "Download anyway"}
+            </Button>
+            <Button variant="outline" onClick={() => { setGate(null); setTab("rules"); }}>Open Text rules</Button>
+            <AlertDialogAction onClick={() => { const first = gate?.small[0]?.items[0]; setGate(null); if (first !== undefined) edit(first); }}>Fix first sign</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={presetDialog} onOpenChange={setPresetDialog}>
         <DialogContent className="sm:max-w-sm">

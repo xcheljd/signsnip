@@ -8,6 +8,7 @@ import { OUT_DIR } from "../core/paths.js";
 import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
   deleteBrand, deleteSavedBatch, findBrand, findSavedBatch, listBrands, listPresets, listSavedBatches, logoInfo,
+  readRules, writeRules,
   readBatch, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
   deleteTemplate, duplicateTemplate, exportTemplateSet, findTemplate, importTemplateSet, listTemplates, parseTemplateSet,
   resetTemplate, saveTemplate,
@@ -52,6 +53,15 @@ Templates (layouts: what goes where, font sizes)
   signo templates export [tpl ...] [-o file.signo.json] [--name "Holiday set"]
   signo templates import <file> [--replace]  default keeps both when a template differs
 
+Readable text (auto-fit)
+  signo rules                               readable minimum + abbreviation list
+  signo rules min 10                        text that would shrink below 10pt gets auto-fixed or flagged
+  signo rules abbr "Chronograph" "Chrono"   add/replace an abbreviation (used only when needed)
+  signo rules abbr-rm "Chronograph"
+  signo templates fallback percent percent-long   use this template when text gets too small (none = off)
+  signo templates min percent 9 | none      per-template readable minimum (none = use the store setting)
+  signo export --strict                     refuse to export if any sign is still below the minimum
+
 Saved batches
   signo batches                             list saved batches
   signo save "Holiday sale"                 save the current batch under a name
@@ -74,7 +84,7 @@ const opts = {
   brand: { type: "string" }, preset: { type: "string" }, collection: { type: "string" }, prefix: { type: "string" },
   percent: { type: "string" }, footer: { type: "string" }, copies: { type: "string" }, off: { type: "string" },
   price: { type: "string" }, was: { type: "string" }, "price-label": { type: "string" }, rows: { type: "string" },
-  template: { type: "string" }, name: { type: "string" }, replace: { type: "boolean" },
+  template: { type: "string" }, name: { type: "string" }, replace: { type: "boolean" }, strict: { type: "boolean" },
   logo: { type: "string" }, collections: { type: "string" }, o: { type: "string", short: "o" }, grid: { type: "string" },
   paper: { type: "string" }, "no-cut-marks": { type: "boolean" }, help: { type: "boolean", short: "h" },
 } as const;
@@ -129,6 +139,8 @@ export function applyTemplateSet(t: Template, assignment: string): Template {
 
 function showTemplate(t: Template) {
   log(`${t.name} (${t.id}) · ${t.kind === "price" ? "price" : "percent off"} · safe margin ${t.safeMargin} mm${isBuiltin(t.id) ? " · built-in" : ""}`);
+  const fb = t.fallbackId ? listTemplates().find((x) => x.id === t.fallbackId) : undefined;
+  log(`  readable minimum ${t.readableMin ? `${t.readableMin}pt (template)` : `${readRules().readableMin}pt (store)`}${t.fallbackId ? ` · too small → "${fb?.name ?? `${t.fallbackId} (missing)`}"` : ""}`);
   for (const o of t.objects) {
     const box = `x ${o.x} y ${o.y}  ${o.w}×${o.h} mm`;
     if (o.type === "logo") { log(`  ${o.id.padEnd(12)} logo                     ${box}`); continue; }
@@ -160,6 +172,11 @@ async function doExport(signs: Sign[], v: Flags) {
     cutMarks: v["no-cut-marks"] ? false : batch.options.cutMarks,
   };
   if (signs.length === 0) die("nothing to export - the batch is empty (signo add ...)");
+  const small = (await checkSigns(signs)).filter((w) => w.code === "small-text");
+  if (v.strict && small.length) {
+    for (const w of small) console.error(`  ! ${w.message}`);
+    die(`${small.length} sign${small.length === 1 ? "" : "s"} below the readable minimum - not exported (drop --strict to export anyway)`);
+  }
   const pdf = await renderPdf(expandCopies(signs), options, "sheet");
   const out = path.resolve(String(v.o ?? path.join(OUT_DIR, "signs.pdf")));
   fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -330,6 +347,24 @@ async function main() {
         const name = more[0] ?? die('usage: signo templates rename <tpl> "New name"');
         saveTemplate({ ...need(), name }); return log(`renamed ${need().id} to "${name}"`);
       }
+      if (sub === "fallback") {
+        const to = more[0] ?? die("usage: signo templates fallback <tpl> <other-tpl|none>");
+        const cur = need();
+        if (to === "none") { saveTemplate({ ...cur, fallbackId: undefined }); return log(`${cur.id}: no fallback`); }
+        const fb = findTemplate(to) ?? die(`No template matching "${to}"`);
+        if (fb.id === cur.id) die("a template can't fall back to itself");
+        if (fb.kind !== cur.kind) die(`"${fb.name}" prints a ${fb.kind}; ${cur.id} prints a ${cur.kind} - pick one of the same kind`);
+        saveTemplate({ ...cur, fallbackId: fb.id });
+        return log(`${cur.id}: when text gets too small, use "${fb.name}"`);
+      }
+      if (sub === "min") {
+        const v2 = more[0] ?? die("usage: signo templates min <tpl> <pt|none>");
+        const cur = need();
+        if (v2 === "none") { saveTemplate({ ...cur, readableMin: undefined }); return log(`${cur.id}: uses the store readable minimum (${readRules().readableMin}pt)`); }
+        const n = Number(v2.replace(/pt$/, ""));
+        if (!(n >= 4 && n <= 40)) die("readable minimum must be 4-40 pt");
+        saveTemplate({ ...cur, readableMin: n }); return log(`${cur.id}: readable minimum ${n}pt`);
+      }
       if (sub === "reset") { const r = resetTemplate(need().id); return log(`${r.id} is back to its original layout`); }
       if (sub === "rm") { deleteTemplate(need().id); return log(`deleted template ${need().id}; rows that used it fall back to the built-in layout`); }
       if (sub === "export") {
@@ -354,6 +389,31 @@ async function main() {
         return log(parts.join("; ") || "nothing to import");
       }
       return die(`unknown templates subcommand "${sub}"`);
+    }
+    case "rules": {
+      const [sub, a, b] = p;
+      const r = readRules();
+      if (!sub) {
+        log(`readable minimum: ${r.readableMin}pt`);
+        log(r.abbreviations.length ? "abbreviations (used only when text would drop below the minimum):" : "no abbreviations");
+        for (const x of r.abbreviations) log(`  ${x.from} -> ${x.to || "(removed)"}`);
+        return;
+      }
+      if (sub === "min") {
+        const n = Number(String(a ?? "").replace(/pt$/, ""));
+        if (!(n >= 4 && n <= 40)) die("usage: signo rules min <4-40>");
+        writeRules({ ...r, readableMin: n }); return log(`readable minimum = ${n}pt`);
+      }
+      if (sub === "abbr") {
+        if (!a || b === undefined) die('usage: signo rules abbr "Word" "Short"');
+        writeRules({ ...r, abbreviations: [...r.abbreviations, { from: a, to: b }] }); return log(`${a} -> ${b || "(removed)"}`);
+      }
+      if (sub === "abbr-rm") {
+        const left = r.abbreviations.filter((x) => x.from.toLowerCase() !== String(a ?? "").toLowerCase());
+        if (left.length === r.abbreviations.length) die(`no abbreviation for "${a ?? ""}"`);
+        writeRules({ ...r, abbreviations: left }); return log(`removed ${a}`);
+      }
+      return die(`unknown rules subcommand "${sub}"`);
     }
     case "check": {
       const b = readBatch();

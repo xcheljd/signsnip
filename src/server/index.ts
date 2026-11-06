@@ -8,9 +8,10 @@ import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/
 import {
   deleteBrand, deleteSavedBatch, ensureData, findBrand, listBrands, listPresets, listSavedBatches, logoInfo,
   readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
+  readRules, writeRules,
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
-import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, SignSchema, TemplateSchema } from "../core/types.js";
+import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
 ensureData();
 const app = new Hono();
@@ -20,8 +21,9 @@ app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.m
 app.get("/api/state", async (c) => {
   const brands = await Promise.all(listBrands().map(async (b) => ({ ...b, logo: await logoInfo(b.id) })));
   const saved = listSavedBatches().map((s) => ({ id: s.id, name: s.name, savedAt: s.savedAt, signs: s.batch.items.reduce((a, i) => a + i.copies, 0) }));
-  return c.json({ brands, presets: listPresets(), batch: readBatch(), saved, templates: listTemplates() });
+  return c.json({ brands, presets: listPresets(), batch: readBatch(), saved, templates: listTemplates(), rules: readRules() });
 });
+app.put("/api/rules", async (c) => c.json(writeRules(RulesSchema.parse(await c.req.json()))));
 
 // templates
 app.put("/api/templates/:id", async (c) => {

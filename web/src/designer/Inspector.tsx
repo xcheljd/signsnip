@@ -175,8 +175,9 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
 }
 
 export function TemplateInspector({
-  t, set, objects, onPick,
-}: { t: Template; set: (p: Partial<Template>) => void; objects: TemplateObject[]; onPick: (id: string) => void }) {
+  t, set, objects, onPick, templates, storeMin,
+}: { t: Template; set: (p: Partial<Template>) => void; objects: TemplateObject[]; onPick: (id: string) => void; templates: Template[]; storeMin: number }) {
+  const fbItems = [{ value: "none", label: "None (just warn)" }, ...templates.filter((x) => x.id !== t.id && x.kind === t.kind).map((x) => ({ value: x.id, label: x.name }))];
   return (
     <FieldGroup>
       <Field>
@@ -194,6 +195,22 @@ export function TemplateInspector({
         <FieldLabel htmlFor="tpl-margin">Safe margin</FieldLabel>
         <NumField id="tpl-margin" className="w-28" after="mm" decimals={1} step={0.5} min={0} max={10} value={t.safeMargin} onChange={(v) => v !== undefined && set({ safeMargin: v })} />
         <FieldDescription>The dashed line. Keep things inside it so the holder's edge doesn't cover them.</FieldDescription>
+      </Field>
+      <FieldSeparator />
+      <Field>
+        <FieldLabel htmlFor="tpl-min">Readable minimum</FieldLabel>
+        <NumField id="tpl-min" className="w-28" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={String(storeMin)}
+          value={t.readableMin} onChange={(v) => set({ readableMin: v })} />
+        <FieldDescription>Empty = the store setting ({storeMin}pt, on the Text rules tab). Text that would shrink below this gets your abbreviations, then the template below.</FieldDescription>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="tpl-fallback">If text is still too small, use</FieldLabel>
+        <Select value={t.fallbackId && fbItems.some((i) => i.value === t.fallbackId) ? t.fallbackId : "none"} items={fbItems}
+          onValueChange={(v) => v && set({ fallbackId: v === "none" ? undefined : v })}>
+          <SelectTrigger id="tpl-fallback" className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectGroup>{fbItems.map((i) => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}</SelectGroup></SelectContent>
+        </Select>
+        <FieldDescription>A roomier layout for long names, e.g. “Percent off · long name”: taller name box, offer moved down. Only those signs switch.</FieldDescription>
       </Field>
       <FieldSeparator />
       <Field>

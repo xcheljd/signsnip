@@ -1,6 +1,7 @@
 import { fitLogo, money, percentText, wrapWords, type Measure } from "./layout.js";
 import {
-  SIGN_H_MM, SIGN_W_MM, type LogoObject, type Sign, type Template, type TemplateObject, type TextField, type TextObject,
+  DEFAULT_RULES, SIGN_H_MM, SIGN_W_MM, type Abbreviation, type LogoObject, type Rules, type Sign, type Template,
+  type TemplateObject, type TextField, type TextObject,
 } from "./types.js";
 
 // ---------- built-in templates (match the original spreadsheet layout)
@@ -45,6 +46,17 @@ export const DEFAULT_TEMPLATES: Template[] = [
       T({ id: "offer", field: "offer", x: 3, y: 33, w: 41, h: 13, size: 30, minSize: 14 }),
       T({ id: "collection", field: "collection", x: 4, y: 47, w: 39, h: 9, size: 11, maxLines: 2, weight: "regular" }),
       T({ id: "footer", field: "footer", x: 4, y: 59, w: 39, h: 6, size: 11, minSize: 8 }),
+    ],
+  },
+  {
+    // a roomier layout for long names: taller heading box (4 lines, balanced), offer moved down.
+    // Not wired up by default: set it as "Percent off"'s fallback in the designer to use it.
+    id: "percent-long", name: "Percent off · long name", kind: "percent", safeMargin: 2,
+    objects: [
+      { ...LOGO, y: 4, h: 12 },
+      T({ id: "heading", field: "heading", x: 3.5, y: 17.5, w: 40, h: 23, size: 14, maxLines: 4, balance: true }),
+      T({ id: "offer", field: "offer", x: 3, y: 42, w: 41, h: 13, size: 28, minSize: 14 }),
+      T({ id: "footer", field: "footer", x: 4, y: 58.5, w: 39, h: 7, size: 12, minSize: 8 }),
     ],
   },
   {
@@ -240,7 +252,7 @@ export function placeLogo(box: { x: number; y: number; w: number; h: number }, a
 export interface TemplateIssue { objectId?: string; level: "error" | "warn" | "info"; message: string }
 const label = (o: TemplateObject) => (o.type === "logo" ? "Logo" : o.field === "static" ? `“${o.text || "fixed text"}”` : FIELD_LABELS[o.field]);
 
-export function templateIssues(t: Template, sample?: { sign: Sign; measure: Measure }): TemplateIssue[] {
+export function templateIssues(t: Template, sample?: { sign: Sign; measure: Measure; rules?: Rules; templates?: Template[] }): TemplateIssue[] {
   const out: TemplateIssue[] = [];
   const m = t.safeMargin;
   const ids = new Set<string>();
@@ -264,8 +276,17 @@ export function templateIssues(t: Template, sample?: { sign: Sign; measure: Meas
       if (ox > 0.5 && oy > 0.5) out.push({ objectId: b.id, level: "info", message: `${label(a)} and ${label(b)} overlap.` });
     }
   }
+  if (t.fallbackId === t.id) out.push({ level: "warn", message: "A template can't fall back to itself." });
   if (sample) {
-    const placed = layoutTemplate(t, sample.sign, sample.measure);
+    const rules = sample.rules ?? DEFAULT_RULES;
+    const here = fitSign(sample.sign, [t], sample.measure, rules, { template: t, noFallback: true });
+    const placed = here.placed;
+    if (here.abbreviations.length) out.push({ level: "info", message: `Shortened to stay at ${here.min}pt+: ${here.abbreviations.map((a) => `${a.from} → ${a.to}`).join(", ")}.` });
+    if (here.belowMin.length) {
+      const all = fitSign(sample.sign, [t, ...(sample.templates ?? []).filter((x) => x.id !== t.id)], sample.measure, rules, { template: t });
+      if (all.switchedFrom && !all.belowMin.length) out.push({ level: "info", message: `Too small here, so these signs print with “${all.template.name}” instead.` });
+      else for (const l of here.belowMin) out.push({ objectId: l.objectId, level: "warn", message: `“${l.text}” prints at ${l.sizePt.toFixed(1)}pt, below the ${here.min}pt readable minimum.` });
+    }
     for (const ov of placed.overflow) out.push({ objectId: ov.objectId, level: "warn", message: `“${ov.text}” doesn't fit its box even at the minimum size.` });
     const shrunk = new Set(placed.lines.filter((l) => l.sizePt < l.wantPt - 0.01).map((l) => l.objectId));
     for (const id of shrunk) {
@@ -281,3 +302,80 @@ export const newObjectId = (t: Template, base: string) => {
   while (t.objects.some((o) => o.id === `${base}-${n}`)) n++;
   return `${base}-${n}`;
 };
+
+// ---------- auto-fit: readable minimum -> abbreviations -> fallback template
+
+export const effectiveMin = (t: Template, rules: Rules) => t.readableMin ?? rules.readableMin;
+
+/** Lines that shrank below the readable minimum. Text designed smaller on purpose (e.g. an 8pt footer) isn't flagged. */
+export function belowMin(placed: PlacedSign, min: number): PlacedLine[] {
+  return placed.lines.filter((l) => l.sizePt < min - 1e-6 && l.sizePt < l.wantPt - 1e-6);
+}
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Replace `from` as a whole word/phrase, case-insensitively. Returns the text unchanged if absent. */
+export function applyAbbreviation(text: string, a: Abbreviation): string {
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])${esc(a.from.trim())}(?=$|[^\\p{L}\\p{N}])`, "giu");
+  return text.replace(re, (_m, pre: string) => pre + a.to).replace(/\s{2,}/g, " ").trim();
+}
+
+export interface FittedSign {
+  template: Template;
+  /** the sign as printed (collection / lead word may be abbreviated) */
+  sign: Sign;
+  placed: PlacedSign;
+  abbreviations: Abbreviation[];
+  /** set when the sign moved to a fallback template */
+  switchedFrom?: Template;
+  belowMin: PlacedLine[];
+  min: number;
+}
+
+function tryTemplate(t: Template, sign: Sign, measure: Measure, rules: Rules): FittedSign {
+  const min = effectiveMin(t, rules);
+  let s = sign;
+  let placed = layoutTemplate(t, s, measure);
+  const used: Abbreviation[] = [];
+  if (belowMin(placed, min).length) {
+    // biggest savings first, one at a time, stop as soon as everything is readable
+    const ordered = [...rules.abbreviations].filter((a) => a.from.trim()).sort((a, b) => (b.from.length - b.to.length) - (a.from.length - a.to.length));
+    for (const a of ordered) {
+      const next = { ...s, collection: applyAbbreviation(s.collection, a), prefix: applyAbbreviation(s.prefix, a) };
+      if (next.collection === s.collection && next.prefix === s.prefix) continue;
+      s = next; used.push(a);
+      placed = layoutTemplate(t, s, measure);
+      if (!belowMin(placed, min).length) break;
+    }
+  }
+  return { template: t, sign: s, placed, abbreviations: used, belowMin: belowMin(placed, min), min };
+}
+const worst = (f: FittedSign) => (f.belowMin.length ? Math.min(...f.belowMin.map((l) => l.sizePt)) : Infinity);
+
+/**
+ * Decide how a sign prints: its template as-is; else with abbreviations; else its fallback
+ * template(s) (same kind, up to 3 deep), each with abbreviations. If nothing reaches the
+ * readable minimum, the attempt with the largest smallest-line wins (and gets flagged).
+ */
+export function fitSign(
+  sign: Sign, templates: Template[], measure: Measure, rules: Rules = DEFAULT_RULES,
+  opts: { template?: Template; noFallback?: boolean } = {},
+): FittedSign {
+  const primary = opts.template ?? resolveTemplate(sign, templates);
+  const chain = [primary];
+  if (!opts.noFallback) {
+    let t = primary;
+    while (t.fallbackId && chain.length < 4) {
+      const n = templates.find((x) => x.id === t.fallbackId);
+      if (!n || n.kind !== primary.kind || chain.some((c) => c.id === n.id)) break;
+      chain.push(n); t = n;
+    }
+  }
+  let best: FittedSign | null = null;
+  for (const [i, t] of chain.entries()) {
+    const r = tryTemplate(t, sign, measure, rules);
+    if (i > 0) r.switchedFrom = primary;
+    if (!r.belowMin.length) return r;
+    if (!best || worst(r) > worst(best) + 0.01) best = r;
+  }
+  return best!;
+}

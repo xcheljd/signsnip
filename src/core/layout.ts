@@ -1,5 +1,5 @@
 import { SIGN_W_MM, type Sign } from "./types.js";
-import { defaultTemplate, layoutTemplate, type PlacedLine, type PlacedSign } from "./template.js";
+import { defaultTemplate, layoutTemplate } from "./template.js";
 
 /** Measures text width in millimetres at a given font size (pt). Injected so layout is testable. */
 export type Measure = (text: string, sizePt: number, weight?: "bold" | "regular") => number;
@@ -80,7 +80,4 @@ export function layoutSign(sign: Sign, measure: Measure) {
   return layoutTemplate(defaultTemplate(sign.kind ?? "percent"), sign, measure);
 }
 
-/** Lines that had to shrink enough to hurt readability across a shop floor. */
-export function smallLines(l: PlacedSign): PlacedLine[] {
-  return l.lines.filter((t) => t.sizePt < t.wantPt * 0.72);
-}
+

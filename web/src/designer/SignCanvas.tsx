@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { fitLogo } from "../../../src/core/layout";
-import { layoutTemplate } from "../../../src/core/template";
-import { SIGN_H_MM, SIGN_W_MM, type Sign, type Template, type TemplateObject } from "../../../src/core/types";
+import { fitSign, layoutTemplate } from "../../../src/core/template";
+import { DEFAULT_RULES, SIGN_H_MM, SIGN_W_MM, type Rules, type Sign, type Template, type TemplateObject } from "../../../src/core/types";
 import { browserMeasure } from "./measure";
 
 const PT = 0.3528; // mm per point
@@ -17,8 +17,9 @@ export interface LogoSource { url: string; aspect: number; scale: number }
  * snapping. Uses the same layout engine and font metrics as the PDF.
  */
 export function SignCanvas({
-  template, sign, logo, width, selectedId, onSelect, onChange, onCommit, snap = true, showBoxes = true, readOnly = false, issues,
+  template, sign, logo, width, selectedId, onSelect, onChange, onCommit, snap = true, showBoxes = true, readOnly = false, issues, rules = DEFAULT_RULES,
 }: {
+  rules?: Rules;
   template: Template; sign: Sign; logo?: LogoSource | null; width: number;
   selectedId?: string | null; onSelect?: (id: string | null) => void;
   /** live update while dragging */
@@ -35,7 +36,8 @@ export function SignCanvas({
   const vbW = SIGN_W_MM + PAD * 2, vbH = SIGN_H_MM + PAD * 2;
   const pxPerMm = width / vbW;
   const height = vbH * pxPerMm;
-  const placed = layoutTemplate(template, sign, browserMeasure);
+  // same auto-fit as the PDF (abbreviations), minus the fallback switch: you are editing *this* template
+  const placed = fitSign(sign, [template], browserMeasure, rules, { template, noFallback: true }).placed;
   const m = template.safeMargin;
 
   const toMm = (e: React.PointerEvent) => {

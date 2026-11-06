@@ -57,6 +57,8 @@ examples: *Buy one get one* and *Final sale*.
 - **Export** writes a template set (`*.signo.json`) with the templates you pick. **Import** shows what's new,
   what you already have, and what differs from yours (keep both, or replace yours).
 
+**Text rules**: a store-wide *readable minimum* (default 10pt) and your own abbreviation list. When text would shrink below the minimum, auto-fit applies abbreviations (only as many as needed), then the template's long-name fallback (set in the designer), and only then warns. Print/Download asks first if anything is still too small. "Try a name" previews the exact result.
+
 **Brands & logos**: drop in a PNG/JPG/WebP/SVG (margins auto-trimmed), see pixel size and printed dpi,
 a live sample sign, a **logo size slider** (capped where the logo would hit the text), and
 **Remove background / Restore original**.
@@ -81,6 +83,9 @@ signo templates duplicate bogo "Holiday BOGO" ; signo templates reset percent ; 
 signo templates export bogo final-sale --name "Holiday set" -o holiday.signo.json
 signo templates import holiday.signo.json [--replace]
 signo add --template bogo --brand orbital --collection Comet --percent 50
+signo rules ; signo rules min 10 ; signo rules abbr "Chronograph" "Chrono" ; signo rules abbr-rm Chronograph
+signo templates fallback percent percent-long ; signo templates min percent 9
+signo export --strict                 # refuse if anything is below the readable minimum
 signo check                           # pre-print warnings
 signo calibrate                       # printer check page
 signo export -o out/signs.pdf [--grid portrait-4x3] [--paper a4] [--no-cut-marks]

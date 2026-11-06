@@ -66,7 +66,7 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     const r = signo("check");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("white background");
-    expect(r.stdout).toMatch(/shrink to fit|doesn't fit its box/);
+    expect(r.stdout).toMatch(/shortened to fit|readable minimum|doesn't fit its box/);
   });
   it("removes a logo background and restores it", () => {
     expect(signo("brands", "fix-bg", "orbital").stdout).toContain("now transparent");
@@ -99,6 +99,28 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("templates", "show", "percent").stdout).toMatch(/offer .*30pt/);
     fs.writeFileSync(path.join(data, "bad.json"), '{"hello":1}');
     expect(signo("templates", "import", path.join(data, "bad.json")).stderr).toContain("isn't a Sign-O-Matic template set");
+  });
+  it("readable-minimum rules: abbreviations, fallback template, strict export", () => {
+    signo("clear");
+    expect(signo("rules").stdout).toContain("readable minimum: 10pt");
+    expect(signo("rules", "min", "12").status).toBe(0);
+    signo("add", "--brand", "orbital", "--collection", "Field Master Automatic Moonphase", "--percent", "50");
+    expect(signo("check").stdout).toContain("below your 12pt readable minimum");
+    expect(signo("export", "--strict", "-o", path.join(data, "s.pdf")).status).toBe(1);
+    expect(signo("templates", "fallback", "percent", "price").stderr).toContain("same kind");
+    expect(signo("templates", "fallback", "percent", "percent-long").status).toBe(0);
+    expect(signo("templates", "show", "percent").stdout).toContain('too small → "Percent off · long name"');
+    const r = signo("check").stdout;
+    expect(r).toContain("prints with “Percent off · long name”");
+    expect(r).not.toContain("readable minimum.");
+    expect(signo("export", "--strict", "-o", path.join(data, "s.pdf")).status).toBe(0);
+    signo("templates", "fallback", "percent", "none");
+    expect(signo("rules", "abbr", "Moonphase", "Moon").status).toBe(0);
+    expect(signo("rules", "abbr", "Automatic", "Auto").status).toBe(0);
+    expect(signo("check").stdout).toMatch(/shortened to fit .*(Moonphase → Moon|Automatic → Auto)/);
+    expect(signo("rules", "abbr-rm", "moonphase").status).toBe(0);
+    expect(signo("rules").stdout).not.toContain("Moonphase");
+    signo("rules", "min", "10"); signo("clear");
   });
   it("accepts a JPG logo and fits it", () => {
     const r = signo("brands", "add", "Test Co", "--logo", path.join(root, "tests/fixtures/orbital.jpg"), "--collections", "A,B");

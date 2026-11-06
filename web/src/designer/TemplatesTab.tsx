@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_TEMPLATES, FIELD_LABELS, isBuiltin, newObjectId, resolveTemplate, templateIssues } from "../../../src/core/template";
-import { TEXT_FIELDS, type Sign, type Template, type TemplateObject, type TextField } from "../../../src/core/types";
+import { DEFAULT_RULES, TEXT_FIELDS, type Rules, type Sign, type Template, type TemplateObject, type TextField } from "../../../src/core/types";
 import * as api from "../api";
 import { usePdf } from "../App";
 import { PdfView } from "../PdfView";
@@ -67,8 +67,8 @@ function IconTip({ label, children, ...p }: { label: string } & React.ComponentP
 }
 
 export function TemplatesTab({
-  active, templates, brands, items, refresh,
-}: { active: boolean; templates: Template[]; brands: api.BrandWithLogo[]; items: Sign[]; refresh: () => Promise<unknown> }) {
+  active, templates, brands, items, refresh, rules = DEFAULT_RULES,
+}: { active: boolean; templates: Template[]; brands: api.BrandWithLogo[]; items: Sign[]; refresh: () => Promise<unknown>; rules?: Rules }) {
   const fontsReady = useSignFonts();
   const [currentId, setCurrentId] = useState(templates[0]?.id ?? "percent");
   const saved = templates.find((t) => t.id === currentId) ?? templates[0];
@@ -228,14 +228,14 @@ export function TemplatesTab({
 
   const brand = brands.find((b) => b.id === brandId) ?? brands[0];
   const sample = useMemo(() => (draft ? sampleSign(draft, brand, long) : null), [draft, brand, long]);
-  const issues = useMemo(() => (draft && sample && fontsReady ? templateIssues(draft, { sign: sample, measure: browserMeasure }) : []), [draft, sample, fontsReady]);
+  const issues = useMemo(() => (draft && sample && fontsReady ? templateIssues(draft, { sign: sample, measure: browserMeasure, rules, templates }) : []), [draft, sample, fontsReady, rules, templates]);
   const issueMap = new Map<string, "error" | "warn" | "info">();
   for (const i of issues) if (i.objectId) {
     const rank = { error: 3, warn: 2, info: 1 };
     const cur = issueMap.get(i.objectId);
     if (!cur || rank[i.level] > rank[cur]) issueMap.set(i.objectId, i.level);
   }
-  const printPdf = usePdf(view === "print" && sample ? [sample] : [], OPTIONS, "single", `${strip(draft)}:${brand?.logoScale}`, draft ? [draft] : undefined);
+  const printPdf = usePdf(view === "print" && sample ? [sample] : [], OPTIONS, "single", `${strip(draft)}:${brand?.logoScale}:${JSON.stringify(rules)}`, draft ? [draft] : undefined);
   const usage = (id: string) => items.filter((s) => resolveTemplate(s, templates).id === id).reduce((a, s) => a + s.copies, 0);
   const canvasW = Math.max(240, Math.min(holderW, 560));
   const sel = draft?.objects.find((o) => o.id === selected) ?? null;
@@ -349,7 +349,7 @@ export function TemplatesTab({
               fontsReady && sample ? (
                 <SignCanvas
                   template={draft} sign={sample} logo={logoSource(brand)} width={canvasW}
-                  selectedId={selected} onSelect={setSelected} snap={snap} showBoxes={showBoxes} issues={issueMap}
+                  selectedId={selected} onSelect={setSelected} snap={snap} showBoxes={showBoxes} issues={issueMap} rules={rules}
                   onChange={(objects) => setDraft({ ...draftRef.current!, objects })}
                   onCommit={(before) => { past.current.push({ ...draftRef.current!, objects: before }); future.current = []; lastCoalesce.current = null; bump((n) => n + 1); }}
                 />
@@ -408,6 +408,7 @@ export function TemplatesTab({
             onTemplate={(p) => change((t) => ({ ...t, ...p }), `tpl:${Object.keys(p).join(",")}`)}
             onObject={(p) => sel && setObj(sel.id, p)}
             onPick={setSelected}
+            templates={templates} storeMin={rules.readableMin}
             onDelete={() => sel && removeObj(sel.id)}
             onDuplicate={() => sel && duplicateObj(sel.id)}
           />

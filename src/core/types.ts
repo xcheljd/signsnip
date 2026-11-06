@@ -89,6 +89,10 @@ export const TemplateSchema = z.object({
   /** keep objects this far (mm) from the paper edge; the holder's lip covers it */
   safeMargin: z.number().min(0).max(10).default(2),
   objects: z.array(TemplateObjectSchema).max(40),
+  /** overrides the store-wide readable minimum (pt) for signs printed with this template */
+  readableMin: z.number().min(4).max(40).optional(),
+  /** if text would print below the readable minimum, try this template instead (same kind) */
+  fallbackId: z.string().max(40).optional(),
   updatedAt: z.string().optional(),
 });
 export type Template = z.infer<typeof TemplateSchema>;
@@ -146,12 +150,36 @@ export const SavedBatchSchema = z.object({
 });
 export type SavedBatch = z.infer<typeof SavedBatchSchema>;
 
+// ---------- text-fitting rules (store-wide)
+export const AbbreviationSchema = z.object({
+  /** word or phrase as it appears in names, matched case-insensitively as whole words */
+  from: z.string().trim().min(1).max(40),
+  to: z.string().trim().max(40),
+});
+export type Abbreviation = z.infer<typeof AbbreviationSchema>;
+export const RulesSchema = z.object({
+  /** text that shrinks below this (pt) triggers abbreviations, then the template's fallback, then a warning */
+  readableMin: z.number().min(4).max(40).default(10),
+  abbreviations: z.array(AbbreviationSchema).max(300).default([]),
+});
+export type Rules = z.infer<typeof RulesSchema>;
+export const DEFAULT_RULES: Rules = {
+  readableMin: 10,
+  abbreviations: [
+    { from: "Chronograph", to: "Chrono" },
+    { from: "Automatic", to: "Auto" },
+    { from: "Collection", to: "Coll." },
+    { from: "Edition", to: "Ed." },
+    { from: "Limited", to: "Ltd." },
+  ],
+};
+
 export interface Warning {
   /** indexes into batch.items this applies to */
   items: number[];
   brandId: string;
   level: "warn" | "info";
-  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo";
+  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template";
   message: string;
 }
 

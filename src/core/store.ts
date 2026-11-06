@@ -4,8 +4,8 @@ import sharp from "sharp";
 import { z } from "zod";
 import { DATA_DIR, SEED_DIR } from "./paths.js";
 import {
-  BatchSchema, BrandSchema, DEFAULT_OPTIONS, PresetSchema, SavedBatchSchema, TemplateSchema, TemplateSetSchema,
-  type Batch, type Brand, type Preset, type SavedBatch, type Template, type TemplateSet,
+  BatchSchema, BrandSchema, DEFAULT_OPTIONS, DEFAULT_RULES, PresetSchema, RulesSchema, SavedBatchSchema, TemplateSchema, TemplateSetSchema,
+  type Batch, type Brand, type Preset, type Rules, type SavedBatch, type Template, type TemplateSet,
 } from "./types.js";
 import { DEFAULT_TEMPLATES, isBuiltin } from "./template.js";
 
@@ -301,6 +301,24 @@ export function importTemplateSet(set: TemplateSet, mode: "keep-both" | "replace
     all.push({ ...t, id, name });
     res.renamed.push({ from: t.id, to: id });
   }
+  // a fallback pointing at a template that got imported under a new id follows it
+  const imported = new Set([...res.added, ...res.replaced, ...res.renamed.map((r) => r.to)]);
+  for (const t of all) {
+    const r = res.renamed.find((x) => x.from === t.fallbackId);
+    if (r && imported.has(t.id)) t.fallbackId = r.to;
+  }
   writeTemplates(all.map((t) => TemplateSchema.parse(t)));
   return res;
+}
+
+// ---------- text-fitting rules
+export const readRules = (): Rules => readJson(f("rules.json"), RulesSchema, DEFAULT_RULES);
+export function writeRules(r: Rules): Rules {
+  const parsed = RulesSchema.parse(r);
+  // one entry per word (case-insensitive); last one wins
+  const seen = new Map<string, (typeof parsed.abbreviations)[number]>();
+  for (const a of parsed.abbreviations) seen.set(a.from.toLowerCase(), a);
+  const clean = { ...parsed, abbreviations: [...seen.values()] };
+  writeJson(f("rules.json"), clean);
+  return clean;
 }

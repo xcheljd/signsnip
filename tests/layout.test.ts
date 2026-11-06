@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, smallLines, wrapWords } from "../src/core/layout";
+import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, wrapWords } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
-import { balanceLines, DEFAULT_TEMPLATES, layoutTemplate, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
+import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, fitSign, layoutTemplate, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
@@ -84,10 +84,10 @@ describe("price signs", () => {
     expect(lines.find((l) => l.role === "was")!.strike).toBe(true);
     expect(lines.find((l) => l.role === "big")!.sizePt).toBe(30);
   });
-  it("flags text that shrank too far", () => {
-    const l = layoutSign(sign({ collection: "EXTRAORDINARILYLONGCOLLECTIONNAMEWITHOUTSPACES" }), measure);
-    expect(smallLines(l).length).toBeGreaterThan(0);
-    expect(smallLines(layoutSign(sign(), measure))).toEqual([]);
+  it("flags text that shrank below the readable minimum, not text designed small", () => {
+    const l = layoutTemplate(DEFAULT_TEMPLATES[0]!, sign({ collection: "EXTRAORDINARILYLONGCOLLECTIONNAMEWITHOUTSPACES" }), measure);
+    expect(belowMin(l, 10).length).toBeGreaterThan(0);
+    expect(belowMin(layoutTemplate(DEFAULT_TEMPLATES[0]!, sign(), measure), 10)).toEqual([]);
   });
 });
 
@@ -160,5 +160,53 @@ describe("templates", () => {
     expect(issues.some((i) => i.level === "warn" && i.objectId === "logo")).toBe(true);
     expect(issues.some((i) => i.level === "error" && i.objectId === "heading")).toBe(true);
     expect(templateIssues(percent).filter((i) => i.level !== "info")).toEqual([]);
+  });
+});
+
+describe("auto-fit (readable minimum)", () => {
+  const T = structuredClone(DEFAULT_TEMPLATES);
+  const percent = T.find((t) => t.id === "percent")!;
+  const long = T.find((t) => t.id === "percent-long")!;
+  const name = "Deep Field Chronograph Automatic Collection Edition";
+  const rules = (min: number, abbreviations: { from: string; to: string }[] = []) => ({ readableMin: min, abbreviations });
+  const col = (f: ReturnType<typeof fitSign>) => f.placed.lines.filter((l) => l.role === "collection");
+
+  it("abbreviates whole words only, case-insensitively", () => {
+    expect(applyAbbreviation("Deep Field Chronograph", { from: "chronograph", to: "Chrono" })).toBe("Deep Field Chrono");
+    expect(applyAbbreviation("Chronographs", { from: "Chronograph", to: "C" })).toBe("Chronographs");
+    expect(applyAbbreviation("Ltd. Edition", { from: "Ltd.", to: "L" })).toBe("L Edition");
+  });
+  it("leaves text alone when it is already readable", () => {
+    const f = fitSign(sign({ collection: "Dusk" }), T, measure, rules(10, [{ from: "Dusk", to: "D" }]));
+    expect(f.abbreviations).toEqual([]);
+    expect(f.sign.collection).toBe("Dusk");
+  });
+  it("uses abbreviations only until the text is readable, biggest savings first", () => {
+    const ab = [{ from: "Edition", to: "Ed." }, { from: "Chronograph", to: "Chrono" }, { from: "Automatic", to: "Auto" }, { from: "Collection", to: "Coll." }];
+    const none = fitSign(sign({ collection: name }), T, measure, rules(10));
+    const f = fitSign(sign({ collection: name }), T, measure, rules(10, ab));
+    expect(none.belowMin.length).toBeGreaterThan(0);
+    expect(f.abbreviations.length).toBeGreaterThan(0);
+    expect(f.abbreviations[0]!.from).toBe("Chronograph");
+    expect(Math.min(...col(f).map((l) => l.sizePt))).toBeGreaterThan(Math.min(...col(none).map((l) => l.sizePt)));
+  });
+  it("switches to the fallback template when abbreviations aren't enough", () => {
+    const withFb = T.map((t) => (t.id === "percent" ? { ...t, fallbackId: "percent-long" } : t));
+    const f = fitSign(sign({ collection: "Field Master Automatic Moonphase" }), withFb, measure, rules(12));
+    expect(f.switchedFrom?.id).toBe("percent");
+    expect(f.template.id).toBe(long.id);
+    expect(f.belowMin).toEqual([]);
+    // no fallback set -> stays on its own template and is flagged
+    const g = fitSign(sign({ collection: "Field Master Automatic Moonphase" }), T, measure, rules(12));
+    expect(g.template.id).toBe(percent.id);
+    expect(g.belowMin.length).toBeGreaterThan(0);
+  });
+  it("ignores fallbacks of the other kind and fallback loops", () => {
+    const bad = T.map((t) => (t.id === "percent" ? { ...t, fallbackId: "price" } : t.id === "percent-long" ? { ...t, fallbackId: "percent" } : t));
+    expect(fitSign(sign({ collection: name }), bad, measure, rules(12)).template.id).toBe("percent");
+  });
+  it("a template's own minimum overrides the store setting", () => {
+    const strict = T.map((t) => (t.id === "percent" ? { ...t, readableMin: 13.5 } : t));
+    expect(fitSign(sign({ collection: "Field Master Automatic" }), strict, measure, rules(6)).min).toBe(13.5);
   });
 });

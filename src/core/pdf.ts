@@ -4,10 +4,10 @@ import { createRequire } from "node:module";
 import { PDFDocument, PrintScaling, degrees, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { cellRect, sheetGeometry } from "./geometry.js";
-import { fitLogo, smallLines, type Measure } from "./layout.js";
-import { findBrand, listTemplates, logoInfo, readLogo } from "./store.js";
-import { layoutTemplate, resolveTemplate } from "./template.js";
-import { SIGN_H_MM, SIGN_W_MM, type Options, type Sign, type Template, type Warning } from "./types.js";
+import { fitLogo, type Measure } from "./layout.js";
+import { findBrand, listTemplates, logoInfo, readLogo, readRules } from "./store.js";
+import { fitSign, type FittedSign } from "./template.js";
+import { SIGN_H_MM, SIGN_W_MM, type Options, type Rules, type Sign, type Template, type Warning } from "./types.js";
 
 const MM = 72 / 25.4;
 const mm = (v: number) => v * MM;
@@ -58,9 +58,9 @@ export function expandCopies(items: Sign[]): Sign[] {
 interface Logo { img: PDFImage; aspect: number; scale: number }
 
 /** The single source of truth for what a sign looks like on paper. */
-function drawSign(page: PDFPage, fonts: Fonts, ox: number, oy: number, sign: Sign, template: Template, logo: Logo | undefined, measure: Measure) {
+function drawSign(page: PDFPage, fonts: Fonts, ox: number, oy: number, fitted: FittedSign, logo: Logo | undefined) {
   // (ox, oy) = top-left corner of the sign in pt, y measured up from page bottom
-  const placed = layoutTemplate(template, sign, measure);
+  const placed = fitted.placed;
   if (logo && placed.logo) {
     const r = fitLogo(logo.aspect, placed.logo.box, logo.scale);
     page.drawImage(logo.img, { x: ox + mm(r.x), y: oy - mm(r.y + r.h), width: mm(r.w), height: mm(r.h) });
@@ -92,17 +92,17 @@ async function embedLogos(doc: PDFDocument, signs: Sign[]) {
 }
 
 /** `templates` overrides the saved ones (the designer previews unsaved edits this way). */
-export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" | "single" = "sheet", templates?: Template[]): Promise<PdfInfo> {
+export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" | "single" = "sheet", templates?: Template[], rules: Rules = readRules()): Promise<PdfInfo> {
   const { doc, fonts, measure } = await newDoc("Sign-O-Matic");
   const logos = await embedLogos(doc, signs);
   const saved = listTemplates();
   const all = templates ? [...templates, ...saved.filter((t) => !templates.some((o) => o.id === t.id))] : saved;
-  const tpl = (s: Sign) => resolveTemplate(s, all);
+  const fit = (s: Sign) => fitSign(s, all, measure, rules);
 
   if (mode === "single") {
     const s = signs[0];
     const page = doc.addPage([mm(SIGN_W_MM), mm(SIGN_H_MM)]);
-    if (s) drawSign(page, fonts, 0, mm(SIGN_H_MM), s, tpl(s), logos.get(s.brandId), measure);
+    if (s) drawSign(page, fonts, 0, mm(SIGN_H_MM), fit(s), logos.get(s.brandId));
     return { bytes: await doc.save(), pages: 1, signs: s ? 1 : 0 };
   }
 
@@ -113,7 +113,7 @@ export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" |
     const chunk = signs.slice(p * g.perPage, (p + 1) * g.perPage);
     chunk.forEach((s, i) => {
       const r = cellRect(g, i);
-      drawSign(page, fonts, mm(r.x), mm(g.pageH - r.y), s, tpl(s), logos.get(s.brandId), measure);
+      drawSign(page, fonts, mm(r.x), mm(g.pageH - r.y), fit(s), logos.get(s.brandId));
     });
     if (options.cutMarks) {
       // hairline grid over every cell (full grid, so empty slots still show the cut lines)
@@ -186,6 +186,8 @@ export async function renderCalibration(paper: Options["paper"] = "letter"): Pro
 export async function checkSigns(items: Sign[]): Promise<Warning[]> {
   const measure = await getMeasure();
   const templates = listTemplates();
+  const rules = readRules();
+  const fitted = items.map((s) => fitSign(s, templates, measure, rules));
   const out: Warning[] = [];
   const byBrand = new Map<string, number[]>();
   items.forEach((s, i) => byBrand.set(s.brandId, [...(byBrand.get(s.brandId) ?? []), i]));
@@ -197,7 +199,7 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
       out.push({ items: idx, brandId, level: "warn", code: "no-logo", message: `${name} has no logo yet - those signs print without one.` });
       continue;
     }
-    const box = layoutTemplate(resolveTemplate(items[idx[0]!]!, templates), items[idx[0]!]!, measure).logo?.box;
+    const box = fitted[idx[0]!]!.placed.logo?.box;
     if (!box) continue; // this brand's signs use templates without a logo
     const r = fitLogo(info.aspect, box, brand?.logoScale ?? 1);
     const dpi = Math.round(info.width / (r.w / 25.4));
@@ -210,15 +212,21 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
       out.push({ items: idx, brandId, level: "info", code: "logo-background", message: `${name}'s logo has a white background. Invisible on white paper; remove it if you print on coloured stock.` });
     }
   }
-  items.forEach((s, i) => {
-    const placed = layoutTemplate(resolveTemplate(s, templates), s, measure);
-    const small = smallLines(placed);
-    if (placed.overflow.length) {
-      const what = placed.overflow.map((o) => `"${o.text}"`).join(", ");
-      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `Row ${i + 1}: ${what} doesn't fit its box and will run past it. Shorten it or enlarge the box in the template.` });
-    } else if (small.length) {
-      const what = small.map((l) => `"${l.text}" (${l.sizePt.toFixed(1)}pt)`).join(", ");
-      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `Row ${i + 1}: ${what} had to shrink to fit and may be hard to read. Try a shorter name.` });
+  fitted.forEach((f, i) => {
+    const s = items[i]!;
+    const row = `Row ${i + 1}`;
+    if (f.placed.overflow.length) {
+      const what = f.placed.overflow.map((o) => `"${o.text}"`).join(", ");
+      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `${row}: ${what} doesn't fit its box and will run past it. Shorten it, add an abbreviation, or enlarge the box in the template.` });
+    } else if (f.belowMin.length) {
+      const what = f.belowMin.map((l) => `"${l.text}" (${l.sizePt.toFixed(1)}pt)`).join(", ");
+      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `${row}: ${what} ${f.belowMin.length === 1 ? "is" : "are"} below your ${f.min}pt readable minimum. Add an abbreviation, shorten the name, or give the template a long-name fallback.` });
+    }
+    if (f.abbreviations.length) {
+      out.push({ items: [i], brandId: s.brandId, level: "info", code: "auto-abbrev", message: `${row}: shortened to fit (${f.abbreviations.map((a) => `${a.from} → ${a.to}`).join(", ")}).` });
+    }
+    if (f.switchedFrom) {
+      out.push({ items: [i], brandId: s.brandId, level: "info", code: "auto-template", message: `${row}: prints with “${f.template.name}” instead of “${f.switchedFrom.name}” so the text stays readable.` });
     }
   });
   return out;

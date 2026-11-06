@@ -1,9 +1,9 @@
-import type { Batch, Brand, Options, Preset, SavedBatch, Sign, Template, Warning } from "../../src/core/types";
+import type { Batch, Brand, Options, Preset, Rules, SavedBatch, Sign, Template, Warning } from "../../src/core/types";
 
 export interface LogoInfo { width: number; height: number; aspect: number; background: "transparent" | "white" | "solid"; hasOriginal: boolean }
 export type BrandWithLogo = Brand & { logo: LogoInfo | null };
 export interface SavedSummary { id: string; name: string; savedAt: string; signs: number }
-export interface State { brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[]; templates: Template[] }
+export interface State { brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[]; templates: Template[]; rules: Rules }
 
 async function j<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -27,6 +27,7 @@ export const saveBatchAs = (name: string, batch: Batch) => send("/api/batches", 
 export const loadSaved = (id: string) => fetch(`/api/batches/${id}`).then((r) => j<SavedBatch>(r));
 export const deleteSaved = (id: string) => send(`/api/batches/${id}`, undefined, "DELETE").then((r) => j(r));
 
+export const saveRules = (r: Rules) => send("/api/rules", r, "PUT").then((res) => j<Rules>(res));
 export const saveTemplate = (t: Template) => send(`/api/templates/${t.id}`, t, "PUT").then((r) => j<Template>(r));
 export const duplicateTemplate = (id: string, name?: string) => send(`/api/templates/${id}/duplicate`, { name }).then((r) => j<Template>(r));
 export const resetTemplate = (id: string) => send(`/api/templates/${id}/reset`).then((r) => j<Template>(r));
