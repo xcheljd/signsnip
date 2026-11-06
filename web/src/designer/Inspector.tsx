@@ -2,6 +2,7 @@ import {
   AlignCenterIcon, AlignLeftIcon, AlignRightIcon, ArrowDownToLineIcon, ArrowUpToLineIcon, CopyIcon, FoldVerticalIcon,
   ImageIcon, ImagePlusIcon, MoveHorizontalIcon, MoveVerticalIcon, RefreshCwIcon, Trash2Icon, TypeIcon,
 } from "lucide-react";
+import { InfoIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import * as api from "../api";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -32,12 +34,34 @@ function TipButton({ label, children, ...p }: { label: string } & React.Componen
   );
 }
 
+/** A small ⓘ next to a label: help text on tap/click instead of a paragraph under every field. */
+export function InfoTip({ about, children }: { about: string; children: React.ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={`About ${about}`} />}>
+        <InfoIcon />
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-64 text-sm">{children}</PopoverContent>
+    </Popover>
+  );
+}
+
+/** A titled group of inspector fields. */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-4 border-t pt-4 first:border-t-0 first:pt-0">
+      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 /** X / Y / W / H in mm, plus centre buttons. */
 function BoxFields({ o, set }: { o: TemplateObject; set: (p: Partial<TemplateObject>) => void }) {
   const n = (k: "x" | "y" | "w" | "h", label: string, min: number, max: number) => (
     <Field>
       <FieldLabel htmlFor={`box-${k}`}>{label}</FieldLabel>
-      <NumField id={`box-${k}`} stepper={label.toLowerCase()} compact after="mm" decimals={1} step={0.5} min={min} max={max} value={o[k]} onChange={(v) => v !== undefined && set({ [k]: v })} />
+      <NumField id={`box-${k}`} stepper={label.toLowerCase()} compact className="w-full" after="mm" decimals={1} step={0.5} min={min} max={max} value={o[k]} onChange={(v) => v !== undefined && set({ [k]: v })} />
     </Field>
   );
   return (
@@ -48,9 +72,9 @@ function BoxFields({ o, set }: { o: TemplateObject; set: (p: Partial<TemplateObj
         {n("w", "Width", o.type === "logo" ? 2 : 1, SIGN_W_MM + 10)}
         {n("h", "Height", o.type === "logo" ? 2 : 1, SIGN_H_MM + 10)}
       </div>
-      <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => set({ x: Math.round(((SIGN_W_MM - o.w) / 2) * 100) / 100 })}><MoveHorizontalIcon data-icon="inline-start" />Centre across</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => set({ w: SIGN_W_MM - 8, x: 4 })}>Full width</Button>
+      <div className="grid grid-cols-2 gap-3">
+        <Button type="button" variant="outline" onClick={() => set({ x: Math.round(((SIGN_W_MM - o.w) / 2) * 100) / 100 })}><MoveHorizontalIcon data-icon="inline-start" />Centre across</Button>
+        <Button type="button" variant="outline" onClick={() => set({ w: SIGN_W_MM - 8, x: 4 })}>Full width</Button>
       </div>
     </>
   );
@@ -68,10 +92,10 @@ export function ObjectInspector({
         <TipButton label="Delete (Del)" className="text-destructive" onClick={onDelete}><Trash2Icon /></TipButton>
       </div>
       {o.type === "text" ? <TextInspector o={o} set={set} /> : (
-        <>
+        <Section title="Position">
           <BoxFields o={o} set={set} />
           <FieldDescription>The brand's logo is fitted inside this box. Each brand's size slider can still grow it a little.</FieldDescription>
-        </>
+        </Section>
       )}
     </FieldGroup>
   );
@@ -79,108 +103,122 @@ export function ObjectInspector({
 
 function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>) => void }) {
   const fieldItems = TEXT_FIELDS.map((f) => ({ value: f, label: FIELD_LABELS[f] }));
+  const fill = "w-full *:flex-1"; // segmented controls fill their cell
   return (
     <>
-      <Field>
-        <FieldLabel htmlFor="obj-field">Shows</FieldLabel>
-        <Select value={o.field} items={fieldItems} onValueChange={(v) => v && set({ field: v as TextField })}>
-          <SelectTrigger id="obj-field" className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectGroup>{fieldItems.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectGroup></SelectContent>
-        </Select>
-        {o.field === "heading" && <FieldDescription>Lead word on its own line, then the collection.</FieldDescription>}
-      </Field>
-      {o.field === "static" && (
+      <Section title="Text">
         <Field>
-          <FieldLabel htmlFor="obj-text">Text</FieldLabel>
-          <Input id="obj-text" value={o.text} maxLength={80} placeholder="e.g. FINAL SALE" onChange={(e) => set({ text: e.target.value })} />
+          <div className="flex items-center gap-1">
+            <FieldLabel htmlFor="obj-field">Shows</FieldLabel>
+            {o.field === "heading" && <InfoTip about="Shows">Lead word on its own line, then the collection.</InfoTip>}
+          </div>
+          <Select value={o.field} items={fieldItems} onValueChange={(v) => v && set({ field: v as TextField })}>
+            <SelectTrigger id="obj-field" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectGroup>{fieldItems.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectGroup></SelectContent>
+          </Select>
         </Field>
-      )}
+        {o.field === "static" && (
+          <Field>
+            <FieldLabel htmlFor="obj-text">Text</FieldLabel>
+            <Input id="obj-text" value={o.text} maxLength={80} placeholder="e.g. FINAL SALE" onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+        )}
+      </Section>
 
-      <FieldSeparator />
-      <Field>
-        <div className="flex items-center justify-between">
-          <FieldLabel htmlFor="obj-size">Font size</FieldLabel>
-          <NumField id="obj-size" stepper="font size" className="w-40" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
+      <Section title="Size & fit">
+        <Field>
+          <div className="flex items-center gap-1">
+            <FieldLabel htmlFor="obj-size">Font size</FieldLabel>
+            <InfoTip about="Font size">The size it prints at when the text fits. Longer text shrinks, down to Smallest.</InfoTip>
+          </div>
+          <NumField id="obj-size" stepper="font size" className="w-full" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
+          <Slider min={6} max={60} step={0.5} value={[Math.min(60, o.size)]} aria-label="Font size" thumbLabel="Font size"
+            onValueChange={(v) => { const s = Array.isArray(v) ? v[0]! : (v as number); set({ size: s, minSize: Math.min(o.minSize, s) }); }} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field>
+            <FieldLabel htmlFor="obj-min">Smallest</FieldLabel>
+            <NumField id="obj-min" stepper="smallest size" compact className="w-full" after="pt" decimals={1} step={0.5} min={3} max={o.size} value={o.minSize} onChange={(v) => v && set({ minSize: v })} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="obj-lines">Max lines</FieldLabel>
+            <NumField id="obj-lines" stepper="max lines" compact className="w-full" min={1} max={5} value={o.maxLines} onChange={(v) => v && set({ maxLines: v })} />
+          </Field>
+          {o.maxLines > 1 && (
+            <Field className="col-span-2">
+              <div className="flex items-center gap-1">
+                <FieldLabel htmlFor="obj-spacing">Line spacing</FieldLabel>
+                <InfoTip about="Line spacing">Space between wrapped lines. 100% is normal; lower packs them tighter (and fits more before shrinking), higher spreads them out.</InfoTip>
+              </div>
+              <NumField id="obj-spacing" stepper="line spacing" className="w-full" after="%" step={5} min={70} max={250}
+                value={Math.round((o.lineSpacing ?? 1) * 100)} onChange={(v) => v && set({ lineSpacing: v / 100 })} />
+            </Field>
+          )}
         </div>
-        <Slider min={6} max={60} step={0.5} value={[Math.min(60, o.size)]} aria-label="Font size" thumbLabel="Font size"
-          onValueChange={(v) => { const s = Array.isArray(v) ? v[0]! : (v as number); set({ size: s, minSize: Math.min(o.minSize, s) }); }} />
-        <FieldDescription>The size it prints at when the text fits. Longer text shrinks, down to the minimum.</FieldDescription>
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field>
-          <FieldLabel htmlFor="obj-min">Smallest</FieldLabel>
-          <NumField id="obj-min" stepper="smallest size" compact after="pt" decimals={1} step={0.5} min={3} max={o.size} value={o.minSize} onChange={(v) => v && set({ minSize: v })} />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="obj-lines">Max lines</FieldLabel>
-          <NumField id="obj-lines" stepper="max lines" compact min={1} max={5} value={o.maxLines} onChange={(v) => v && set({ maxLines: v })} />
-        </Field>
-      </div>
-      <Field>
-        <FieldLabel>Weight</FieldLabel>
-        <ToggleGroup variant="outline" size="sm" spacing={0} value={[o.weight]} onValueChange={(v) => v[0] && set({ weight: v[0] as TextObject["weight"] })}>
-          <ToggleGroupItem value="bold" className="font-bold">Bold</ToggleGroupItem>
-          <ToggleGroupItem value="regular" className="font-normal">Regular</ToggleGroupItem>
-        </ToggleGroup>
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field>
-          <FieldLabel>Align</FieldLabel>
-          <ToggleGroup variant="outline" size="sm" spacing={0} value={[o.align]} onValueChange={(v) => v[0] && set({ align: v[0] as TextObject["align"] })}>
-            <ToggleGroupItem value="left" aria-label="Align left"><AlignLeftIcon /></ToggleGroupItem>
-            <ToggleGroupItem value="center" aria-label="Align centre"><AlignCenterIcon /></ToggleGroupItem>
-            <ToggleGroupItem value="right" aria-label="Align right"><AlignRightIcon /></ToggleGroupItem>
-          </ToggleGroup>
-        </Field>
-        <Field>
-          <FieldLabel>In the box</FieldLabel>
-          <ToggleGroup variant="outline" size="sm" spacing={0} value={[o.vAlign]} onValueChange={(v) => v[0] && set({ vAlign: v[0] as TextObject["vAlign"] })}>
-            <ToggleGroupItem value="top" aria-label="Top"><ArrowUpToLineIcon /></ToggleGroupItem>
-            <ToggleGroupItem value="middle" aria-label="Middle"><FoldVerticalIcon /></ToggleGroupItem>
-            <ToggleGroupItem value="bottom" aria-label="Bottom"><ArrowDownToLineIcon /></ToggleGroupItem>
-          </ToggleGroup>
-        </Field>
-      </div>
-      {o.maxLines > 1 && (
-        <Field>
-          <FieldLabel htmlFor="obj-spacing">Line spacing</FieldLabel>
-          <NumField id="obj-spacing" stepper="line spacing" className="w-40" after="%" step={5} min={70} max={250}
-            value={Math.round((o.lineSpacing ?? 1) * 100)} onChange={(v) => v && set({ lineSpacing: v / 100 })} />
-          <FieldDescription>Space between wrapped lines. 100% is normal; lower packs them tighter, higher spreads them out.</FieldDescription>
-        </Field>
-      )}
-      {o.maxLines > 1 && (
-        <Field orientation="horizontal">
-          <Switch id="obj-balance" checked={o.balance} onCheckedChange={(c) => set({ balance: c })} />
-          <div className="flex flex-col gap-0.5">
+        {o.maxLines > 1 && (
+          <Field orientation="horizontal" className="items-center">
+            <Switch id="obj-balance" checked={o.balance} onCheckedChange={(c) => set({ balance: c })} />
+            <span className="flex items-center gap-1">
             <FieldLabel htmlFor="obj-balance">Balance line breaks</FieldLabel>
-            <FieldDescription>Evens out wrapped lines. Same font size, just a tidier shape.</FieldDescription>
+            <InfoTip about="Balance line breaks">Evens out wrapped lines (“SEABIRD / CHRONO GMT” instead of “SEABIRD CHRONO / GMT”). Same font size, just a tidier shape.</InfoTip>
+            </span>
+          </Field>
+        )}
+      </Section>
+
+      <Section title="Style">
+        <Field>
+          <FieldLabel>Weight</FieldLabel>
+          <ToggleGroup variant="outline" spacing={0} className={fill} value={[o.weight]} onValueChange={(v) => v[0] && set({ weight: v[0] as TextObject["weight"] })}>
+            <ToggleGroupItem value="bold" className="font-bold">Bold</ToggleGroupItem>
+            <ToggleGroupItem value="regular" className="font-normal">Regular</ToggleGroupItem>
+          </ToggleGroup>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field orientation="horizontal" className="items-center">
+            <Switch id="obj-upper" checked={o.uppercase} onCheckedChange={(c) => set({ uppercase: c })} />
+            <FieldLabel htmlFor="obj-upper">ALL CAPS</FieldLabel>
+          </Field>
+          <Field orientation="horizontal" className="items-center">
+            <Switch id="obj-strike" checked={o.strike} onCheckedChange={(c) => set({ strike: c })} />
+            <FieldLabel htmlFor="obj-strike">Strike through</FieldLabel>
+          </Field>
+        </div>
+        <Field>
+          <FieldLabel htmlFor="obj-color">Colour</FieldLabel>
+          <div className="flex items-center gap-2">
+            {SWATCHES.map((c) => (
+              <button key={c} type="button" aria-label={`Colour ${c}`} onClick={() => set({ color: c })}
+                className={cn("size-6 rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50", o.color.toLowerCase() === c ? "border-primary" : "border-transparent ring-1 ring-border")}
+                style={{ background: c }} />
+            ))}
+            <input id="obj-color" type="color" aria-label="Custom colour" value={o.color} onChange={(e) => set({ color: e.target.value })}
+              title="Pick any colour" className="size-7 cursor-pointer rounded-full border border-dashed border-muted-foreground/60 bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-moz-color-swatch]:rounded-full" />
           </div>
         </Field>
-      )}
-      <Field orientation="horizontal">
-        <Switch id="obj-upper" checked={o.uppercase} onCheckedChange={(c) => set({ uppercase: c })} />
-        <FieldLabel htmlFor="obj-upper">ALL CAPS</FieldLabel>
-      </Field>
-      <Field orientation="horizontal">
-        <Switch id="obj-strike" checked={o.strike} onCheckedChange={(c) => set({ strike: c })} />
-        <FieldLabel htmlFor="obj-strike">Strike through</FieldLabel>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="obj-color">Colour</FieldLabel>
-        <div className="flex items-center gap-2">
-          {SWATCHES.map((c) => (
-            <button key={c} type="button" aria-label={`Colour ${c}`} onClick={() => set({ color: c })}
-              className={cn("size-6 rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50", o.color.toLowerCase() === c ? "border-primary" : "border-transparent ring-1 ring-border")}
-              style={{ background: c }} />
-          ))}
-          <input id="obj-color" type="color" aria-label="Custom colour" value={o.color} onChange={(e) => set({ color: e.target.value })}
-            className="size-7 cursor-pointer rounded-md border bg-transparent p-0.5" />
-        </div>
-      </Field>
+      </Section>
 
-      <FieldSeparator />
-      <BoxFields o={o} set={set as (p: Partial<TemplateObject>) => void} />
+      <Section title="Position">
+        <div className="grid grid-cols-2 gap-3">
+          <Field>
+            <FieldLabel>Align</FieldLabel>
+            <ToggleGroup variant="outline" spacing={0} className={fill} value={[o.align]} onValueChange={(v) => v[0] && set({ align: v[0] as TextObject["align"] })}>
+              <ToggleGroupItem value="left" aria-label="Align left"><AlignLeftIcon /></ToggleGroupItem>
+              <ToggleGroupItem value="center" aria-label="Align centre"><AlignCenterIcon /></ToggleGroupItem>
+              <ToggleGroupItem value="right" aria-label="Align right"><AlignRightIcon /></ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
+          <Field>
+            <FieldLabel>Up / down in the box</FieldLabel>
+            <ToggleGroup variant="outline" spacing={0} className={fill} value={[o.vAlign]} onValueChange={(v) => v[0] && set({ vAlign: v[0] as TextObject["vAlign"] })}>
+              <ToggleGroupItem value="top" aria-label="Top"><ArrowUpToLineIcon /></ToggleGroupItem>
+              <ToggleGroupItem value="middle" aria-label="Middle"><FoldVerticalIcon /></ToggleGroupItem>
+              <ToggleGroupItem value="bottom" aria-label="Bottom"><ArrowDownToLineIcon /></ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
+        </div>
+        <BoxFields o={o} set={set as (p: Partial<TemplateObject>) => void} />
+      </Section>
     </>
   );
 }
@@ -203,7 +241,7 @@ function BackgroundFields({ t, set }: { t: Template; set: (p: Partial<Template>)
   const r = bg ? backgroundRect(bg) : null;
   return (
     <Field>
-      <FieldLabel>Background picture</FieldLabel>
+      <FieldLabel className="sr-only">Background picture</FieldLabel>
       <input ref={file} type="file" accept="image/*" hidden aria-label="Background picture file" onChange={(e) => pick(e.target.files?.[0])} />
       {!bg || !r ? (
         <>
@@ -224,14 +262,14 @@ function BackgroundFields({ t, set }: { t: Template; set: (p: Partial<Template>)
               <Button type="button" size="sm" variant="outline" className="text-destructive" onClick={() => set({ background: undefined })}><Trash2Icon data-icon="inline-start" />Remove</Button>
             </div>
           </div>
-          <ToggleGroup variant="outline" size="sm" spacing={0} aria-label="Background fit" value={[bg.fit]} onValueChange={(v) => v[0] && set({ background: { ...bg, fit: v[0] as "cover" | "contain" } })}>
+          <ToggleGroup variant="outline" spacing={0} className="w-full *:flex-1" aria-label="Background fit" value={[bg.fit]} onValueChange={(v) => v[0] && set({ background: { ...bg, fit: v[0] as "cover" | "contain" } })}>
             <ToggleGroupItem value="cover">Fill the sign</ToggleGroupItem>
             <ToggleGroupItem value="contain">Whole picture</ToggleGroupItem>
           </ToggleGroup>
           <FieldDescription>{bg.fit === "cover" ? "Covers the whole sign; edges of the picture may be cropped." : "Shows all of the picture; white bands where the shapes differ."}</FieldDescription>
-          <div className="flex items-center justify-between gap-3">
-            <FieldLabel htmlFor="tpl-bg-strength">Strength</FieldLabel>
-            <NumField id="tpl-bg-strength" stepper="background strength" className="w-40" after="%" step={5} min={5} max={100}
+          <FieldLabel htmlFor="tpl-bg-strength">Strength</FieldLabel>
+          <div>
+            <NumField id="tpl-bg-strength" stepper="background strength" className="w-full" after="%" step={5} min={5} max={100}
               value={strength} onChange={(v) => v && set({ background: { ...bg, opacity: v / 100 } })} />
           </div>
           <Slider min={5} max={100} step={5} value={[strength]} aria-label="Background strength" thumbLabel="Background strength"
@@ -251,46 +289,55 @@ export function TemplateInspector({
   const fbItems = [{ value: "none", label: "None (just warn)" }, ...templates.filter((x) => x.id !== t.id && x.kind === t.kind).map((x) => ({ value: x.id, label: x.name }))];
   return (
     <FieldGroup>
-      <Field>
-        <FieldLabel htmlFor="tpl-name">Template name</FieldLabel>
-        <Input id="tpl-name" value={t.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />
-      </Field>
-      <Field>
-        <FieldLabel>Prints</FieldLabel>
-        <ToggleGroup variant="outline" size="sm" spacing={0} value={[t.kind]} onValueChange={(v) => v[0] && set({ kind: v[0] as Template["kind"] })}>
-          <ToggleGroupItem value="percent">Percent off</ToggleGroupItem>
-          <ToggleGroupItem value="price">A price</ToggleGroupItem>
-        </ToggleGroup>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="tpl-margin">Safe margin</FieldLabel>
-        <NumField id="tpl-margin" stepper="safe margin" className="w-40" after="mm" decimals={1} step={0.5} min={0} max={10} value={t.safeMargin} onChange={(v) => v !== undefined && set({ safeMargin: v })} />
-        <FieldDescription>The dashed line. Keep things inside it so the holder's edge doesn't cover them.</FieldDescription>
-      </Field>
-      <BackgroundFields t={t} set={set} />
-      <FieldSeparator />
-      <Field>
-        <FieldLabel htmlFor="tpl-min">Readable minimum</FieldLabel>
-        <NumField id="tpl-min" stepper="template readable minimum" emptyStart={storeMin} className="w-40" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={String(storeMin)}
-          value={t.readableMin} onChange={(v) => set({ readableMin: v })} />
-        <FieldDescription>Empty = the store setting ({storeMin}pt, on the Text rules tab). Text that would shrink below this gets your abbreviations, then the template below.</FieldDescription>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="tpl-fallback">If text is still too small, use</FieldLabel>
-        <Select value={t.fallbackId && fbItems.some((i) => i.value === t.fallbackId) ? t.fallbackId : "none"} items={fbItems}
-          onValueChange={(v) => v && set({ fallbackId: v === "none" ? undefined : v })}>
-          <SelectTrigger id="tpl-fallback" className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectGroup>{fbItems.map((i) => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}</SelectGroup></SelectContent>
-        </Select>
-        <FieldDescription>A roomier layout for long names, e.g. “Percent off · long name”: taller name box, offer moved down. Only those signs switch.</FieldDescription>
-      </Field>
-      <FieldSeparator />
-      <Field>
-        <FieldLabel>Objects</FieldLabel>
+      <Section title="Template">
+        <Field>
+          <FieldLabel htmlFor="tpl-name">Template name</FieldLabel>
+          <Input id="tpl-name" value={t.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />
+        </Field>
+        <Field>
+          <FieldLabel>Prints</FieldLabel>
+          <ToggleGroup variant="outline" spacing={0} className="w-full *:flex-1" value={[t.kind]} onValueChange={(v) => v[0] && set({ kind: v[0] as Template["kind"] })}>
+            <ToggleGroupItem value="percent">Percent off</ToggleGroupItem>
+            <ToggleGroupItem value="price">A price</ToggleGroupItem>
+          </ToggleGroup>
+        </Field>
+        <Field>
+          <div className="flex items-center gap-1">
+            <FieldLabel htmlFor="tpl-margin">Safe margin</FieldLabel>
+            <InfoTip about="Safe margin">The dashed line. Keep things inside it so the holder's edge doesn't cover them.</InfoTip>
+          </div>
+          <NumField id="tpl-margin" stepper="safe margin" className="w-full" after="mm" decimals={1} step={0.5} min={0} max={10} value={t.safeMargin} onChange={(v) => v !== undefined && set({ safeMargin: v })} />
+        </Field>
+      </Section>
+      <Section title="Background">
+        <BackgroundFields t={t} set={set} />
+      </Section>
+      <Section title="Small text">
+        <Field>
+          <div className="flex items-center gap-1">
+            <FieldLabel htmlFor="tpl-min">Readable minimum</FieldLabel>
+            <InfoTip about="Readable minimum">Empty = the store setting ({storeMin}pt, on the Text rules tab). Text that would shrink below this gets your abbreviations, then the template below.</InfoTip>
+          </div>
+          <NumField id="tpl-min" stepper="template readable minimum" emptyStart={storeMin} className="w-full" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={`${storeMin} (store setting)`}
+            value={t.readableMin} onChange={(v) => set({ readableMin: v })} />
+        </Field>
+        <Field>
+          <div className="flex items-center gap-1">
+            <FieldLabel htmlFor="tpl-fallback">If text is still too small, use</FieldLabel>
+            <InfoTip about="the long-name template">A roomier layout for long names, e.g. “Percent off · long name”: taller name box, offer moved down. Only those signs switch.</InfoTip>
+          </div>
+          <Select value={t.fallbackId && fbItems.some((i) => i.value === t.fallbackId) ? t.fallbackId : "none"} items={fbItems}
+            onValueChange={(v) => v && set({ fallbackId: v === "none" ? undefined : v })}>
+            <SelectTrigger id="tpl-fallback" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectGroup>{fbItems.map((i) => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}</SelectGroup></SelectContent>
+          </Select>
+        </Field>
+      </Section>
+      <Section title="Objects">
         <div className="flex flex-col gap-1">
           {objects.map((o) => (
             <button key={o.id} type="button" onClick={() => onPick(o.id)}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
+              className="flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
               {o.type === "logo" ? <ImageIcon className="size-4 text-muted-foreground" /> : <TypeIcon className="size-4 text-muted-foreground" />}
               <span className="min-w-0 flex-1 truncate">{objectLabel(o)}</span>
               {o.type === "text" && <span className="text-xs tabular-nums text-muted-foreground">{o.size}pt</span>}
@@ -298,7 +345,7 @@ export function TemplateInspector({
           ))}
         </div>
         <FieldDescription><MoveVerticalIcon className="inline size-3" /> Click an object on the sign, or here, to edit it.</FieldDescription>
-      </Field>
+      </Section>
     </FieldGroup>
   );
 }

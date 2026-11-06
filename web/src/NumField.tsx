@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { MinusIcon, PlusIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 
 /**
@@ -74,7 +75,7 @@ export function NumField({
             disabled={at !== undefined && at <= min} onClick={() => bump(-1)}><MinusIcon /></InputGroupButton>
           {before && <InputGroupText>{before}</InputGroupText>}
         </InputGroupAddon>
-        <InputGroupInput {...props} className={before || after ? "tabular-nums" : "text-center tabular-nums"} />
+        <InputGroupInput {...props} className={cn("tabular-nums", after ? "text-right" : before ? "text-left" : "text-center")} />
         <InputGroupAddon align="inline-end" className={small ? "pr-1" : undefined}>
           {after && <InputGroupText>{after}</InputGroupText>}
           <InputGroupButton size={size} aria-label={`${stepWords[1]} ${stepper}`} title={`${stepWords[1]} ${stepper}`}

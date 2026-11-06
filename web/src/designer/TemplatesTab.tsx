@@ -24,6 +24,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
+import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -345,7 +346,9 @@ export function TemplatesTab({
             {dirty && <Badge variant="outline">unsaved</Badge>}
           </CardTitle>
           <CardDescription>{usage(draft.id) ? `${usage(draft.id)} sign${usage(draft.id) === 1 ? "" : "s"} in the batch use this. Saving updates them all.` : "Not used in the current batch."}</CardDescription>
-          <CardAction className="flex gap-2">
+          <CardAction className="flex flex-wrap items-center justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={!dirty} onClick={revert}>Discard changes</Button>
+            <Button type="button" size="sm" disabled={!dirty} onClick={save}><SaveIcon data-icon="inline-start" />Save template</Button>
             {resettable && <IconTip label="Reset to the original layout" onClick={() => setConfirmReset(true)}><RotateCcwIcon /></IconTip>}
             {!isBuiltin(draft.id) && <IconTip label="Delete template" className="text-destructive" onClick={() => setConfirmDelete(true)}><Trash2Icon /></IconTip>}
           </CardAction>
@@ -386,6 +389,21 @@ export function TemplatesTab({
             </ToggleGroup>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2">
+            <Label htmlFor="sample-brand" className="text-sm text-muted-foreground">Preview with</Label>
+            <Select value={brand?.id ?? ""} items={brands.map((b) => ({ value: b.id, label: b.name }))} onValueChange={(v) => v && setBrandId(v)}>
+              <SelectTrigger id="sample-brand" className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
+            </Select>
+            <Toggle variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
+            {row && (
+              <span className="flex items-center gap-2 text-sm">
+                <Badge variant="secondary">Showing row {previewRow! + 1}</Badge>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setPreviewRow(null)}>Back to sample</Button>
+              </span>
+            )}
+          </div>
+
           <div ref={holder} className="flex justify-center rounded-lg bg-muted py-4">
             {view === "design" ? (
               fontsReady && sample ? (
@@ -403,25 +421,9 @@ export function TemplatesTab({
             )}
           </div>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <Field className="w-56">
-              <FieldLabel htmlFor="sample-brand">Preview with</FieldLabel>
-              <Select value={brand?.id ?? ""} items={brands.map((b) => ({ value: b.id, label: b.name }))} onValueChange={(v) => v && setBrandId(v)}>
-                <SelectTrigger id="sample-brand" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
-              </Select>
-            </Field>
-            <Toggle variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
-            {row && (
-              <span className="flex items-center gap-2 text-sm">
-                <Badge variant="secondary">Showing row {previewRow! + 1}</Badge>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setPreviewRow(null)}>Back to sample</Button>
-              </span>
-            )}
-            <p className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
-              <Kbd>←↑→↓</Kbd> 0.1 mm <Kbd>Shift</Kbd> 1 mm <Kbd>Del</Kbd> remove <Kbd>Ctrl S</Kbd> save
-            </p>
-          </div>
+          <p className="hidden items-center justify-center gap-1.5 text-xs text-muted-foreground lg:flex">
+            <Kbd>←↑→↓</Kbd> 0.1 mm <Kbd>Shift</Kbd> 1 mm <Kbd>Del</Kbd> remove <Kbd>Ctrl+S</Kbd> save
+          </p>
 
           {issues.filter((i) => i.level !== "info").length > 0 && (
             <ul className="flex flex-col gap-1 text-sm">
@@ -461,10 +463,7 @@ export function TemplatesTab({
             <p className="text-xs text-muted-foreground">{issues.filter((i) => i.level === "info").map((i) => i.message).join(" ")}</p>
           )}
         </CardContent>
-        <CardFooter className="flex gap-2">
-          <Button type="button" disabled={!dirty} onClick={save}><SaveIcon data-icon="inline-start" />Save template</Button>
-          <Button type="button" variant="outline" disabled={!dirty} onClick={revert}>Discard changes</Button>
-        </CardFooter>
+
       </Card>
 
       {/* ------- inspector */}
