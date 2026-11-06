@@ -41,11 +41,17 @@ export function listBrands(): Brand[] {
 export function saveBrands(brands: Brand[]): void {
   writeJson(f("brands.json"), brands.map((b) => ({ ...b, hasLogo: undefined })));
 }
-export function findBrand(ref: string): Brand | undefined {
+/** exact id/name first; a partial name only counts when it matches exactly one brand */
+export function brandMatches(ref: string): Brand[] {
   const r = ref.trim().toLowerCase();
+  if (!r) return [];
   const all = listBrands();
-  return all.find((b) => b.id === r) ?? all.find((b) => b.name.toLowerCase() === r)
-    ?? all.find((b) => b.name.toLowerCase().includes(r));
+  const exact = all.filter((b) => b.id === r || b.name.toLowerCase() === r);
+  return exact.length ? exact : all.filter((b) => b.name.toLowerCase().includes(r) || b.id.includes(r));
+}
+export function findBrand(ref: string): Brand | undefined {
+  const m = brandMatches(ref);
+  return m.length === 1 ? m[0] : undefined;
 }
 export function upsertBrand(input: { id?: string; name: string; collections?: string[]; logoScale?: number }): Brand {
   const brands = listBrands();
@@ -87,6 +93,10 @@ export async function saveLogo(brandId: string, input: Buffer): Promise<{ aspect
   }
   const out = await img.resize({ width: 1400, height: 700, fit: "inside", withoutEnlargement: true })
     .png().toBuffer({ resolveWithObject: true });
+  const { data: px } = await sharp(out.data).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let visible = 0;
+  for (let i = 3; i < px.length; i += 4) if (px[i]! > 16) { visible++; if (visible > 20) break; }
+  if (visible <= 20) throw new Error("That image is empty (fully transparent) - nothing would print");
   fs.mkdirSync(f("logos"), { recursive: true });
   fs.writeFileSync(logoPath(brandId), out.data);
   fs.rmSync(origLogoPath(brandId), { force: true }); // a fresh upload supersedes any old backup
@@ -155,6 +165,9 @@ export async function removeLogoBackground(brandId: string): Promise<LogoInfo> {
       if (q >= 0 && !seen[q] && dist(q * 4) <= SOFT) { seen[q] = 1; stack.push(q); }
     }
   }
+  let kept = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i]! > 16) kept++;
+  if (kept < (w * h) * 0.02) throw new Error("Removing the background would erase the whole logo (it's one solid colour). Upload a version with a transparent or white background instead.");
   fs.mkdirSync(path.dirname(origLogoPath(brandId)), { recursive: true });
   if (!fs.existsSync(origLogoPath(brandId))) fs.copyFileSync(file, origLogoPath(brandId));
   const png = await sharp(data, { raw: { width: w, height: h, channels: 4 } }).trim({ threshold: 1 }).png().toBuffer();
@@ -198,10 +211,11 @@ export function findSavedBatch(ref: string): SavedBatch | undefined {
   const all = listSavedBatches();
   return all.find((b) => b.id === r) ?? all.find((b) => b.name.toLowerCase() === r) ?? all.find((b) => b.name.toLowerCase().includes(r));
 }
-export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedBatch {
+export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedBatch & { replaced: boolean } {
   const saved = SavedBatchSchema.parse({ id: slugify(name), name: name.trim(), savedAt: new Date().toISOString(), batch });
+  const replaced = fs.existsSync(batchFile(saved.id));
   writeJson(batchFile(saved.id), saved);
-  return saved;
+  return { ...saved, replaced };
 }
 export function deleteSavedBatch(id: string): void { fs.rmSync(batchFile(id), { force: true }); }
 
@@ -249,7 +263,8 @@ export function duplicateTemplate(id: string, name?: string): Template {
 /** Built-ins can't be deleted (signs fall back to them); they can be reset instead. */
 export function deleteTemplate(id: string): void {
   if (isBuiltin(id)) throw new Error(`"${id}" is built in - you can reset it, but not delete it`);
-  writeTemplates(listTemplates().filter((t) => t.id !== id));
+  // templates that fell back to this one stop falling back (instead of pointing at nothing)
+  writeTemplates(listTemplates().filter((t) => t.id !== id).map((t) => (t.fallbackId === id ? { ...t, fallbackId: undefined } : t)));
 }
 export function resetTemplate(id: string): Template {
   const d = DEFAULT_TEMPLATES.find((t) => t.id === id);

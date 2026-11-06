@@ -122,6 +122,40 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("rules").stdout).not.toContain("Moonphase");
     signo("rules", "min", "10"); signo("clear");
   });
+  it("edge cases from the QA sweep give clear answers", () => {
+    signo("clear");
+    // a partial brand name that matches several brands is refused, not silently guessed
+    const amb = signo("add", "--brand", "a", "--percent", "50");
+    expect(amb.status).toBe(1);
+    expect(amb.stderr).toContain("matches several brands");
+    signo("add", "--brand", "kestrel", "--collection", "P", "--price", "300", "--was", "200");
+    signo("add", "--brand", "kestrel", "--collection", "Q", "--price", "100");
+    expect(signo("check").stdout).toContain("isn't higher than the sale price");
+    expect(signo("bulk", "--rows", "2-1", "--percent", "10").stderr).toContain("runs backwards");
+    fs.writeFileSync(path.join(data, "q.csv"), 'brand,collection,percent\nnorthwind,"Open,50\n');
+    expect(signo("import", path.join(data, "q.csv")).stderr).toContain("never closed");
+    fs.writeFileSync(path.join(data, "n.csv"), "brand,collection\nnorthwind,X\n");
+    expect(signo("import", path.join(data, "n.csv")).stderr).toContain("needs a percent or price value");
+    expect(signo("import", path.join(data, "missing.csv")).stderr).toContain("can't find");
+    expect(signo("templates", "rename", "bogo", "").stderr).toMatch(/name: .*>=1|Too small/);
+    // deleting a template clears fallbacks that pointed at it
+    signo("templates", "duplicate", "percent", "Long copy");
+    signo("templates", "fallback", "percent", "long-copy");
+    signo("templates", "rm", "long-copy");
+    expect(signo("templates", "show", "percent").stdout).not.toContain("too small →");
+    expect(signo("save", "Twice").stdout).not.toContain("replaced");
+    expect(signo("save", "Twice").stdout).toContain("replaced the earlier batch");
+    signo("clear");
+  });
+  it("refuses an empty logo and won't erase a solid-colour logo", async () => {
+    const sharp = (await import("sharp")).default;
+    const blank = path.join(data, "blank.png"), solid = path.join(data, "solid.png");
+    await sharp({ create: { width: 200, height: 80, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toFile(blank);
+    await sharp({ create: { width: 200, height: 80, channels: 4, background: { r: 10, g: 20, b: 120, alpha: 1 } } }).png().toFile(solid);
+    expect(signo("brands", "logo", "lumen", blank).stderr).toContain("empty");
+    expect(signo("brands", "logo", "lumen", solid).status).toBe(0);
+    expect(signo("brands", "fix-bg", "lumen").stderr).toContain("erase the whole logo");
+  });
   it("accepts a JPG logo and fits it", () => {
     const r = signo("brands", "add", "Test Co", "--logo", path.join(root, "tests/fixtures/orbital.jpg"), "--collections", "A,B");
     expect(r.status).toBe(0);

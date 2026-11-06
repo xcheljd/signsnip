@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { findBrand, findTemplate, listPresets, readBatch, writeBatch } from "./store.js";
+import { brandMatches, findTemplate, listPresets, readBatch, writeBatch } from "./store.js";
 import { SignSchema, type Sign } from "./types.js";
 
 export interface AddInput {
@@ -21,7 +21,9 @@ export function buildSign(input: AddInput): Sign {
   }
   const brandRef = input.brand ?? base.brandId;
   if (!brandRef) throw new Error("Need a brand (--brand <id|name>) or a --preset");
-  const brand = findBrand(brandRef);
+  const matches = brandMatches(brandRef);
+  if (matches.length > 1) throw new Error(`"${brandRef}" matches several brands (${matches.map((b) => b.name).join(", ")}). Be more specific.`);
+  const brand = matches[0];
   if (!brand) throw new Error(`No brand matching "${brandRef}". Try: signo brands`);
   const tpl = input.template ? findTemplate(input.template) : undefined;
   if (input.template && !tpl) throw new Error(`No template matching "${input.template}". Try: signo templates`);
@@ -74,6 +76,7 @@ export function parseCsv(text: string): Record<string, string>[] {
       row = [];
     } else cell += c;
   }
+  if (q) throw new Error(`CSV row ${rows.length + 1}: a quote (") is opened but never closed`);
   row.push(cell);
   if (row.some((x) => x.trim())) rows.push(row);
   const [head, ...rest] = rows;
@@ -99,7 +102,12 @@ export function csvToSigns(text: string): Sign[] {
         footer: r.footer || undefined, copies: r.copies ? Number(r.copies) : undefined,
       });
     } catch (e) {
-      throw new Error(`CSV row ${i + 2}: ${(e as Error).message}`);
+      const msg = (e as Error).message
+        .replace("Need --percent (or --price for a price sign)", "needs a percent or price value")
+        .replace("Need a brand (--brand <id|name>) or a --preset", "needs a brand (add a \"brand\" column)")
+        .replace("Need --price for a price template", "needs a price for that template")
+        .replace(". Try: signo brands", "");
+      throw new Error(`CSV row ${i + 2}: ${msg}`);
     }
   });
 }

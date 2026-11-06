@@ -195,6 +195,10 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
     const brand = findBrand(brandId);
     const name = brand?.name ?? brandId;
     const info = await logoInfo(brandId);
+    if (!brand) {
+      out.push({ items: idx, brandId, level: "warn", code: "no-logo", message: `${idx.length === 1 ? `Row ${idx[0]! + 1} uses` : `${idx.length} rows use`} a brand that was deleted (“${brandId}”) - they print without a logo. Change the brand with bulk edit.` });
+      continue;
+    }
     if (!info) {
       out.push({ items: idx, brandId, level: "warn", code: "no-logo", message: `${name} has no logo yet - those signs print without one.` });
       continue;
@@ -221,6 +225,9 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
     } else if (f.belowMin.length) {
       const what = f.belowMin.map((l) => `"${l.text}" (${l.sizePt.toFixed(1)}pt)`).join(", ");
       out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `${row}: ${what} ${f.belowMin.length === 1 ? "is" : "are"} below your ${f.min}pt readable minimum. Add an abbreviation, shorten the name, or give the template a long-name fallback.` });
+    }
+    if (s.kind === "price" && s.price && s.wasPrice && s.wasPrice <= s.price) {
+      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "was-price", message: `${row}: the “was” price (${s.wasPrice}) isn't higher than the sale price (${s.price}).` });
     }
     if (f.abbreviations.length) {
       out.push({ items: [i], brandId: s.brandId, level: "info", code: "auto-abbrev", message: `${row}: shortened to fit (${f.abbreviations.map((a) => `${a.from} → ${a.to}`).join(", ")}).` });

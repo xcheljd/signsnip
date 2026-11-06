@@ -73,7 +73,7 @@ export function SignEditor({
           onKeyDown={(e) => { if (e.key === "Escape" && editing && !e.defaultPrevented) onCancel(); }}
         >
           <FieldGroup>
-            <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+            <div className="grid gap-4 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="brand">Brand</FieldLabel>
                 <Select value={draft.brandId} items={brandItems} onValueChange={(v) => v && set({ brandId: v })}>
@@ -81,7 +81,7 @@ export function SignEditor({
                   <SelectContent><SelectGroup>{brandItems.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </Field>
-              <Field className="sm:w-60">
+              <Field>
                 <FieldLabel htmlFor="template">Template</FieldLabel>
                 <div className="flex gap-1">
                   <Select value={template.id} items={templateItems} onValueChange={(v) => v && switchTemplate(v)}>
@@ -127,7 +127,7 @@ export function SignEditor({
             </Field>}
 
             {!isPrice ? (
-              <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_8rem]">
                 <Field>
                   <FieldLabel htmlFor="percent">Percent off</FieldLabel>
                   <div className="flex flex-wrap items-center gap-2">
@@ -145,7 +145,7 @@ export function SignEditor({
               </div>
             ) : (
               <>
-                <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_9rem]">
                   <Field>
                     <FieldLabel htmlFor="price">Price</FieldLabel>
                     <div className="flex flex-wrap items-center gap-2">
@@ -175,7 +175,7 @@ export function SignEditor({
               </>
             )}
 
-            <div className="grid grid-cols-[1fr_6rem] gap-4">
+            <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-4">
               {uses.has("footer") ? <Field>
                 <FieldLabel htmlFor="footer">Footer</FieldLabel>
                 <Input id="footer" value={draft.footer} maxLength={40} placeholder="(none)" onChange={(e) => set({ footer: e.target.value })} />

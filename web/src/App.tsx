@@ -182,16 +182,16 @@ export function App() {
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
-      <header className="sticky top-0 z-10 flex items-center gap-5 border-b bg-card px-6 py-3 shadow-xs">
+      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><SignpostIcon aria-hidden className="size-5 text-primary" /> Sign-O-Matic</h1>
-        <TabsList>
+        <TabsList className="order-last w-full overflow-x-auto md:order-none md:w-fit">
           <TabsTrigger value="make">Make signs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="rules">Text rules</TabsTrigger>
           <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
         </TabsList>
-        <Badge variant="secondary" className="ml-auto">47 × 70 mm · sample data only</Badge>
-        <ToggleGroup variant="outline" size="sm" spacing={0} value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
+        <Badge variant="secondary" className="ml-auto hidden lg:inline-flex">47 × 70 mm · sample data only</Badge>
+        <ToggleGroup variant="outline" size="sm" spacing={0} className="ml-auto lg:ml-0" value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
           <ToggleGroupItem value="light" aria-label="Light theme"><SunIcon /></ToggleGroupItem>
           <ToggleGroupItem value="system" aria-label="Match system theme"><MonitorIcon /></ToggleGroupItem>
           <ToggleGroupItem value="dark" aria-label="Dark theme"><MoonIcon /></ToggleGroupItem>
@@ -199,19 +199,19 @@ export function App() {
       </header>
 
       <main>
-      <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-6" keepMounted>
+      <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-3 sm:p-6" keepMounted>
         <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} rules={rules} />
       </TabsContent>
 
-      <TabsContent value="rules" className="mx-auto w-full max-w-7xl p-6">
+      <TabsContent value="rules" className="mx-auto w-full max-w-7xl p-3 sm:p-6">
         <RulesTab rules={rules} templates={templates} items={batch.items} refresh={refresh} />
       </TabsContent>
 
-      <TabsContent value="brands" className="mx-auto w-full max-w-7xl p-6">
+      <TabsContent value="brands" className="mx-auto w-full max-w-7xl p-3 sm:p-6">
         <BrandsTab brands={brands} refresh={async () => { await refresh(); }} focusBrand={focusBrand} />
       </TabsContent>
 
-      <TabsContent value="make" className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-4 p-6 pb-16 lg:grid-cols-[1fr_20rem]">
+      <TabsContent value="make" className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-4 p-3 pb-16 sm:p-6 lg:grid-cols-[1fr_20rem]">
         <div className="grid grid-cols-1 items-start gap-4 lg:col-span-2 lg:grid-cols-[1fr_20rem]">
         {draft && (
           <SignEditor
@@ -275,7 +275,7 @@ export function App() {
       <Toaster position="bottom-right" theme={resolved} />
 
       <AlertDialog open={!!gate} onOpenChange={(o) => !o && setGate(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent size="lg">
           <AlertDialogHeader>
             <AlertDialogTitle>{gate?.small.length} sign{gate?.small.length === 1 ? "" : "s"} will print below {rules.readableMin}pt</AlertDialogTitle>
             <AlertDialogDescription render={<div />}>

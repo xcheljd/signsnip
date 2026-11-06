@@ -179,7 +179,7 @@ export interface Warning {
   items: number[];
   brandId: string;
   level: "warn" | "info";
-  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template";
+  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template" | "was-price";
   message: string;
 }
 

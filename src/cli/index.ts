@@ -156,6 +156,7 @@ export function parseRows(spec: string | undefined, count: number): number[] {
   for (const part of spec.split(",")) {
     const [a, b] = part.split("-").map((x) => Number(x.trim()));
     if (!Number.isInteger(a) || (b !== undefined && !Number.isInteger(b))) die(`bad --rows "${spec}"`);
+    if (b !== undefined && b < a!) die(`--rows ${part}: the range runs backwards (did you mean ${b}-${a}?)`);
     for (let i = a!; i <= (b ?? a!); i++) {
       if (i < 1 || i > count) die(`row ${i} is out of range 1-${count}`);
       out.add(i - 1);
@@ -316,7 +317,7 @@ async function main() {
       const name = p[0] ?? die('usage: signo save "Batch name"');
       const b = readBatch();
       if (!b.items.length) die("the batch is empty - nothing to save");
-      const s = saveNamedBatch(name, b); return log(`saved "${s.name}" (${s.id})`);
+      const s = saveNamedBatch(name, b); return log(`saved "${s.name}" (${s.id})${s.replaced ? " - replaced the earlier batch with that name" : ""}`);
     }
     case "load": {
       const s = findSavedBatch(p[0] ?? "") ?? die(`No saved batch matching "${p[0] ?? ""}". Try: signo batches`);
@@ -443,4 +444,9 @@ async function main() {
     default: die(`unknown command "${cmd}". Run: signo help`);
   }
 }
-main().catch((e) => die((e as Error).message));
+main().catch((e) => {
+  const issues = (e as { issues?: { path: (string | number)[]; message: string }[] }).issues;
+  if (Array.isArray(issues)) die(issues.map((i) => `${i.path.join(".") || "value"}: ${i.message}`).join("; "));
+  if ((e as NodeJS.ErrnoException).code === "ENOENT") die(`can't find ${(e as NodeJS.ErrnoException).path}`);
+  die((e as Error).message);
+});

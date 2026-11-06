@@ -35,7 +35,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-const strip = (t: Template | null | undefined) => (t ? JSON.stringify({ ...t, updatedAt: undefined }) : "");
+/** key-order-independent fingerprint (server JSON and local objects list keys in different orders) */
+const canon = (v: unknown): unknown =>
+  Array.isArray(v) ? v.map(canon) : v && typeof v === "object"
+    ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k, x]) => x !== undefined && k !== "updatedAt").sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, canon(x)]))
+    : v;
+const strip = (t: Template | null | undefined) => (t ? JSON.stringify(canon(t)) : "");
 const OPTIONS = { grid: "landscape-5x2", paper: "letter", cutMarks: false } as const;
 const LONG = "Deep Field Chronograph Automatic Edition";
 

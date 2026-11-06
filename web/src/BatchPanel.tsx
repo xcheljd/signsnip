@@ -117,7 +117,7 @@ export function BatchPanel({
             <AlertAction>
               {w.code === "logo-background" && <Button type="button" size="sm" variant="outline" onClick={() => onFixBg(w.brandId)}><WandSparklesIcon data-icon="inline-start" />Remove background</Button>}
               {(w.code === "low-res-logo" || w.code === "no-logo") && <Button type="button" size="sm" variant="outline" onClick={() => onGoToBrand(w.brandId)}>Open brand</Button>}
-              {w.code === "small-text" && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
+              {(w.code === "small-text" || w.code === "was-price") && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
             </AlertAction>
           </Alert>
         ))}
