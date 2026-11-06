@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
+import { MinusIcon, PlusIcon } from "lucide-react";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 
 /**
  * Number input that lets you type freely (clearing, "5" then "0") and only commits
  * valid values. Clamps on blur. Enter bubbles up so the form can submit.
  */
 export function NumField({
-  value, onChange, min, max, step = 1, decimals = 0, className, before, after, allowEmpty = false, ...rest
+  value, onChange, min, max, step = 1, decimals = 0, className, before, after, allowEmpty = false, stepper, ...rest
 }: {
   value: number | undefined; onChange: (n: number | undefined) => void; min: number; max: number;
   step?: number; decimals?: number; className?: string;
@@ -15,6 +16,8 @@ export function NumField({
   before?: string; after?: string;
   /** clearing the box means "no value" (e.g. optional was-price) */
   allowEmpty?: boolean;
+  /** show − / + buttons; the string names the value for screen readers ("copies") */
+  stepper?: string;
 } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "min" | "max" | "step">) {
   const fmt = (n: number | undefined) => (n === undefined ? "" : String(n));
   const [text, setText] = useState(fmt(value));
@@ -26,6 +29,10 @@ export function NumField({
   const parse = (t: string) => {
     const n = Number(t.replace(/[$,%\s]/g, ""));
     return t.trim() === "" || !Number.isFinite(n) ? undefined : Number(n.toFixed(decimals));
+  };
+  const bump = (dir: 1 | -1) => {
+    const c = Math.min(max, Math.max(min, Number(((value ?? min) + dir * step).toFixed(decimals))));
+    setText(fmt(c)); if (c !== value) onChange(c);
   };
   const props = {
       inputMode: (decimals ? "decimal" : "numeric") as "decimal" | "numeric",
@@ -44,14 +51,25 @@ export function NumField({
         if (c !== value) onChange(c);
       },
       onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-          e.preventDefault();
-          const c = Math.min(max, Math.max(min, Number(((value ?? min) + (e.key === "ArrowUp" ? step : -step)).toFixed(decimals))));
-          setText(fmt(c)); onChange(c);
-        }
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); bump(e.key === "ArrowUp" ? 1 : -1); }
       },
       ...rest,
   };
+  if (stepper) {
+    const small = /\bh-7\b/.test(className ?? "");
+    const btn = small ? "icon-xs" : "icon-sm";
+    return (
+      <InputGroup className={className}>
+        <InputGroupAddon>
+          <InputGroupButton size={btn} aria-label={`Fewer ${stepper}`} title={`Fewer ${stepper}`} disabled={(value ?? min) <= min} onClick={() => bump(-1)}><MinusIcon /></InputGroupButton>
+        </InputGroupAddon>
+        <InputGroupInput {...props} className="text-center tabular-nums" />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton size={btn} aria-label={`More ${stepper}`} title={`More ${stepper}`} disabled={(value ?? min) >= max} onClick={() => bump(1)}><PlusIcon /></InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    );
+  }
   if (!before && !after) return <Input className={className} {...props} />;
   return (
     <InputGroup className={className}>

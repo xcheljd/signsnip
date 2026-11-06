@@ -238,7 +238,7 @@ export function BatchPanel({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <NumField className="h-7 w-16" aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
+                      <NumField className="h-7 w-24" stepper={`copies of row ${i + 1}`} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
                         onChange={(n) => n && update((b) => ({ ...b, items: b.items.map((x) => (x.id === s.id ? { ...x, copies: n } : x)) }), { coalesce: `qty-${s.id}` })} />
                     </TableCell>
                     <TableCell>

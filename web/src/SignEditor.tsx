@@ -175,14 +175,14 @@ export function SignEditor({
               </>
             )}
 
-            <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-4">
+            <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] gap-4">
               {uses.has("footer") ? <Field>
                 <FieldLabel htmlFor="footer">Footer</FieldLabel>
                 <Input id="footer" value={draft.footer} maxLength={40} placeholder="(none)" onChange={(e) => set({ footer: e.target.value })} />
               </Field> : <div />}
               <Field>
                 <FieldLabel htmlFor="copies">Copies</FieldLabel>
-                <NumField id="copies" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
+                <NumField id="copies" stepper="copies" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
               </Field>
             </div>
           </FieldGroup>
