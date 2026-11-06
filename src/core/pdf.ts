@@ -3,7 +3,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { PDFDocument, PrintScaling, degrees, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { cellRect, sheetGeometry } from "./geometry.js";
+import { cellRect, sheetGeometry, MAX_PAGES } from "./geometry.js";
 import { fitLogo, type Measure } from "./layout.js";
 import { findBrand, listTemplates, logoInfo, readLogo, readRules } from "./store.js";
 import { fitSign, type FittedSign } from "./template.js";
@@ -108,6 +108,7 @@ export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" |
 
   const g = sheetGeometry(options);
   const pageCount = Math.max(1, Math.ceil(signs.length / g.perPage));
+  if (pageCount > MAX_PAGES) throw new Error(`That's ${pageCount} pages. One PDF can have at most ${MAX_PAGES}. Split the batch into separate saved batches.`);
   for (let p = 0; p < pageCount; p++) {
     const page = doc.addPage([mm(g.pageW), mm(g.pageH)]);
     const chunk = signs.slice(p * g.perPage, (p + 1) * g.perPage);

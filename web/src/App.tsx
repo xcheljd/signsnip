@@ -107,7 +107,7 @@ export function App() {
   const submit = () => {
     if (!draft) return;
     if (editing) {
-      update((b) => ({ ...b, items: b.items.map((i) => (i.id === editing ? { ...draft, id: editing } : i)) }));
+      if (update((b) => ({ ...b, items: b.items.map((i) => (i.id === editing ? { ...draft, id: editing } : i)) })) === false) return;
       setEditing(null); setDraft({ ...draft, id: uid() }); toast("Sign updated");
     } else {
       update((b) => ({ ...b, items: [...b.items, { ...draft, id: uid() }] }), { undo: "Added to batch" });
@@ -270,6 +270,7 @@ export function App() {
         </Card>
       </TabsContent>
 
+        <div id="overlays" />
       </main>
 
       <Toaster position="bottom-right" theme={resolved} />
@@ -283,7 +284,7 @@ export function App() {
                 {gate?.small.slice(0, 5).map((w, i) => <li key={i}>{w.message.replace(/ Add an abbreviation.*$/, "")}</li>)}
                 {(gate?.small.length ?? 0) > 5 && <li>…and {gate!.small.length - 5} more</li>}
               </ul>
-              <p className="mt-3">Fix them with an abbreviation (Text rules tab), a shorter name, or a long-name fallback template.</p>
+              <p className="mt-3">Fix them with an abbreviation on the <button type="button" className="font-medium text-primary underline underline-offset-2" onClick={() => { setGate(null); setTab("rules"); }}>Text rules</button> tab, a shorter name, or a long-name fallback template.</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -291,7 +292,6 @@ export function App() {
             <Button variant="outline" onClick={() => { const a = gate!.action; setGate(null); if (a === "print") print(true); else exportPdf(true); }}>
               {gate?.action === "print" ? "Print anyway" : "Download anyway"}
             </Button>
-            <Button variant="outline" onClick={() => { setGate(null); setTab("rules"); }}>Open Text rules</Button>
             <AlertDialogAction onClick={() => { const first = gate?.small[0]?.items[0]; setGate(null); if (first !== undefined) edit(first); }}>Fix first sign</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

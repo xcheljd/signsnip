@@ -156,6 +156,19 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("brands", "logo", "lumen", solid).status).toBe(0);
     expect(signo("brands", "fix-bg", "lumen").stderr).toContain("erase the whole logo");
   });
+  it("caps a batch at 20 pages (copies count) but lets an over-limit batch shrink", () => {
+    signo("clear");
+    const rows = ["brand,collection,percent,copies", ...Array.from({ length: 20 }, (_, i) => `orbital,Line ${i},${10 + i},10`)];
+    fs.writeFileSync(path.join(data, "cap.csv"), rows.join("\n"));
+    expect(signo("import", path.join(data, "cap.csv")).status).toBe(0); // exactly 200 signs = 20 pages
+    const more = signo("add", "--brand", "orbital", "--percent", "5");
+    expect(more.status).toBe(1);
+    expect(more.stderr).toContain("The limit is 20 pages, 200 signs");
+    expect(signo("bulk", "--rows", "1", "--copies", "11").stderr).toContain("21 pages");
+    expect(signo("export", "-o", path.join(data, "cap.pdf")).status).toBe(0);
+    expect(signo("rm", "1").status).toBe(0); // shrinking is always allowed
+    signo("clear");
+  });
   it("accepts a JPG logo and fits it", () => {
     const r = signo("brands", "add", "Test Co", "--logo", path.join(root, "tests/fixtures/orbital.jpg"), "--collections", "A,B");
     expect(r.status).toBe(0);

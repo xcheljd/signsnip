@@ -34,6 +34,24 @@ export function slotOwners(copies: number[]): number[] {
   return copies.flatMap((n, i) => Array.from({ length: n }, () => i));
 }
 
+/** The most pages one batch can print. Past this, split into separate saved batches. */
+export const MAX_PAGES = 20;
+
+/** printed pages for a batch (copies count) */
+export function batchPages(b: { items: { copies: number }[]; options: Pick<Options, "grid" | "paper"> }): number {
+  const signs = b.items.reduce((n, s) => n + s.copies, 0);
+  return Math.ceil(signs / sheetGeometry(b.options).perPage);
+}
+
+/** null when the batch fits in MAX_PAGES, otherwise a message saying what to do */
+export function pageLimitError(b: Parameters<typeof batchPages>[0]): string | null {
+  const pages = batchPages(b);
+  if (pages <= MAX_PAGES) return null;
+  const per = sheetGeometry(b.options).perPage;
+  const signs = b.items.reduce((n, s) => n + s.copies, 0);
+  return `That would be ${pages} pages (${signs} signs). The limit is ${MAX_PAGES} pages, ${MAX_PAGES * per} signs on this sheet layout. Remove some signs or copies, or save part of it as a separate batch.`;
+}
+
 export function pageFill(totalSigns: number, perPage: number) {
   const pages = Math.max(1, Math.ceil(totalSigns / perPage));
   const lastUsed = totalSigns === 0 ? 0 : totalSigns - (pages - 1) * perPage;

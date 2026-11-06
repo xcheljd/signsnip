@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Batch } from "../../src/core/types";
 import * as api from "./api";
+import { batchPages, pageLimitError } from "../../src/core/geometry";
 
 const EMPTY: Batch = { items: [], options: { grid: "landscape-5x2", paper: "letter", cutMarks: true } };
 const MAX_HISTORY = 100;
@@ -34,7 +35,10 @@ export function useBatch(onRemote: (s: api.State) => void) {
   const update = useCallback((fn: (b: Batch) => Batch, opts: { undo?: string; coalesce?: string } = {}) => {
     const prev = ref.current;
     const next = fn(prev);
-    if (next === prev) return;
+    if (next === prev) return true;
+    // page cap: refuse changes that grow the batch past it (shrinking is always fine)
+    const over = pageLimitError(next);
+    if (over && batchPages(next) > batchPages(prev)) { toast.error(over); return false; }
     const now = Date.now();
     const merge = opts.coalesce && lastCoalesce.current?.key === opts.coalesce && now - lastCoalesce.current.at < 1500;
     const id = nextId.current++;
@@ -57,6 +61,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
         },
       });
     }
+    return true;
   }, [undo]);
 
   const refresh = useCallback(async (initial = false) => {

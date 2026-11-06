@@ -73,7 +73,7 @@ export function SignEditor({
           onKeyDown={(e) => { if (e.key === "Escape" && editing && !e.defaultPrevented) onCancel(); }}
         >
           <FieldGroup>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 @md/field-group:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="brand">Brand</FieldLabel>
                 <Select value={draft.brandId} items={brandItems} onValueChange={(v) => v && set({ brandId: v })}>

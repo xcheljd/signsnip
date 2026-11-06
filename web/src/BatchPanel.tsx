@@ -4,7 +4,7 @@ import {
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { pageFill, sheetGeometry } from "../../src/core/geometry";
+import { MAX_PAGES, pageFill, sheetGeometry } from "../../src/core/geometry";
 import { money } from "../../src/core/layout";
 import { resolveTemplate } from "../../src/core/template";
 import type { Batch, Sign, Template, Warning } from "../../src/core/types";
@@ -26,7 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-type Update = (fn: (b: Batch) => Batch, opts?: { undo?: string; coalesce?: string }) => void;
+type Update = (fn: (b: Batch) => Batch, opts?: { undo?: string; coalesce?: string }) => boolean | void;
 const uid = () => crypto.randomUUID();
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
@@ -79,7 +79,9 @@ export function BatchPanel({
     <Card className="lg:col-span-2">
       <CardHeader>
         <CardTitle>Batch</CardTitle>
-        <CardDescription>{plural(total, "sign")} · {plural(fill.pages, "page")} · click any sign on the sheet below to edit it</CardDescription>
+        <CardDescription>
+          {plural(total, "sign")} · <span className={cn(total && fill.pages >= MAX_PAGES - 2 && "font-medium text-warning")}>{total ? fill.pages : 0} of {MAX_PAGES} pages max</span> · click any sign on the sheet below to edit it
+        </CardDescription>
         <CardAction className="flex gap-2">
           <Button type="button" variant="ghost" size="sm" disabled={!canUndo} onClick={undo}><Undo2Icon data-icon="inline-start" />Undo</Button>
           <SavedBatches batch={batch} saved={saved} update={update} refresh={refresh} />

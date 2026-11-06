@@ -1,3 +1,4 @@
+import { batchPages, pageLimitError } from "./geometry.js";
 import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
@@ -192,6 +193,9 @@ export function savePresets(p: Preset[]): void { writeJson(f("presets.json"), p)
 export const readBatch = (): Batch => readJson(f("batch.json"), BatchSchema, { items: [], options: DEFAULT_OPTIONS });
 export function writeBatch(b: Batch): Batch {
   const parsed = BatchSchema.parse(b);
+  // can't grow past the page limit (an older, bigger batch may still shrink)
+  const over = pageLimitError(parsed);
+  if (over && batchPages(parsed) > batchPages(readBatch())) throw new Error(over);
   writeJson(f("batch.json"), parsed);
   return parsed;
 }

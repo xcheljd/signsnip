@@ -8,7 +8,7 @@ import * as React from "react"
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete"
 import { ChevronDownIcon } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn, overlayRoot } from "@/lib/utils"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 
 const Autocomplete = AutocompletePrimitive.Root
@@ -47,7 +47,7 @@ function AutocompleteContent({
 }: AutocompletePrimitive.Popup.Props &
   Pick<AutocompletePrimitive.Positioner.Props, "side" | "align" | "sideOffset">) {
   return (
-    <AutocompletePrimitive.Portal>
+    <AutocompletePrimitive.Portal container={overlayRoot()}>
       <AutocompletePrimitive.Positioner side={side} sideOffset={sideOffset} align={align} className="isolate z-50">
         <AutocompletePrimitive.Popup
           data-slot="autocomplete-content"

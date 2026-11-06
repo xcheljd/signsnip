@@ -59,17 +59,29 @@ for (const [theme, vars] of [["light", root], ["dark", dark]] as const) {
         expect(ratio(c("destructive"), tint(c("destructive"), c(s), 0.1)), `destructive on destructive/10 over ${s}`).toBeGreaterThanOrEqual(4.5);
       }
     });
-    it("primary used as text (links, icons in ghost buttons) >= 4.5:1 on cards", () => {
-      for (const s of surfaces) expect(ratio(c("primary"), c(s)), `primary on ${s}`).toBeGreaterThanOrEqual(4.5);
+    // muted/secondary count too: card footers, the bulk bar and selected rows sit on them
+    const all = [...surfaces, "muted", "secondary"];
+    it("primary used as text (links, icons, selected chips) >= 5:1 on every surface", () => {
+      for (const s of all) expect(ratio(c("primary"), c(s)), `primary on ${s}`).toBeGreaterThanOrEqual(5);
     });
-    it("control edges and focus ring >= 3:1 (inputs, selects, checkboxes are findable)", () => {
-      for (const s of surfaces) {
-        expect(ratio(c("input"), c(s)), `input edge on ${s}`).toBeGreaterThanOrEqual(3);
-        expect(ratio(c("ring"), c(s)), `focus ring on ${s}`).toBeGreaterThanOrEqual(3);
+    it("filled primary buttons >= 5:1", () => {
+      expect(ratio(c("primary-foreground"), c("primary"))).toBeGreaterThanOrEqual(5);
+    });
+    it("control edges and focus ring >= 3.3:1 on every surface (WCAG 1.4.11 with margin)", () => {
+      for (const s of all) {
+        expect(ratio(c("input"), c(s)), `input edge on ${s}`).toBeGreaterThanOrEqual(3.3);
+        expect(ratio(c("ring"), c(s)), `focus ring on ${s}`).toBeGreaterThanOrEqual(3.3);
       }
     });
-    it("warning icons >= 3:1", () => {
-      for (const s of surfaces) expect(ratio(c("warning"), c(s)), `warning on ${s}`).toBeGreaterThanOrEqual(3);
+    it("muted text >= 5:1 on cards, >= 4.5:1 on muted surfaces", () => {
+      for (const s of surfaces) expect(ratio(c("muted-foreground"), c(s)), `muted-foreground on ${s}`).toBeGreaterThanOrEqual(5);
+    });
+    // dark fields are tinted dark:bg-input/10 (light fields are transparent)
+    if (theme === "dark") it("placeholders >= 4.5:1 inside tinted dark fields, on every surface", () => {
+      for (const s of all) expect(ratio(c("muted-foreground"), tint(c("input"), c(s), 0.10)), `placeholder in a field on ${s}`).toBeGreaterThanOrEqual(4.5);
+    });
+    it("warnings readable as text (>= 4.5:1) on every surface", () => {
+      for (const s of all) expect(ratio(c("warning"), c(s)), `warning on ${s}`).toBeGreaterThanOrEqual(4.5);
     });
   });
 }

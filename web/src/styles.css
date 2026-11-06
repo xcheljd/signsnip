@@ -63,14 +63,17 @@
     --nord7: #8fbcbb; --nord8: #88c0d0; --nord9: #81a1c1; --nord10: #5e81ac;
     --nord11: #bf616a; --nord12: #d08770; --nord13: #ebcb8b; --nord14: #a3be8c; --nord15: #b48ead;
     /* contrast-tuned shades (same hue as the Nord colour, lightness adjusted) */
-    --nord10-deep: #4a6990;  /* nord10: 4.9:1 under nord6 text (nord10 itself is 3.5:1) */
+    --nord10-deep: #415d7f;  /* nord10 darkened: >= 5.0:1 as text on every light surface incl. muted, 5.9:1 under nord6 text (nord10 is 3.5:1) */
+    --nord10-ring: #5579a5;  /* nord10 nudged: focus ring >= 3.3:1 on every light surface incl. muted */
+    --nord8-bright: #a0cdd9; /* nord8 lightened: >= 5.0:1 as text on every dark surface incl. muted, 7.3:1 under nord0 text */
+    --nord9-bright: #84a4c3; /* nord9 nudged: focus ring >= 3.3:1 on every dark surface */
     --nord11-deep: #9a3e47;  /* nord11 as text on Snow Storm and on its own 10% tint: >= 4.6:1 (nord11 is 3.6:1) */
     --nord11-light: #e6c0c4; /* nord11 as text on Polar Night and on its own 10% tint: >= 4.6:1 (nord11 is 2.5:1) */
-    --nord12-deep: #a85237;  /* nord12 for warning icons/lines on light surfaces */
+    --nord12-deep: #974a31;  /* nord12 darkened: warnings >= 4.6:1 on every light surface, so they work as text too */
     /* control edges (inputs, selects, checkboxes, switches) need 3:1 against the card (WCAG 1.4.11) */
-    --nord3-edge: #78859e;   /* nord3 lightened: 3.2:1 on nord6, 3.1:1 on nord5 (old #c5cddb was 1.4:1) */
-    --nord4-muted: #bbc5d8;  /* nord4 dimmed: muted text on Polar Night 5.0-7.2:1, and 1.5:1 below body text (nord4 was 1.17, too close to nord6) */
-    --nord3-edge-dark: #828ea5; /* nord3 lightened for Polar Night: 3.1:1 on nord1, 3.8:1 on nord0 (nord3 is 1.4:1) */
+    --nord3-edge: #697791;   /* nord3 lightened: control edges >= 3.3:1 on every light surface incl. muted (old #c5cddb was 1.4:1) */
+    --nord4-muted: #c5cdde;  /* nord4 dimmed: muted text >= 4.7:1 on Polar Night incl. tinted fields, and 1.5:1 below body text (nord4 was 1.17, too close to nord6) */
+    --nord3-edge-dark: #97a1b4; /* nord3 lightened for Polar Night: control edges >= 3.3:1 on every dark surface (nord3 is 1.4:1) */
 
     /* light: Snow Storm surfaces, Polar Night text, Frost accents */
     --background: var(--nord5);
@@ -90,7 +93,7 @@
     --destructive: var(--nord11-deep);
     --border: var(--nord4);
     --input: var(--nord3-edge);
-    --ring: var(--nord10);       /* focus ring: 3.5:1 (nord9 was 2.3:1 on Snow Storm) */
+    --ring: var(--nord10-ring);  /* focus ring >= 3.3:1 everywhere (nord9 was 2.3:1 on Snow Storm) */
     --warning: var(--nord12-deep);
     --guide: var(--nord15);
     --chart-1: var(--nord10);
@@ -106,7 +109,7 @@
     --sidebar-accent: var(--nord5);
     --sidebar-accent-foreground: var(--nord0);
     --sidebar-border: var(--nord4);
-    --sidebar-ring: var(--nord10);
+    --sidebar-ring: var(--nord10-ring);
 }
 
 /* dark: Polar Night surfaces, Snow Storm text, Frost accents */
@@ -117,7 +120,7 @@
     --card-foreground: var(--nord6);
     --popover: var(--nord1);
     --popover-foreground: var(--nord6);
-    --primary: var(--nord8);
+    --primary: var(--nord8-bright);
     --primary-foreground: var(--nord0);
     --secondary: var(--nord2);
     --secondary-foreground: var(--nord6);
@@ -128,17 +131,17 @@
     --destructive: var(--nord11-light);
     --border: var(--nord2);
     --input: var(--nord3-edge-dark);
-    --ring: var(--nord9);        /* 3.7:1 on nord1 */
+    --ring: var(--nord9-bright); /* >= 3.3:1 on every dark surface */
     --warning: var(--nord13);
     --guide: var(--nord15);
     --sidebar: var(--nord1);
     --sidebar-foreground: var(--nord6);
-    --sidebar-primary: var(--nord8);
+    --sidebar-primary: var(--nord8-bright);
     --sidebar-primary-foreground: var(--nord0);
     --sidebar-accent: var(--nord2);
     --sidebar-accent-foreground: var(--nord6);
     --sidebar-border: var(--nord2);
-    --sidebar-ring: var(--nord9);
+    --sidebar-ring: var(--nord9-bright);
 }
 
 @layer base {
