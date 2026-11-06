@@ -310,7 +310,7 @@ export function TemplatesTab({
                 {fontsReady ? <TemplateThumb template={t.id === currentId ? draft : t} sign={sampleSign(t, brand, false)} logo={logoSource(brand)} width={38} /> : <Skeleton className="h-14 w-[38px]" />}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium">{t.id === currentId ? draft.name || "Untitled" : t.name}</span>
-                  <span className={cn("text-xs", t.id === currentId ? "text-accent-foreground" : "text-muted-foreground")}>{t.kind === "price" ? "Price" : "Percent off"}{n ? ` · ${n} in batch` : ""}</span>
+                  <span className={cn("text-xs", t.id === currentId ? "text-accent-foreground" : "text-muted-foreground")}>{t.kind === "price" ? "Price" : "Percent off"} · {n ? `${n} in batch` : "not in batch"}</span>
                 </span>
                 {t.id === currentId && dirty && <span className="size-2 rounded-full bg-primary" aria-label="unsaved changes" />}
               </button>

@@ -187,7 +187,7 @@ export function SignEditor({
         <span className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
           <Kbd>Enter</Kbd> {editing ? "update" : "add"}
           {editing && <><Kbd>Esc</Kbd> cancel</>}
-          <Kbd>Ctrl Z</Kbd> undo <Kbd>Ctrl P</Kbd> print
+          <Kbd>Ctrl+Z</Kbd> undo <Kbd>Ctrl+P</Kbd> print
         </span>
       </CardFooter>
     </Card>

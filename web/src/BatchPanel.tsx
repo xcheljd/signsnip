@@ -80,11 +80,14 @@ export function BatchPanel({
       <CardHeader>
         <CardTitle>Batch</CardTitle>
         <CardDescription>
-          {plural(total, "sign")} · <span className={cn(total && fill.pages >= MAX_PAGES - 2 && "font-medium text-warning")}>{total ? fill.pages : 0} of {MAX_PAGES} pages max</span> · click any sign on the sheet below to edit it
+          {plural(total, "sign")} · {plural(total ? fill.pages : 0, "page")}
+          {total > 0 && fill.pages >= MAX_PAGES - 2 && <span className="font-medium text-warning"> · {fill.pages} of {MAX_PAGES} pages max</span>}
         </CardDescription>
         <CardAction className="flex gap-2">
           <Button type="button" variant="ghost" size="sm" disabled={!canUndo} onClick={undo}><Undo2Icon data-icon="inline-start" />Undo</Button>
           <SavedBatches batch={batch} saved={saved} update={update} refresh={refresh} />
+          <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={!items.length}
+            onClick={() => { update((b) => ({ ...b, items: [] }), { undo: `Cleared ${plural(items.length, "row")}` }); setSelected(new Set()); }}><Trash2Icon data-icon="inline-start" />Clear</Button>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -280,7 +283,7 @@ export function BatchPanel({
                     {used < g.perPage && (
                       <Button type="button" size="sm" variant="outline" className="self-start"
                         onClick={() => update((b) => ({ ...b, items: b.items.map((x, j) => (j === b.items.length - 1 ? { ...x, copies: x.copies + (g.perPage - used) } : x)) }), { undo: `Filled page ${p + 1} with ${g.perPage - used} more of row ${items.length}` })}>
-                        Fill with row {items.length} (+{g.perPage - used})
+                        Fill page {p + 1}: {g.perPage - used} more of row {items.length}
                       </Button>
                     )}
                   </div>
@@ -290,35 +293,37 @@ export function BatchPanel({
           </>
         )}
 
-        <div className="flex flex-wrap items-end gap-4">
-          <Field className="w-40">
-            <FieldLabel htmlFor="paper">Paper</FieldLabel>
-            <Select value={batch.options.paper} items={[{ value: "letter", label: "Letter" }, { value: "a4", label: "A4" }]} onValueChange={(v) => v && setOptions({ paper: v as "letter" | "a4" })}>
-              <SelectTrigger id="paper" className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectGroup><SelectItem value="letter">Letter</SelectItem><SelectItem value="a4">A4</SelectItem></SelectGroup></SelectContent>
-            </Select>
-          </Field>
-          <Field className="w-56">
-            <FieldLabel htmlFor="grid">Layout</FieldLabel>
-            <Select value={batch.options.grid} items={[{ value: "landscape-5x2", label: "Landscape · 5×2 (10/page)" }, { value: "portrait-4x3", label: "Portrait · 4×3 (12/page)" }]}
-              onValueChange={(v) => v && setOptions({ grid: v as Batch["options"]["grid"] })}>
-              <SelectTrigger id="grid" className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectGroup><SelectItem value="landscape-5x2">Landscape · 5×2 (10/page)</SelectItem><SelectItem value="portrait-4x3">Portrait · 4×3 (12/page)</SelectItem></SelectGroup></SelectContent>
-            </Select>
-          </Field>
-          <Field orientation="horizontal" className="h-8 w-auto items-center">
-            <Checkbox id="cut" checked={batch.options.cutMarks} onCheckedChange={(c) => setOptions({ cutMarks: c === true })} />
-            <FieldLabel htmlFor="cut">Cut lines</FieldLabel>
-          </Field>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" className="text-destructive" disabled={!items.length} onClick={() => { update((b) => ({ ...b, items: [] }), { undo: `Cleared ${plural(items.length, "row")}` }); setSelected(new Set()); }}>Clear</Button>
-            <Button type="button" variant="outline" onClick={onCalibrate}><RulerIcon data-icon="inline-start" />Printer check</Button>
-            <Button type="button" variant="outline" disabled={!items.length} onClick={onExport}><DownloadIcon data-icon="inline-start" />Download PDF</Button>
-            <Button type="button" disabled={!items.length} onClick={onPrint}><PrinterIcon data-icon="inline-start" />Print</Button>
-          </div>
-        </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Paper, layout, cut lines and the printer check: they describe the print sheet, so they sit on it. */
+export function PrintSettings({ options, update, onCalibrate }: { options: Batch["options"]; update: Update; onCalibrate: () => void }) {
+  const setOptions = (patch: Partial<Batch["options"]>) => update((b) => ({ ...b, options: { ...b.options, ...patch } }));
+  return (
+    <div className="flex flex-wrap items-end gap-4">
+      <Field className="w-40">
+        <FieldLabel htmlFor="paper">Paper</FieldLabel>
+        <Select value={options.paper} items={[{ value: "letter", label: "Letter" }, { value: "a4", label: "A4" }]} onValueChange={(v) => v && setOptions({ paper: v as "letter" | "a4" })}>
+          <SelectTrigger id="paper" className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectGroup><SelectItem value="letter">Letter</SelectItem><SelectItem value="a4">A4</SelectItem></SelectGroup></SelectContent>
+        </Select>
+      </Field>
+      <Field className="w-56">
+        <FieldLabel htmlFor="grid">Layout</FieldLabel>
+        <Select value={options.grid} items={[{ value: "landscape-5x2", label: "Landscape · 5×2 (10/page)" }, { value: "portrait-4x3", label: "Portrait · 4×3 (12/page)" }]}
+          onValueChange={(v) => v && setOptions({ grid: v as Batch["options"]["grid"] })}>
+          <SelectTrigger id="grid" className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectGroup><SelectItem value="landscape-5x2">Landscape · 5×2 (10/page)</SelectItem><SelectItem value="portrait-4x3">Portrait · 4×3 (12/page)</SelectItem></SelectGroup></SelectContent>
+        </Select>
+      </Field>
+      <Field orientation="horizontal" className="h-8 w-auto items-center">
+        <Checkbox id="cut" checked={options.cutMarks} onCheckedChange={(c) => setOptions({ cutMarks: c === true })} />
+        <FieldLabel htmlFor="cut">Cut lines</FieldLabel>
+      </Field>
+      <Button type="button" variant="outline" className="ml-auto" onClick={onCalibrate}><RulerIcon data-icon="inline-start" />Printer check</Button>
+    </div>
   );
 }
 

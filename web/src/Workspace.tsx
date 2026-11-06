@@ -220,7 +220,8 @@ export function WorkspaceButtons({ showBackup }: { showBackup: boolean }) {
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen("restore")} aria-label="Restore backup" title="Restore a backup file">
         <ArchiveRestoreIcon data-icon="inline-start" /><span className="hidden sm:inline">Restore backup</span>
       </Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen("start")} aria-label="Start over" title="Start over: empty, or with the samples">
+      <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+      <Button type="button" variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setOpen("start")} aria-label="Start over" title="Start over: empty, or with the samples">
         <RotateCcwIcon data-icon="inline-start" /><span className="hidden sm:inline">Start over</span>
       </Button>
       <Dialog open={!!open} onOpenChange={(o) => !o && setOpen("")}>

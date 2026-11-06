@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
@@ -7,7 +8,7 @@ import { SavingStatusBar, StartPage, WorkspaceButtons } from "./Workspace";
 import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
-import { BatchPanel, moveItem } from "./BatchPanel";
+import { BatchPanel, PrintSettings, moveItem } from "./BatchPanel";
 import { BrandsTab } from "./BrandsTab";
 import { PdfView } from "./PdfView";
 import { downloadPdf, printPdf } from "./print";
@@ -15,7 +16,7 @@ import { SheetView } from "./SheetView";
 import { SignEditor } from "./SignEditor";
 import { useBatch } from "./useBatch";
 import { useTheme } from "./theme";
-import { MonitorIcon, MoonIcon, ScissorsIcon, SunIcon } from "lucide-react";
+import { DownloadIcon, MonitorIcon, MoonIcon, PlusIcon, PrinterIcon, ScissorsIcon, SunIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
@@ -189,6 +190,12 @@ function SignoApp() {
 
   const warnedRows = new Set(warnings.filter((w) => w.level === "warn").flatMap((w) => w.items));
   const g = sheetGeometry(batch.options);
+  const signCount = batch.items.reduce((a, s) => a + s.copies, 0);
+  const pageCount = signCount ? Math.ceil(signCount / g.perPage) : 0;
+  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
+  const THEMES = ["light", "dark", "system"] as const;
+  const themeName = { light: "Light", dark: "Dark", system: "Match system" } as const;
+  const nextTheme = THEMES[(THEMES.indexOf(theme as (typeof THEMES)[number]) + 1) % THEMES.length]!;
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
@@ -199,14 +206,15 @@ function SignoApp() {
           <TabsTrigger value="make">Make signs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="rules">Text rules</TabsTrigger>
-          <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
+          <TabsTrigger value="brands"><span className="sm:hidden">Brands</span><span className="hidden sm:inline">Brands &amp; logos</span></TabsTrigger>
         </TabsList>
         <span className="ml-auto"><WorkspaceButtons showBackup={api.MODE !== "browser"} /></span>
-        <ToggleGroup variant="outline" size="sm" spacing={0} value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
-          <ToggleGroupItem value="light" aria-label="Light theme"><SunIcon /></ToggleGroupItem>
-          <ToggleGroupItem value="system" aria-label="Match system theme"><MonitorIcon /></ToggleGroupItem>
-          <ToggleGroupItem value="dark" aria-label="Dark theme"><MoonIcon /></ToggleGroupItem>
-        </ToggleGroup>
+        <Tooltip>
+          <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={`Theme: ${themeName[theme as keyof typeof themeName]}`} data-theme-button={theme} onClick={() => setTheme(nextTheme)} />}>
+            {theme === "light" ? <SunIcon /> : theme === "dark" ? <MoonIcon /> : <MonitorIcon />}
+          </TooltipTrigger>
+          <TooltipContent>Theme: {themeName[theme as keyof typeof themeName]}. Click for {themeName[nextTheme]}.</TooltipContent>
+        </Tooltip>
       </header>
       {api.MODE === "browser" && <SavingStatusBar />}
       </div>
@@ -263,11 +271,12 @@ function SignoApp() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Print sheet</CardTitle>
-            <CardDescription>Click a sign to edit it · drag signs to rearrange · click an empty slot to add the sign you're building</CardDescription>
+            <CardDescription>Click a sign to edit it · drag to rearrange · click an empty slot to add the sign you're building</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
+            <PrintSettings options={batch.options} update={update} onCalibrate={calibrate} />
             {batch.items.length ? (
-              <div className="mx-auto max-w-4xl rounded-lg bg-muted p-3">
+              <div className="mx-auto w-full max-w-4xl rounded-lg bg-muted p-3">
                 <SheetView
                   batch={batch} bytes={sheetPdf.pdf?.bytes ?? null} editingId={editing} selected={selected} warned={warnedRows}
                   onEdit={edit}
@@ -278,16 +287,32 @@ function SignoApp() {
             ) : (
               <Empty className="border border-dashed"><EmptyHeader><EmptyTitle>The sheet appears here</EmptyTitle></EmptyHeader></Empty>
             )}
-            {sheetPdf.err && <p className="mt-2 text-sm text-destructive">{sheetPdf.err}</p>}
-            <p className="mt-3 text-center text-xs text-muted-foreground">{g.perPage} signs per page · print at 100% (“Actual size”)</p>
+            {sheetPdf.err && <p className="text-sm text-destructive">{sheetPdf.err}</p>}
           </CardContent>
         </Card>
+
+        {/* always-reachable finish line: what you're about to print, and the buttons to do it */}
+        <div className="sticky bottom-0 z-10 -mx-3 lg:col-span-2 sm:-mx-6" data-slot="print-bar">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-card px-4 py-2 shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.15)] sm:px-6">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-sm font-medium tabular-nums">{signCount ? `${n(signCount, "sign")} · ${n(pageCount, "page")}` : "Nothing to print yet"}</span>
+              <span className="text-xs text-muted-foreground">Print at 100% (“Actual size”) · {g.perPage} per page</span>
+            </div>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button type="submit" form="sign-form" variant="outline" className="md:hidden" disabled={!brand}>
+                <PlusIcon data-icon="inline-start" />{editing ? "Update sign" : "Add to batch"}
+              </Button>
+              <Button type="button" variant="outline" disabled={!signCount} onClick={() => exportPdf()}><DownloadIcon data-icon="inline-start" />Download PDF</Button>
+              <Button type="button" disabled={!signCount} onClick={() => print()}><PrinterIcon data-icon="inline-start" />Print</Button>
+            </div>
+          </div>
+        </div>
       </TabsContent>
 
         <div id="overlays" />
       </main>
 
-      <Toaster position="bottom-right" theme={resolved} />
+      <Toaster position="bottom-right" theme={resolved} offset={tab === "make" ? 88 : 24} mobileOffset={tab === "make" ? 120 : 16} />
 
       <AlertDialog open={!!gate} onOpenChange={(o) => !o && setGate(null)}>
         <AlertDialogContent size="lg">

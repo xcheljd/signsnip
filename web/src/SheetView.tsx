@@ -34,13 +34,13 @@ export function SheetView({
               type="button"
               aria-label="Add the current sign here"
               style={style}
-              className={cn("group absolute flex items-center justify-center rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50", over === -1 - slot && "bg-primary/10 ring-2 ring-primary")}
+              className={cn("group absolute flex items-center justify-center rounded-sm border border-dashed border-muted-foreground/40 outline-none transition-colors hover:border-primary hover:bg-primary/5 focus-visible:ring-3 focus-visible:ring-ring/50", over === -1 - slot && "bg-primary/10 ring-2 ring-primary")}
               onClick={onAddHere}
               onDragOver={(e) => { if (drag !== null) { e.preventDefault(); setOver(-1 - slot); } }}
               onDragLeave={() => setOver(null)}
               onDrop={(e) => { e.preventDefault(); if (drag !== null) onMove(drag, batch.items.length - 1); setDrag(null); setOver(null); }}
             >
-              <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow transition-opacity group-hover:opacity-90 group-focus-visible:opacity-90">
+              <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground group-focus-visible:bg-primary group-focus-visible:text-primary-foreground">
                 <PlusIcon className="size-4" />
               </span>
             </button>
