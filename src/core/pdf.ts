@@ -27,7 +27,7 @@ async function newDoc(title: string) {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(title);
-  doc.setProducer("Sign-O-Matic");
+  doc.setProducer("Sign Snip");
   // Ask viewers to default the print dialog to "Actual size" (honoured by Acrobat/most PDF viewers).
   doc.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
   const fonts: Fonts = {
@@ -89,7 +89,7 @@ async function embedLogos(doc: PDFDocument, signs: Sign[]) {
 
 /** `templates` overrides the saved ones (the designer previews unsaved edits this way). */
 export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" | "single" = "sheet", templates?: Template[], rules: Rules = readRules()): Promise<PdfInfo> {
-  const { doc, fonts, measure } = await newDoc("Sign-O-Matic");
+  const { doc, fonts, measure } = await newDoc("Sign Snip");
   const logos = await embedLogos(doc, signs);
   const saved = listTemplates();
   const all = templates ? [...templates, ...saved.filter((t) => !templates.some((o) => o.id === t.id))] : saved;
@@ -134,7 +134,7 @@ export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" |
  * measure 47 x 70 mm, the print dialog is scaling ("Fit to page") - switch to Actual size / 100%.
  */
 export async function renderCalibration(paper: Options["paper"] = "letter"): Promise<Uint8Array> {
-  const { doc, font } = await newDoc("Sign-O-Matic printer check");
+  const { doc, font } = await newDoc("Sign Snip printer check");
   const g = sheetGeometry({ grid: "portrait-4x3", paper });
   const page = doc.addPage([mm(g.pageW), mm(g.pageH)]);
   const H = g.pageH;

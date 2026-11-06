@@ -83,7 +83,7 @@ const server: Backend = {
   async exportTemplates(ids, name) {
     const res = await fetch(`/api/templates/export?ids=${encodeURIComponent(ids.join(","))}${name.trim() ? `&name=${encodeURIComponent(name.trim())}` : ""}`);
     if (!res.ok) throw new Error("Export failed");
-    return { blob: await res.blob(), filename: filename(res, "sign-templates.signo.json") };
+    return { blob: await res.blob(), filename: filename(res, "sign-templates.signsnip.json") };
   },
   inspectSet: (set) => send("/api/templates/inspect", set).then((r) => j<SetPreview>(r)),
   importSet: (set, mode, only) => send("/api/templates/import", { set, mode, only }).then((r) => j<ImportResult>(r)),
@@ -100,7 +100,7 @@ const server: Backend = {
   async backup() {
     const res = await fetch("/api/workspace");
     if (!res.ok) throw new Error("Backup failed");
-    return { blob: await res.blob(), filename: filename(res, "sign-o-matic-backup.signo-backup.json") };
+    return { blob: await res.blob(), filename: filename(res, "sign-snip-backup.signsnip-backup.json") };
   },
   inspectBackup: (raw) => send("/api/workspace/inspect", raw).then((r) => j<BackupSummary>(r)),
   restoreBackup: (raw) => send("/api/workspace/restore", raw).then((r) => j<BackupSummary>(r)),

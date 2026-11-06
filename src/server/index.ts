@@ -45,7 +45,7 @@ app.get("/api/templates/export", (c) => {
   const set = exportTemplateSet(ids, name);
   const file = (name ?? "sign-templates").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sign-templates";
   return new Response(JSON.stringify(set, null, 2), {
-    headers: { "content-type": "application/json", "content-disposition": `attachment; filename="${file}.signo.json"` },
+    headers: { "content-type": "application/json", "content-disposition": `attachment; filename="${file}.signsnip.json"` },
   });
 });
 /** Look inside a set before importing: which templates are new, identical, or would clash. */
@@ -69,7 +69,7 @@ app.get("/api/calibration", async (c) => {
 
 // whole-workspace backup / restore
 app.get("/api/workspace", () => new Response(JSON.stringify(exportWorkspace()), {
-  headers: { "content-type": "application/json", "content-disposition": `attachment; filename="sign-o-matic-backup-${new Date().toISOString().slice(0, 10)}.signo-backup.json"` },
+  headers: { "content-type": "application/json", "content-disposition": `attachment; filename="sign-snip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json"` },
 }));
 app.post("/api/workspace/inspect", async (c) => c.json(summarizeWorkspace(parseWorkspace(await c.req.json()))));
 app.post("/api/workspace/restore", async (c) => c.json(restoreWorkspace(await c.req.json())));
@@ -157,4 +157,4 @@ if (fs.existsSync(dist)) {
 }
 
 serve({ fetch: app.fetch, port: API_PORT, hostname: "127.0.0.1" }, () =>
-  console.log(`Sign-O-Matic API on http://127.0.0.1:${API_PORT}${fs.existsSync(dist) ? " (serving built UI)" : ""}`));
+  console.log(`Sign Snip API on http://127.0.0.1:${API_PORT}${fs.existsSync(dist) ? " (serving built UI)" : ""}`));

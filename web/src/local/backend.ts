@@ -84,7 +84,7 @@ export async function createBrowserBackend(): Promise<Backend> {
     duplicateTemplate: (id, name) => run(() => store.duplicateTemplate(id, name)),
     resetTemplate: (id) => run(() => store.resetTemplate(id)),
     deleteTemplate: (id) => run(() => store.deleteTemplate(id)),
-    exportTemplates: (ids, name) => run(() => json(store.exportTemplateSet(ids, name.trim() || undefined), `${slug(name) || "sign-templates"}.signo.json`)),
+    exportTemplates: (ids, name) => run(() => json(store.exportTemplateSet(ids, name.trim() || undefined), `${slug(name) || "sign-templates"}.signsnip.json`)),
     inspectSet: (set) => run(() => store.inspectTemplateSet(store.parseTemplateSet(set))),
     importSet: (set, mode, only) => run(() => store.importTemplateSet(store.parseTemplateSet(set), mode, only)),
     fetchPdf: async (items, options, mode, templates) => {
@@ -95,7 +95,7 @@ export async function createBrowserBackend(): Promise<Backend> {
     backup: async () => {
       await r.flush();
       markBackedUp();
-      return { blob: new Blob([JSON.stringify(exportWorkspace())], { type: "application/json" }), filename: `sign-o-matic-backup-${new Date().toISOString().slice(0, 10)}.signo-backup.json` };
+      return { blob: new Blob([JSON.stringify(exportWorkspace())], { type: "application/json" }), filename: `sign-snip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json` };
     },
     inspectBackup: (raw) => run(() => summarizeWorkspace(parseWorkspace(raw))),
     restoreBackup: (raw) => quietly(async () => {

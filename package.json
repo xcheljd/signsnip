@@ -1,10 +1,11 @@
 {
-  "name": "sign-o-matic",
+  "name": "sign-snip",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Print-ready shelf signs for 47x70mm holders. Local web app + CLI.",
   "bin": {
+    "signsnip": "./bin/signo.mjs",
     "signo": "./bin/signo.mjs"
   },
   "scripts": {

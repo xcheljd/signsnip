@@ -26,6 +26,7 @@
     --color-border: var(--border);
     --color-destructive: var(--destructive);
     --color-warning: var(--warning);
+    --color-warning-surface: var(--warning-surface);
     --color-guide: var(--guide);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
@@ -95,6 +96,7 @@
     --input: var(--nord3-edge);
     --ring: var(--nord10-ring);  /* focus ring >= 3.3:1 everywhere (nord9 was 2.3:1 on Snow Storm) */
     --warning: var(--nord12-deep);
+    --warning-surface: var(--nord12); /* tints + borders of warning boxes: the real Aurora orange (text/icons use the deep shade) */
     --guide: var(--nord15);
     --chart-1: var(--nord10);
     --chart-2: var(--nord8);
@@ -133,6 +135,7 @@
     --input: var(--nord3-edge-dark);
     --ring: var(--nord9-bright); /* >= 3.3:1 on every dark surface */
     --warning: var(--nord13);
+    --warning-surface: var(--nord13);
     --guide: var(--nord15);
     --sidebar: var(--nord1);
     --sidebar-foreground: var(--nord6);

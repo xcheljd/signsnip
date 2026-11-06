@@ -206,7 +206,7 @@ export function resetTemplate(id: string): Template {
 export function exportTemplateSet(ids?: string[], name?: string): TemplateSet {
   const all = listTemplates();
   const pick = ids?.length ? ids.map((id) => all.find((t) => t.id === id) ?? (() => { throw new Error(`No template "${id}"`); })()) : all;
-  return TemplateSetSchema.parse({ format: "sign-o-matic/template-set", version: 1, name, exportedAt: new Date().toISOString(), templates: pick });
+  return TemplateSetSchema.parse({ format: "sign-snip/template-set", version: 1, name, exportedAt: new Date().toISOString(), templates: pick });
 }
 
 const sameLayout = (a: Template, b: Template) =>
@@ -223,8 +223,8 @@ export interface SetPreview {
 
 /** Parse a template-set file (throws a friendly error if it isn't one). */
 export function parseTemplateSet(raw: unknown): TemplateSet {
-  if (!raw || typeof raw !== "object" || (raw as { format?: string }).format !== "sign-o-matic/template-set") {
-    throw new Error("That file isn't a Sign-O-Matic template set");
+  if (!raw || typeof raw !== "object" || !["sign-snip/template-set", "sign-o-matic/template-set"].includes(String((raw as { format?: string }).format))) {
+    throw new Error("That file isn't a Sign Snip template set");
   }
   const r = TemplateSetSchema.safeParse(raw);
   if (!r.success) throw new Error(`The template set is damaged: ${r.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);

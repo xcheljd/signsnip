@@ -1,4 +1,4 @@
-# 🪧 Sign-O-Matic
+# 🪧 Sign Snip
 
 Print-ready shelf signs for **47 × 70 mm** holders. Pick a brand, a collection and a percent off
 (or a price), and get a PDF sheet ready to print and cut. Replaces hand-editing a spreadsheet full of text boxes.

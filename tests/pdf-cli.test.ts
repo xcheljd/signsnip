@@ -98,7 +98,7 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("templates", "reset", "percent").status).toBe(0);
     expect(signo("templates", "show", "percent").stdout).toMatch(/offer .*30pt/);
     fs.writeFileSync(path.join(data, "bad.json"), '{"hello":1}');
-    expect(signo("templates", "import", path.join(data, "bad.json")).stderr).toContain("isn't a Sign-O-Matic template set");
+    expect(signo("templates", "import", path.join(data, "bad.json")).stderr).toContain("isn't a Sign Snip template set");
   });
   it("readable-minimum rules: abbreviations, fallback template, strict export", () => {
     signo("clear");
@@ -170,13 +170,13 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     signo("clear");
   });
   it("backs up and restores the whole workspace, and starts over from scratch or samples", () => {
-    const file = path.join(data, "ws.signo-backup.json");
+    const file = path.join(data, "ws.signsnip-backup.json");
     signo("rules", "abbr", "Moonphase", "Moon");
     signo("templates", "duplicate", "bogo", "Backup check");
     signo("clear"); signo("add", "--brand", "orbital", "--collection", "Round trip", "--percent", "33");
     expect(signo("backup", "-o", file).stdout).toMatch(/backed up \d+ brands \(\d+ logos\)/);
     const ws = JSON.parse(fs.readFileSync(file, "utf8"));
-    expect(ws.format).toBe("sign-o-matic/workspace");
+    expect(ws.format).toBe("sign-snip/workspace");
     expect(Object.keys(ws.logos).length).toBeGreaterThan(0);
     // refuses without --yes, and refuses a template set
     expect(signo("start", "scratch").status).toBe(1);
@@ -194,6 +194,14 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("templates").stdout).toContain("Backup check");
     expect(signo("export", "-o", path.join(data, "after-restore.pdf")).status).toBe(0);
     expect(signo("check").stdout).not.toContain("has no logo");
+    // files made before the rename still restore / import
+    const legacy = { ...ws, format: "sign-o-matic/workspace" };
+    fs.writeFileSync(path.join(data, "legacy.json"), JSON.stringify(legacy));
+    expect(signo("restore", path.join(data, "legacy.json"), "--yes").status).toBe(0);
+    const set = JSON.parse(fs.readFileSync(path.join(data, "set.json"), "utf8"));
+    expect(set.format).toBe("sign-snip/template-set");
+    fs.writeFileSync(path.join(data, "legacy-set.json"), JSON.stringify({ ...set, format: "sign-o-matic/template-set" }));
+    expect(signo("templates", "import", path.join(data, "legacy-set.json")).status).toBe(0);
     // samples: made-up brands + a small batch
     expect(signo("start", "samples", "--yes").stdout).toMatch(/started with samples: 5 made-up brands and a 5-row batch/);
     // put the original data back for the remaining tests

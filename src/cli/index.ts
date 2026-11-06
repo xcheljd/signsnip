@@ -19,7 +19,7 @@ import { seedSamples } from "../core/node.js";
 import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
 import { GridSchema, PaperSchema, TemplateSchema, type Sign, type Template } from "../core/types.js";
 
-const HELP = `signo - Sign-O-Matic CLI (47x70mm shelf signs -> print-ready PDF)
+const HELP = `signsnip - Sign Snip CLI (47x70mm shelf signs -> print-ready PDF). Short alias: signo
 
 Brands
   signo brands                              list brands, collections, logo status
@@ -53,7 +53,7 @@ Templates (layouts: what goes where, font sizes)
   signo templates rename <tpl> "New name"
   signo templates reset <percent|price|bogo|final-sale>   back to the original layout
   signo templates rm <tpl>
-  signo templates export [tpl ...] [-o file.signo.json] [--name "Holiday set"]
+  signo templates export [tpl ...] [-o file.signsnip.json] [--name "Holiday set"]
   signo templates import <file> [--replace]  default keeps both when a template differs
 
 Readable text (auto-fit)
@@ -66,7 +66,7 @@ Readable text (auto-fit)
   signo export --strict                     refuse to export if any sign is still below the minimum
 
 Backups (everything: brands, logos, templates, text rules, presets, batches)
-  signo backup [-o file.signo-backup.json]  one file you can restore here or in the hosted app
+  signo backup [-o file.signsnip-backup.json]  one file you can restore here or in the hosted app
   signo restore <file> --yes                REPLACES everything with the backup
   signo start scratch|samples --yes         wipe and start empty, or with the made-up sample brands
 
@@ -379,13 +379,13 @@ async function main() {
       if (sub === "export") {
         const ids = [a, ...more].filter((x): x is string => !!x).map((r) => (findTemplate(r) ?? die(`No template matching "${r}"`)).id);
         const set = exportTemplateSet(ids, v.name);
-        const out = path.resolve(String(v.o ?? path.join(OUT_DIR, `${(v.name ?? "sign-templates").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.signo.json`)));
+        const out = path.resolve(String(v.o ?? path.join(OUT_DIR, `${(v.name ?? "sign-templates").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.signsnip.json`)));
         fs.mkdirSync(path.dirname(out), { recursive: true });
         fs.writeFileSync(out, JSON.stringify(set, null, 2) + "\n");
         return log(`wrote ${out} (${set.templates.length} template${set.templates.length === 1 ? "" : "s"}: ${set.templates.map((x) => x.id).join(", ")})`);
       }
       if (sub === "import") {
-        if (!a) die("usage: signo templates import <file.signo.json> [--replace]");
+        if (!a) die("usage: signo templates import <file.signsnip.json> [--replace]");
         let raw: unknown;
         try { raw = JSON.parse(fs.readFileSync(a, "utf8")); } catch { die(`can't read ${a} as JSON`); }
         const r = importTemplateSet(parseTemplateSet(raw), v.replace ? "replace" : "keep-both");
@@ -426,14 +426,14 @@ async function main() {
     }
     case "backup": {
       const ws = exportWorkspace();
-      const file = v.o ?? path.join(OUT_DIR, `sign-o-matic-backup-${new Date().toISOString().slice(0, 10)}.signo-backup.json`);
+      const file = v.o ?? path.join(OUT_DIR, `sign-snip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json`);
       fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
       fs.writeFileSync(file, JSON.stringify(ws));
       const s = summarizeWorkspace(ws);
       return log(`backed up ${s.brands} brands (${s.logos} logos), ${s.templates} templates, ${s.presets} presets, ${s.saved} saved batches, ${s.signs} signs in the batch -> ${file}`);
     }
     case "restore": {
-      if (!p[0]) die("usage: signo restore <file.signo-backup.json> --yes");
+      if (!p[0]) die("usage: signo restore <file.signsnip-backup.json> --yes");
       let raw: unknown;
       try { raw = JSON.parse(fs.readFileSync(p[0], "utf8")); } catch { die(`can't read ${p[0]} as JSON`); }
       const s = summarizeWorkspace(parseWorkspace(raw));

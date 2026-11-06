@@ -13,9 +13,11 @@ import {
 
 /**
  * A workspace backup: everything you made, in one file (logos embedded as base64 PNG).
- * Used by "Back up" / "Restore" in the app, the start page, and `signo backup` / `signo restore`.
+ * Used by "Back up" / "Restore" in the app, the start page, and `signsnip backup` / `signsnip restore`.
  */
-export const WORKSPACE_FORMAT = "sign-o-matic/workspace";
+export const WORKSPACE_FORMAT = "sign-snip/workspace";
+/** backups made before the rename */
+export const LEGACY_WORKSPACE_FORMAT = "sign-o-matic/workspace";
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
 const b64Png = z.string().max(8_000_000).refine((s) => {
   const head = fromBase64(s.slice(0, 16));
@@ -23,7 +25,7 @@ const b64Png = z.string().max(8_000_000).refine((s) => {
 }, "not a PNG image");
 
 export const WorkspaceSchema = z.object({
-  format: z.literal(WORKSPACE_FORMAT),
+  format: z.enum([WORKSPACE_FORMAT, LEGACY_WORKSPACE_FORMAT]),
   version: z.literal(1),
   exportedAt: z.string(),
   brands: z.array(BrandSchema).max(500),
@@ -64,8 +66,8 @@ export function exportWorkspace(): Workspace {
 /** Parse a backup file, with a friendly error when it isn't one (or is a template set). */
 export function parseWorkspace(raw: unknown): Workspace {
   const fmt = raw && typeof raw === "object" ? (raw as { format?: unknown }).format : undefined;
-  if (fmt === "sign-o-matic/template-set") throw new Error("That's a template set, not a full backup. Import it on the Templates tab instead.");
-  if (fmt !== WORKSPACE_FORMAT) throw new Error("That file isn't a Sign-O-Matic backup");
+  if (fmt === "sign-snip/template-set" || fmt === "sign-o-matic/template-set") throw new Error("That's a template set, not a full backup. Import it on the Templates tab instead.");
+  if (fmt !== WORKSPACE_FORMAT && fmt !== LEGACY_WORKSPACE_FORMAT) throw new Error("That file isn't a Sign Snip backup");
   const r = WorkspaceSchema.safeParse(raw);
   if (!r.success) throw new Error(`The backup is damaged: ${r.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   return r.data;

@@ -498,7 +498,7 @@ function ExportDialog({ open, onOpenChange, templates, current, dirty }: { open:
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Export a template set</DialogTitle>
-          <DialogDescription>Saves the chosen layouts to a .signo.json file you can keep, back up or import on another computer.</DialogDescription>
+          <DialogDescription>Saves the chosen layouts to a .signsnip.json file you can keep, back up or import on another computer.</DialogDescription>
         </DialogHeader>
         <Field>
           <FieldLabel htmlFor="set-name">Set name</FieldLabel>

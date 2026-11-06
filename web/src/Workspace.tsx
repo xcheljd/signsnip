@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArchiveRestoreIcon, CircleAlertIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, SignpostIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
+import { ArchiveRestoreIcon, CircleAlertIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, ScissorsIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as api from "./api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -38,7 +38,7 @@ export function StartChoices({ replacing, onDone }: { replacing: boolean; onDone
       const raw = JSON.parse(await f.text());
       setPending({ raw, summary: await api.inspectBackup(raw), name: f.name });
     } catch (e) {
-      toast.error(e instanceof SyntaxError ? "That file isn't a Sign-O-Matic backup" : (e as Error).message);
+      toast.error(e instanceof SyntaxError ? "That file isn't a Sign Snip backup" : (e as Error).message);
     } finally { if (file.current) file.current.value = ""; }
   };
   const restore = async () => {
@@ -77,7 +77,7 @@ export function StartChoices({ replacing, onDone }: { replacing: boolean; onDone
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ArchiveRestoreIcon className="size-4 text-primary" />Continue your work</CardTitle>
-            <CardDescription>Restore a backup file (<code className="whitespace-nowrap text-xs">.signo-backup.json</code>) from this app, another computer, or the local version.</CardDescription>
+            <CardDescription>Restore a backup file (<code className="whitespace-nowrap text-xs">.signsnip-backup.json</code>) from this app, another computer, or the local version.</CardDescription>
           </CardHeader>
           <CardFooter>
             <input ref={file} type="file" accept=".json,application/json" className="sr-only" aria-label="Backup file" onChange={(e) => pick(e.target.files?.[0])} />
@@ -162,7 +162,7 @@ export function SavingStatusBar() {
   const unsaved = st.changed > st.backup;
   return (
     <div className="border-b bg-card">{/* opaque base: the tint below is translucent, and this bar is sticky */}
-    <div role="status" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-sm sm:px-6 ${unsaved ? "bg-warning/10" : "bg-muted/50"}`}>
+    <div role="status" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-sm sm:px-6 ${unsaved ? "bg-warning-surface/15 dark:bg-warning-surface/10" : "bg-muted/50"}`}>
       {unsaved ? <CircleAlertIcon aria-hidden className="size-4 shrink-0 text-warning" /> : <CircleCheckIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
       <span className="text-foreground">
         <strong className="font-semibold">This site doesn't save your work.</strong>{" "}
@@ -195,14 +195,14 @@ export function StartPage({ onDone }: { onDone: () => void }) {
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-5xl flex-col justify-center gap-6 p-4 sm:p-8">
       <div className="flex flex-col gap-2">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><SignpostIcon aria-hidden className="size-6 text-primary" />Sign-O-Matic</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-6 text-primary" />Sign Snip</h1>
         <p className="text-muted-foreground">Print-ready sale signs for 47 × 70 mm holders. How do you want to start?</p>
       </div>
-      <section aria-labelledby="saving-title" className="rounded-xl border border-warning/60 bg-warning/10 p-4 text-muted-foreground">
-        <h2 id="saving-title" className="mb-3 flex items-center gap-2 text-sm font-medium tracking-wide text-muted-foreground uppercase"><TriangleAlertIcon aria-hidden className="size-4 text-warning" />Before you start</h2>
+      <StartChoices replacing={false} onDone={onDone} />
+      <section aria-labelledby="saving-title" className="rounded-xl border border-warning-surface/70 bg-warning-surface/15 p-4 text-muted-foreground dark:bg-warning-surface/10">
+        <h2 id="saving-title" className="mb-3 flex items-center gap-2 text-sm font-medium tracking-wide text-muted-foreground uppercase"><TriangleAlertIcon aria-hidden className="size-4 text-warning" />Before you start: how saving works</h2>
         <HowSavingWorks compact />
       </section>
-      <StartChoices replacing={false} onDone={onDone} />
       <div id="overlays" />
     </main>
   );
@@ -223,13 +223,13 @@ export function WorkspaceMenu() {
             <DropdownMenuItem onClick={downloadBackup}><DownloadIcon />Back up everything</DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setOpen(true)}><ArchiveRestoreIcon />Restore or start over…</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setOpen(true)}><ArchiveRestoreIcon />Start over or restore a backup…</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Restore or start over</DialogTitle>
+            <DialogTitle>Start over or restore a backup</DialogTitle>
             <DialogDescription>Pick a fresh start, the samples, or a backup file.</DialogDescription>
           </DialogHeader>
           <StartChoices replacing onDone={() => { setOpen(false); window.location.reload(); }} />

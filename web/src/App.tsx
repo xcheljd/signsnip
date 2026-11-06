@@ -15,7 +15,7 @@ import { SheetView } from "./SheetView";
 import { SignEditor } from "./SignEditor";
 import { useBatch } from "./useBatch";
 import { useTheme } from "./theme";
-import { MonitorIcon, MoonIcon, SignpostIcon, SunIcon } from "lucide-react";
+import { MonitorIcon, MoonIcon, ScissorsIcon, SunIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
@@ -193,7 +193,7 @@ function SignoApp() {
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
       <div className="sticky top-0 z-10">
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
-        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><SignpostIcon aria-hidden className="size-5 text-primary" /> Sign-O-Matic</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-5 text-primary" /> Sign Snip</h1>
         <TabsList className="order-last w-full overflow-x-auto md:order-none md:w-fit">
           <TabsTrigger value="make">Make signs</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
