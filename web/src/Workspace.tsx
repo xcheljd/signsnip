@@ -147,15 +147,15 @@ const when = (ms: number) => {
 
 /** Hosted app only: always-visible line saying the work isn't saved, with backup status. */
 export function SavingStatusBar() {
-  const read = () => ({ changed: Number(localStorage.getItem("signo.lastChange") ?? 0), backup: Number(localStorage.getItem("signo.lastBackup") ?? 0) });
+  const read = () => ({ changed: Number(localStorage.getItem("signsnip.lastChange") ?? 0), backup: Number(localStorage.getItem("signsnip.lastBackup") ?? 0) });
   const [st, setSt] = useState(read);
   const [, tick] = useState(0);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const on = () => setSt(read());
-    window.addEventListener("signo:saved-state", on);
+    window.addEventListener("signsnip:saved-state", on);
     const t = setInterval(() => tick((n) => n + 1), 60_000); // keep "x min ago" fresh
-    return () => { window.removeEventListener("signo:saved-state", on); clearInterval(t); };
+    return () => { window.removeEventListener("signsnip:saved-state", on); clearInterval(t); };
   }, []);
   const unsaved = st.changed > st.backup;
   return (

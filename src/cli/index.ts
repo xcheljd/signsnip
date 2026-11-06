@@ -1,4 +1,6 @@
 import "../core/node.js";
+// `signsnip batch | head` closes the pipe early: exit quietly instead of crashing
+process.stdout.on("error", (e: NodeJS.ErrnoException) => { if (e.code === "EPIPE") process.exit(0); throw e; });
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";

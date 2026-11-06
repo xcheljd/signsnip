@@ -77,8 +77,8 @@ function SignoApp() {
   const [presetDialog, setPresetDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [focusBrand, setFocusBrand] = useState<string | null>(null);
-  const [calibrated, setCalibratedState] = useState(() => localStorage.getItem("signo.calibrated") === "1");
-  const setCalibrated = (v: boolean) => { localStorage.setItem("signo.calibrated", v ? "1" : "0"); setCalibratedState(v); };
+  const [calibrated, setCalibratedState] = useState(() => (localStorage.getItem("signsnip.calibrated") ?? localStorage.getItem("signo.calibrated")) === "1");
+  const setCalibrated = (v: boolean) => { localStorage.setItem("signsnip.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
   const onRemote = useCallback((s: api.State) => {
     setBrands(s.brands); setPresets(s.presets); setSaved(s.saved); setTemplates(s.templates); setRules(s.rules);

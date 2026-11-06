@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
 export type Theme = "light" | "dark" | "system";
-const KEY = "signo.theme";
+const KEY = "signsnip.theme";
+const OLD_KEY = "signo.theme"; // before the rename
 const media = () => window.matchMedia("(prefers-color-scheme: dark)");
 export const resolveTheme = (t: Theme) => (t === "system" ? (media().matches ? "dark" : "light") : t);
 export function applyTheme(t: Theme) { document.documentElement.classList.toggle("dark", resolveTheme(t) === "dark"); }
-export const storedTheme = (): Theme => (localStorage.getItem(KEY) as Theme) || "system";
+export const storedTheme = (): Theme => (localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY) ?? "system") as Theme;
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(storedTheme);
