@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fitLogo, fitSize, layoutSign, LOGO_BOX, MAX_TEXT_W, wrapWords } from "../src/core/layout";
+import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, smallLines, wrapWords } from "../src/core/layout";
+import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign } from "../src/core/types";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
 const sign = (o: Partial<Sign> = {}): Sign => ({
-  id: "x", brandId: "b", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*", footer: "*MSRP", copies: 1, ...o,
+  id: "x", brandId: "b", kind: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*", priceLabel: "", footer: "*MSRP", copies: 1, ...o,
 });
 
 describe("fitLogo", () => {
@@ -46,5 +47,59 @@ describe("layoutSign", () => {
   });
   it("keeps the big percent at 30pt when it fits", () => {
     expect(layoutSign(sign(), measure).lines.find((l) => l.text.startsWith("50"))!.sizePt).toBe(30);
+  });
+});
+
+describe("logo scale", () => {
+  it("lets a tall logo grow but never past the safe area", () => {
+    const base = fitLogo(0.65, LOGO_BOX, 1);
+    const big = fitLogo(0.65, LOGO_BOX, 1.6);
+    expect(big.h).toBeGreaterThan(base.h);
+    expect(big.h).toBeLessThanOrEqual(LOGO_MAX.h + 1e-9);
+    expect(big.y).toBeGreaterThanOrEqual(LOGO_MAX.y);
+    expect(big.x + big.w / 2).toBeCloseTo(LOGO_BOX.x + LOGO_BOX.w / 2);
+  });
+  it("reports the scale where growth stops, so the slider never does nothing", () => {
+    const k = maxLogoScale(0.65);
+    expect(k).toBeGreaterThan(1);
+    expect(fitLogo(0.65, LOGO_BOX, k).h).toBeGreaterThan(fitLogo(0.65, LOGO_BOX, k - 0.05).h);
+    expect(fitLogo(0.65, LOGO_BOX, k + 0.2).h).toBeCloseTo(fitLogo(0.65, LOGO_BOX, k).h, 0);
+  });
+  it("a wide logo at max scale stays inside the sign width", () => {
+    const r = fitLogo(6, LOGO_BOX, 1.6);
+    expect(r.w).toBeLessThanOrEqual(LOGO_MAX.w + 1e-9);
+  });
+});
+
+describe("price signs", () => {
+  it("formats money", () => {
+    expect(money(199)).toBe("$199");
+    expect(money(1295)).toBe("$1,295");
+    expect(money(49.5)).toBe("$49.50");
+  });
+  it("lays out label, price and a struck was-price", () => {
+    const { lines } = layoutSign(sign({ kind: "price", price: 199, wasPrice: 395, priceLabel: "now", footer: "" }), measure);
+    expect(lines.map((l) => l.text)).toEqual(["SELECT", "MODELS", "NOW", "$199", "WAS $395"]);
+    expect(lines.find((l) => l.role === "was")!.strike).toBe(true);
+    expect(lines.find((l) => l.role === "big")!.sizePt).toBe(30);
+  });
+  it("flags text that shrank too far", () => {
+    const l = layoutSign(sign({ collection: "EXTRAORDINARILYLONGCOLLECTIONNAMEWITHOUTSPACES" }), measure);
+    expect(smallLines(l).length).toBeGreaterThan(0);
+    expect(smallLines(layoutSign(sign(), measure))).toEqual([]);
+  });
+});
+
+describe("sheet geometry", () => {
+  it("centres a 5x2 grid of 47x70 on landscape letter", () => {
+    const g = sheetGeometry({ grid: "landscape-5x2", paper: "letter" });
+    expect(g.perPage).toBe(10);
+    expect(g.left * 2 + 5 * 47).toBeCloseTo(279.4);
+    expect(cellRect(g, 6)).toMatchObject({ x: g.left + 47, y: g.top + 70 });
+  });
+  it("maps printed slots back to batch rows and measures page fill", () => {
+    expect(slotOwners([2, 1, 3])).toEqual([0, 0, 1, 2, 2, 2]);
+    expect(pageFill(13, 10)).toEqual({ pages: 2, lastUsed: 3, empty: 7 });
+    expect(pageFill(20, 10)).toEqual({ pages: 2, lastUsed: 10, empty: 0 });
   });
 });

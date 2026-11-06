@@ -40,6 +40,40 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(bad.stderr).toContain('No brand matching "nope"');
     expect(signo("add", "--brand", "northwind", "--percent", "150").status).toBe(1);
   });
+  it("makes price signs, bulk-edits rows, fills the page, saves and reloads a batch", () => {
+    signo("clear");
+    expect(signo("add", "--brand", "kestrel", "--collection", "Falcon", "--price", "$1,295", "--was", "1595", "--price-label", "now").status).toBe(0);
+    expect(signo("batch").stdout).toContain("NOW $1,295 (was $1,595)");
+    signo("add", "--brand", "tidemark", "--collection", "Tidepool", "--percent", "40");
+    expect(signo("bulk", "--rows", "2", "--percent", "60").stdout).toContain("updated 1 row");
+    expect(signo("batch").stdout).toMatch(/2\. tidemark .*60% OFF\*/);
+    expect(signo("batch").stdout).toContain("8 empty");
+    expect(signo("fill").stdout).toContain("added 8 copies");
+    expect(signo("batch").stdout).toContain("10 signs · 1 page");
+    expect(signo("save", "Holiday sale").status).toBe(0);
+    signo("clear");
+    expect(signo("load", "holiday").stdout).toContain('loaded "Holiday sale" (2 rows)');
+    expect(signo("batches").stdout).toContain("Holiday sale");
+    const bad = signo("bulk", "--rows", "9", "--percent", "10");
+    expect(bad.status).toBe(1);
+    expect(bad.stderr).toContain("out of range");
+  });
+  it("writes a calibration page and runs pre-print checks", () => {
+    const out = path.join(data, "cal.pdf");
+    expect(signo("calibrate", "-o", out).status).toBe(0);
+    expect(fs.readFileSync(out).subarray(0, 5).toString()).toBe("%PDF-");
+    signo("add", "--brand", "orbital", "--collection", "Deep Field Chronograph Extraordinaire Edition", "--percent", "50");
+    const r = signo("check");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("white background");
+    expect(r.stdout).toContain("shrink to fit");
+  });
+  it("removes a logo background and restores it", () => {
+    expect(signo("brands", "fix-bg", "orbital").stdout).toContain("now transparent");
+    expect(signo("brands").stdout).not.toMatch(/ORBITAL.*white bg/);
+    expect(signo("brands", "restore", "orbital").status).toBe(0);
+    expect(signo("brands").stdout).toMatch(/ORBITAL.*white bg/);
+  });
   it("accepts a JPG logo and fits it", () => {
     const r = signo("brands", "add", "Test Co", "--logo", path.join(root, "tests/fixtures/orbital.jpg"), "--collections", "A,B");
     expect(r.status).toBe(0);

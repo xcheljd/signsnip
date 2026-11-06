@@ -7,7 +7,8 @@
       "Deckhand",
       "Lighthouse",
       "Seabird Chrono"
-    ]
+    ],
+    "logoScale": 1
   },
   {
     "id": "kestrel-vale",
@@ -17,7 +18,8 @@
       "Moorland",
       "Ridgeback",
       "Field Master Automatic"
-    ]
+    ],
+    "logoScale": 1
   },
   {
     "id": "tidemark",
@@ -27,7 +29,8 @@
       "Reef Diver",
       "Driftwood",
       "Low Tide"
-    ]
+    ],
+    "logoScale": 1
   },
   {
     "id": "orbital",
@@ -37,7 +40,8 @@
       "Nebula",
       "Perihelion",
       "Deep Field Chronograph"
-    ]
+    ],
+    "logoScale": 1
   },
   {
     "id": "lumen-atelier",
@@ -46,6 +50,7 @@
       "Dusk",
       "Ember",
       "Lantern"
-    ]
+    ],
+    "logoScale": 1
   }
 ]

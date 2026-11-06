@@ -4,23 +4,43 @@ import { z } from "zod";
 export const SIGN_W_MM = 47;
 export const SIGN_H_MM = 70;
 
-export const SignSchema = z.object({
+export const SignKindSchema = z.enum(["percent", "price"]);
+export type SignKind = z.infer<typeof SignKindSchema>;
+
+/** Plain object (no refinements) so it can be .omit()-ed for presets. */
+export const SignBaseSchema = z.object({
   id: z.string().min(1),
   brandId: z.string().min(1),
+  /** "percent" = "50% OFF*"; "price" = "$199" (optionally with a struck-through was-price). */
+  kind: SignKindSchema.default("percent"),
   /** Small lead word above the collection, e.g. "SELECT". Empty string = none. */
   prefix: z.string().max(24).default("SELECT"),
   /** Collection / line name, e.g. "HARBOR LINE" or the generic "MODELS". */
   collection: z.string().max(60).default("MODELS"),
-  percent: z.number().int().min(1).max(99),
+  percent: z.number().int().min(1).max(99).default(50),
   /** Text after the percent number, e.g. "OFF*". */
   offLabel: z.string().max(20).default("OFF*"),
+  /** Sale price in dollars (price signs). */
+  price: z.number().positive().max(999_999).optional(),
+  /** Optional original price, printed struck through ("WAS $395"). */
+  wasPrice: z.number().positive().max(999_999).optional(),
+  /** Small line above the price, e.g. "NOW", "ONLY", "STARTING AT". */
+  priceLabel: z.string().max(24).default(""),
   footer: z.string().max(40).default("*MSRP"),
   copies: z.number().int().min(1).max(200).default(1),
 });
-export type Sign = z.infer<typeof SignSchema>;
+
+export const SignSchema = SignBaseSchema.superRefine((s, ctx) => {
+  if (s.kind === "price" && !(s.price && s.price > 0)) {
+    ctx.addIssue({ code: "custom", path: ["price"], message: "price signs need a price" });
+  }
+});
+export type Sign = z.infer<typeof SignBaseSchema>;
 
 export const GridSchema = z.enum(["landscape-5x2", "portrait-4x3"]);
 export const PaperSchema = z.enum(["letter", "a4"]);
+export type Grid = z.infer<typeof GridSchema>;
+export type Paper = z.infer<typeof PaperSchema>;
 export const OptionsSchema = z.object({
   grid: GridSchema.default("landscape-5x2"),
   paper: PaperSchema.default("letter"),
@@ -33,7 +53,8 @@ export const BrandSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(60),
   collections: z.array(z.string().min(1).max(60)).default([]),
-  /** Defaults used when this brand is picked in the editor. */
+  /** Multiplier on the auto-fitted logo size (0.5 to 1.6). Lets tall/stacked logos grow. */
+  logoScale: z.number().min(0.5).max(1.6).default(1),
   hasLogo: z.boolean().default(false),
 });
 export type Brand = z.infer<typeof BrandSchema>;
@@ -41,7 +62,7 @@ export type Brand = z.infer<typeof BrandSchema>;
 export const PresetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(60),
-  sign: SignSchema.omit({ id: true, copies: true }),
+  sign: SignBaseSchema.omit({ id: true, copies: true }),
 });
 export type Preset = z.infer<typeof PresetSchema>;
 
@@ -50,5 +71,22 @@ export const BatchSchema = z.object({
   options: OptionsSchema.default(DEFAULT_OPTIONS),
 });
 export type Batch = z.infer<typeof BatchSchema>;
+
+export const SavedBatchSchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/),
+  name: z.string().min(1).max(60),
+  savedAt: z.string(),
+  batch: BatchSchema,
+});
+export type SavedBatch = z.infer<typeof SavedBatchSchema>;
+
+export interface Warning {
+  /** indexes into batch.items this applies to */
+  items: number[];
+  brandId: string;
+  level: "warn" | "info";
+  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo";
+  message: string;
+}
 
 export const PERCENT_CHOICES = [10, 20, 25, 30, 40, 50, 60, 70, 75, 80];

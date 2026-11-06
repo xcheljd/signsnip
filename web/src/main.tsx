@@ -7,6 +7,6 @@ import "./styles.css";
 createRoot(document.getElementById("root")!).render(
   <TooltipProvider>
     <App />
-    <Toaster position="bottom-center" />
+    <Toaster position="bottom-right" />
   </TooltipProvider>,
 );

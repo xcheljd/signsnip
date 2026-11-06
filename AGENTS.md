@@ -9,3 +9,8 @@
 - Ports: API 7047, Vite dev 7048.
 - UI = shadcn/ui (style base-nova, Base UI primitives: use `render=` not `asChild`; ToggleGroup value is an array; Select needs `items`). Components live in web/src/components/ui; add more with `pnpm dlx shadcn@latest add <name>`. components.json + vite.config.ts are at the repo root (Vite `root` is web/) so the CLI detects the framework. Registry output imports `cn` from the "cn" package; this repo rewrites it to `@/lib/utils`, so re-check after any `add`.
 - Theme tokens (warm paper + orange primary) are in web/src/styles.css; no hand-written component CSS.
+- Sheet geometry (`src/core/geometry.ts`) is shared by pdf.ts and the web overlay (SheetView); change cell math in one place only.
+- Undo lives in web/src/useBatch.ts (snapshot stack). Toast "Undo" only undoes its own change (checks the top entry id).
+- Logo scale is capped by `maxLogoScale(aspect)` (layout.ts); slider max + CLI both use it, so the control never silently does nothing.
+- Background removal backs up to data/logos/originals/<id>.png; a fresh upload deletes the backup.
+- Browser e2e lives outside the repo for now (Playwright from the Hermes install); run it against `pnpm start` with a fresh `data/`.

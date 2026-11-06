@@ -4,24 +4,54 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { z } from "zod";
 import { API_PORT, ROOT } from "../core/paths.js";
-import { renderPdf, expandCopies } from "../core/pdf.js";
+import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
-  deleteBrand, ensureData, findBrand, listBrands, listPresets, readBatch, readLogo,
-  saveLogo, savePresets, upsertBrand, writeBatch,
+  deleteBrand, deleteSavedBatch, ensureData, findBrand, listBrands, listPresets, listSavedBatches, logoInfo,
+  readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
 } from "../core/store.js";
-import { OptionsSchema, PresetSchema, SignSchema, BatchSchema } from "../core/types.js";
+import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, SignSchema } from "../core/types.js";
 
 ensureData();
 const app = new Hono();
 
 app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 
-app.get("/api/state", (c) => c.json({ brands: listBrands(), presets: listPresets(), batch: readBatch() }));
+app.get("/api/state", async (c) => {
+  const brands = await Promise.all(listBrands().map(async (b) => ({ ...b, logo: await logoInfo(b.id) })));
+  const saved = listSavedBatches().map((s) => ({ id: s.id, name: s.name, savedAt: s.savedAt, signs: s.batch.items.reduce((a, i) => a + i.copies, 0) }));
+  return c.json({ brands, presets: listPresets(), batch: readBatch(), saved });
+});
+
+app.post("/api/check", async (c) => {
+  const { items } = z.object({ items: z.array(SignSchema) }).parse(await c.req.json());
+  return c.json(await checkSigns(items));
+});
+
+app.get("/api/calibration", async (c) => {
+  const paper = PaperSchema.parse(c.req.query("paper") ?? "letter");
+  return new Response(Buffer.from(await renderCalibration(paper)), {
+    headers: { "content-type": "application/pdf", "content-disposition": 'inline; filename="printer-check.pdf"' },
+  });
+});
+
+// saved batches
+app.post("/api/batches", async (c) => {
+  const { name, batch } = z.object({ name: z.string().min(1).max(60), batch: BatchSchema }).parse(await c.req.json());
+  return c.json(saveNamedBatch(name, batch));
+});
+app.get("/api/batches/:id", (c) => {
+  const b = listSavedBatches().find((x) => x.id === c.req.param("id"));
+  return b ? c.json(b) : c.json({ error: "not found" }, 404);
+});
+app.delete("/api/batches/:id", (c) => { deleteSavedBatch(c.req.param("id")); return c.json({ ok: true }); });
 
 app.put("/api/batch", async (c) => c.json(writeBatch(BatchSchema.parse(await c.req.json()))));
 
 app.post("/api/brands", async (c) => {
-  const body = z.object({ id: z.string().optional(), name: z.string().min(1), collections: z.array(z.string()).optional() }).parse(await c.req.json());
+  const body = z.object({
+    id: z.string().optional(), name: z.string().min(1), collections: z.array(z.string()).optional(),
+    logoScale: z.number().min(0.5).max(1.6).optional(),
+  }).parse(await c.req.json());
   return c.json(upsertBrand(body));
 });
 app.delete("/api/brands/:id", (c) => { deleteBrand(c.req.param("id")); return c.json({ ok: true }); });
@@ -32,6 +62,8 @@ app.post("/api/brands/:id/logo", async (c) => {
   if (!findBrand(id)) throw new Error(`Unknown brand "${id}"`);
   return c.json(await saveLogo(id, buf));
 });
+app.post("/api/brands/:id/logo/remove-bg", async (c) => c.json(await removeLogoBackground(c.req.param("id"))));
+app.post("/api/brands/:id/logo/restore", async (c) => { await restoreLogo(c.req.param("id")); return c.json({ ok: true }); });
 app.get("/api/logos/:id", (c) => {
   const buf = readLogo(c.req.param("id").replace(/\.png$/, ""));
   if (!buf) return c.notFound();

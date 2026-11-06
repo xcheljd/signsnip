@@ -1,14 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { Skeleton } from "@/components/ui/skeleton";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-/** Renders every page of a PDF to crisp canvases at a CSS width. Same bytes that get printed. */
-export function PdfView({ bytes, width: fixed, label }: { bytes: Uint8Array | null; width: number | "fill"; label: string }) {
-  const host = useRef<HTMLDivElement>(null);
+interface Page { src: string; w: number; h: number }
+
+/**
+ * Renders every page of a PDF (the exact bytes that get printed) to images, swapping all
+ * pages at once so edits never flicker. `overlay` draws interactive layers on top of a page.
+ */
+export function PdfView({
+  bytes, width: fixed, label, overlay, aspect,
+}: {
+  bytes: Uint8Array | null; width: number | "fill"; label: string;
+  overlay?: (page: number) => ReactNode;
+  /** w/h of a page, so a placeholder of the right shape shows before the first render */
+  aspect?: number;
+}) {
   const outer = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
+  const [pages, setPages] = useState<Page[]>([]);
+  const [err, setErr] = useState("");
+
   useEffect(() => {
     if (fixed !== "fill" || !outer.current) return;
     const el = outer.current;
@@ -17,16 +32,15 @@ export function PdfView({ bytes, width: fixed, label }: { bytes: Uint8Array | nu
     return () => ro.disconnect();
   }, [fixed]);
   const width = fixed === "fill" ? avail : fixed;
-  const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!bytes || !host.current || width < 50) return;
+    if (!bytes || width < 50) return;
     let dead = false;
-    const el = host.current;
     (async () => {
       try {
-        const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
-        const canvases: HTMLCanvasElement[] = [];
+        const task = pdfjs.getDocument({ data: bytes.slice() });
+        const doc = await task.promise;
+        const out: Page[] = [];
         for (let n = 1; n <= doc.numPages; n++) {
           const page = await doc.getPage(n);
           const base = page.getViewport({ scale: 1 });
@@ -34,20 +48,27 @@ export function PdfView({ bytes, width: fixed, label }: { bytes: Uint8Array | nu
           const vp = page.getViewport({ scale: (width / base.width) * dpr });
           const c = document.createElement("canvas");
           c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-          c.style.width = `${width}px`; c.style.height = `${(width * base.height) / base.width}px`;
-          c.className = "mx-auto mb-3 block bg-white shadow-md";
           await page.render({ canvas: c, canvasContext: c.getContext("2d")!, viewport: vp }).promise;
-          canvases.push(c);
+          out.push({ src: c.toDataURL("image/png"), w: width, h: (width * base.height) / base.width });
         }
-        if (!dead) { el.replaceChildren(...canvases); setErr(""); }
+        await task.destroy();
+        if (!dead) { setPages(out); setErr(""); }
       } catch (e) { if (!dead) setErr((e as Error).message); }
     })();
     return () => { dead = true; };
   }, [bytes, width]);
 
   return (
-    <div className="w-full max-w-full overflow-auto" aria-label={label} ref={outer}>
-      <div ref={host} />
+    <div ref={outer} className="flex w-full flex-col items-center gap-4" aria-label={label}>
+      {pages.length === 0 && !err && width > 0 && aspect && (
+        <Skeleton className="bg-background" style={{ width, height: width / aspect }} />
+      )}
+      {pages.map((p, i) => (
+        <div key={i} className="relative bg-white shadow-md" style={{ width: p.w, height: p.h }}>
+          <img src={p.src} alt={`${label} page ${i + 1}`} className="block size-full select-none" draggable={false} />
+          {overlay?.(i)}
+        </div>
+      ))}
       {err && <p className="text-sm text-destructive">{err}</p>}
     </div>
   );

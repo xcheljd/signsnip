@@ -75,8 +75,9 @@ for (const [id, b] of Object.entries(logos)) {
 }
 
 savePresets([
-  { id: "sale-50", name: "Select models 50%", sign: { brandId: "northwind", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*", footer: "*MSRP" } },
-  { id: "tidal-40", name: "Tidepool 40%", sign: { brandId: "tidemark", prefix: "SELECT", collection: "TIDEPOOL", percent: 40, offLabel: "OFF*", footer: "*MSRP" } },
-  { id: "orbital-60", name: "Comet 60%", sign: { brandId: "orbital", prefix: "SELECT", collection: "COMET", percent: 60, offLabel: "OFF*", footer: "*MSRP" } },
+  { id: "sale-50", name: "Select models 50%", sign: { brandId: "northwind", kind: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*", priceLabel: "", footer: "*MSRP" } },
+  { id: "tidal-40", name: "Tidepool 40%", sign: { brandId: "tidemark", kind: "percent", prefix: "SELECT", collection: "TIDEPOOL", percent: 40, offLabel: "OFF*", priceLabel: "", footer: "*MSRP" } },
+  { id: "orbital-60", name: "Comet 60%", sign: { brandId: "orbital", kind: "percent", prefix: "SELECT", collection: "COMET", percent: 60, offLabel: "OFF*", priceLabel: "", footer: "*MSRP" } },
+  { id: "falcon-199", name: "Falcon $199", sign: { brandId: "kestrel-vale", kind: "price", prefix: "", collection: "FALCON", percent: 50, offLabel: "OFF*", price: 199, wasPrice: 395, priceLabel: "NOW", footer: "" } },
 ]);
 console.log("seed written");

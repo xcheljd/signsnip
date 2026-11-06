@@ -5,6 +5,8 @@ import { SignSchema, type Sign } from "./types.js";
 export interface AddInput {
   brand?: string; preset?: string; prefix?: string; collection?: string;
   percent?: number; offLabel?: string; footer?: string; copies?: number;
+  /** giving a price makes it a price-point sign */
+  price?: number; wasPrice?: number; priceLabel?: string;
 }
 
 /** Build a validated Sign from loose input (CLI flags, CSV rows). Throws friendly errors. */
@@ -19,14 +21,21 @@ export function buildSign(input: AddInput): Sign {
   if (!brandRef) throw new Error("Need a brand (--brand <id|name>) or a --preset");
   const brand = findBrand(brandRef);
   if (!brand) throw new Error(`No brand matching "${brandRef}". Try: signo brands`);
+  const kind = input.price !== undefined ? "price" : input.percent !== undefined ? "percent" : (base.kind ?? "percent");
+  if (kind === "percent" && input.percent === undefined && base.percent === undefined) throw new Error("Need --percent (or --price for a price sign)");
   const parsed = SignSchema.safeParse({
     id: randomUUID(),
     brandId: brand.id,
+    kind,
     prefix: input.prefix ?? base.prefix ?? "SELECT",
     collection: input.collection ?? base.collection ?? "MODELS",
-    percent: input.percent ?? base.percent,
+    percent: input.percent ?? base.percent ?? 50,
     offLabel: input.offLabel ?? base.offLabel ?? "OFF*",
-    footer: input.footer ?? base.footer ?? "*MSRP",
+    price: input.price ?? base.price,
+    wasPrice: input.wasPrice ?? base.wasPrice,
+    priceLabel: input.priceLabel ?? base.priceLabel ?? "",
+    // price signs don't reference MSRP by default
+    footer: input.footer ?? base.footer ?? (kind === "price" ? "" : "*MSRP"),
     copies: input.copies ?? 1,
   });
   if (!parsed.success) {
@@ -40,7 +49,7 @@ export function addToBatch(signs: Sign[]) {
   return writeBatch({ ...b, items: [...b.items, ...signs] });
 }
 
-/** Minimal CSV (quotes supported): brand,collection,percent[,copies,prefix,footer] with a header row. */
+/** Minimal CSV (quotes supported) with a header row: brand,collection,percent|price[,was,price_label,copies,prefix,footer]. */
 export function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = [];
   let row: string[] = [], cell = "", q = false;
@@ -67,6 +76,9 @@ export function parseCsv(text: string): Record<string, string>[] {
   return rest.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? "").trim()])));
 }
 
+/** "$1,295.00" -> 1295 */
+export const money = (s: string) => Number(String(s).replace(/[$,\s]/g, ""));
+
 export function csvToSigns(text: string): Sign[] {
   return parseCsv(text).map((r, i) => {
     try {
@@ -74,6 +86,9 @@ export function csvToSigns(text: string): Sign[] {
         brand: r.brand, preset: r.preset || undefined, collection: r.collection || undefined,
         prefix: r.prefix === undefined || r.prefix === "" ? undefined : r.prefix,
         percent: r.percent ? Number(r.percent.replace("%", "")) : undefined,
+        price: r.price ? money(r.price) : undefined,
+        wasPrice: r.was ? money(r.was) : undefined,
+        priceLabel: r.price_label || undefined,
         footer: r.footer || undefined, copies: r.copies ? Number(r.copies) : undefined,
       });
     } catch (e) {
