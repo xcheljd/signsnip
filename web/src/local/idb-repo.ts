@@ -7,6 +7,20 @@ import { MemoryRepo } from "../../../src/core/repo";
  */
 const DB = "sign-o-matic", VERSION = 1;
 
+/** "Changed since the last backup?" lives in localStorage so the reminder survives reloads. */
+export const BACKUP_KEYS = { changed: "signo.lastChange", backup: "signo.lastBackup" } as const;
+let quiet = false; // restore/start write a lot; they set the timestamps themselves
+export function quietly<T>(fn: () => Promise<T>): Promise<T> { quiet = true; return fn().finally(() => { quiet = false; }); }
+function markChanged() {
+  if (quiet) return;
+  localStorage.setItem(BACKUP_KEYS.changed, String(Date.now()));
+  window.dispatchEvent(new Event("signo:saved-state"));
+}
+export function markBackedUp(at = Date.now()) {
+  localStorage.setItem(BACKUP_KEYS.backup, String(at));
+  window.dispatchEvent(new Event("signo:saved-state"));
+}
+
 function req<T>(r: IDBRequest<T>): Promise<T> {
   return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 }
@@ -35,6 +49,7 @@ export class BrowserRepo extends MemoryRepo {
   }
 
   private persist(fn: (tx: IDBTransaction) => void) {
+    markChanged();
     this.queue = this.queue.then(() => new Promise<void>((res) => {
       const tx = this.db.transaction(["json", "blobs"], "readwrite");
       fn(tx);

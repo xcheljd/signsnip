@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ArchiveRestoreIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, SignpostIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArchiveRestoreIcon, CircleAlertIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, SignpostIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as api from "./api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -107,6 +107,89 @@ export function StartChoices({ replacing, onDone }: { replacing: boolean; onDone
   );
 }
 
+/** The plain-language explanation of where your work lives in the hosted app. */
+export function HowSavingWorks({ compact = false }: { compact?: boolean }) {
+  const strong = "font-semibold text-foreground";
+  return (
+    <div className="flex max-w-prose flex-col gap-3 text-sm">
+      <p className="flex items-start gap-2 text-base font-semibold text-foreground">
+        <ServerOffIcon aria-hidden className="mt-1 size-4 shrink-0 text-primary" />
+        This site does not save your work.
+      </p>
+      <p className="flex items-start gap-2">
+        <DownloadIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <span>
+          <strong className={strong}>Download a backup to pick up where you left off</strong>: <strong className={`${strong} whitespace-nowrap`}>Workspace → Back up everything</strong> saves
+          your brands, logos, templates, text rules, presets and batches to your computer.
+          Next time, choose <strong className={`${strong} whitespace-nowrap`}>Continue your work</strong> and pick that file.
+        </span>
+      </p>
+      <div className="flex items-start gap-2">
+        <DatabaseIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <div>
+          There's no server and no account; nothing you make is uploaded. As a convenience, your browser keeps a temporary copy on this device
+          so a reload doesn't lose your place. <strong className={strong}>Don't rely on it.</strong> It's erased without warning when:
+          <ul className="mt-1 list-disc pl-5">
+            <li>you clear your browsing data, or use a private window</li>
+            <li>you switch to another browser or device</li>
+            <li>the browser frees up space on its own</li>
+          </ul>
+        </div>
+      </div>
+      {!compact && <p className="text-muted-foreground">PDFs are separate: download them as usual. The backup is what lets you edit again later.</p>}
+    </div>
+  );
+}
+
+/** "2:14 PM" today, otherwise "Nov 3, 2:14 PM" */
+const when = (ms: number) => {
+  const d = new Date(ms), today = new Date().toDateString() === d.toDateString();
+  return d.toLocaleString(undefined, today ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+};
+
+/** Hosted app only: always-visible line saying the work isn't saved, with backup status. */
+export function SavingStatusBar() {
+  const read = () => ({ changed: Number(localStorage.getItem("signo.lastChange") ?? 0), backup: Number(localStorage.getItem("signo.lastBackup") ?? 0) });
+  const [st, setSt] = useState(read);
+  const [, tick] = useState(0);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const on = () => setSt(read());
+    window.addEventListener("signo:saved-state", on);
+    const t = setInterval(() => tick((n) => n + 1), 60_000); // keep "x min ago" fresh
+    return () => { window.removeEventListener("signo:saved-state", on); clearInterval(t); };
+  }, []);
+  const unsaved = st.changed > st.backup;
+  return (
+    <div className="border-b bg-card">{/* opaque base: the tint below is translucent, and this bar is sticky */}
+    <div role="status" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-sm sm:px-6 ${unsaved ? "bg-warning/10" : "bg-muted/50"}`}>
+      {unsaved ? <CircleAlertIcon aria-hidden className="size-4 shrink-0 text-warning" /> : <CircleCheckIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
+      <span className="text-foreground">
+        <strong className="font-semibold">This site doesn't save your work.</strong>{" "}
+        {!st.backup ? (st.changed ? "You haven't backed up yet." : "Back up to your computer to keep it.")
+          : unsaved ? `You've made changes since your last backup at ${when(st.backup)}.` : `Last backup ${when(st.backup)}, nothing changed since.`}
+      </span>
+      <span className="ml-auto flex items-center gap-1">
+        <Button type="button" variant="link" size="sm" className="h-auto px-1" onClick={() => setOpen(true)}><InfoIcon data-icon="inline-start" />How saving works</Button>
+        <Button type="button" size="sm" variant={unsaved ? "default" : "outline"} onClick={downloadBackup}><DownloadIcon data-icon="inline-start" />Back up now</Button>
+      </span>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>How saving works</DialogTitle>
+            <DialogDescription render={<div />}><HowSavingWorks /></DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
+            <Button onClick={() => { setOpen(false); void downloadBackup(); }}><DownloadIcon data-icon="inline-start" />Back up now</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+    </div>
+  );
+}
+
 /** First visit to the hosted app. */
 export function StartPage({ onDone }: { onDone: () => void }) {
   return (
@@ -115,11 +198,11 @@ export function StartPage({ onDone }: { onDone: () => void }) {
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><SignpostIcon aria-hidden className="size-6 text-primary" />Sign-O-Matic</h1>
         <p className="text-muted-foreground">Print-ready sale signs for 47 × 70 mm holders. How do you want to start?</p>
       </div>
+      <section aria-labelledby="saving-title" className="rounded-xl border border-warning/60 bg-warning/10 p-4 text-muted-foreground">
+        <h2 id="saving-title" className="mb-3 flex items-center gap-2 text-sm font-medium tracking-wide text-muted-foreground uppercase"><TriangleAlertIcon aria-hidden className="size-4 text-warning" />Before you start</h2>
+        <HowSavingWorks compact />
+      </section>
       <StartChoices replacing={false} onDone={onDone} />
-      <p className="flex items-start gap-2 text-sm text-muted-foreground">
-        <DatabaseIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
-        Everything you make stays in this browser on this device. Nothing is uploaded. Clearing your browser data erases it, so make a backup from time to time (Workspace menu, at the top of the app).
-      </p>
       <div id="overlays" />
     </main>
   );
@@ -136,7 +219,7 @@ export function WorkspaceMenu() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>{api.MODE === "browser" ? "Saved in this browser only" : "Saved on this computer (data/)"}</DropdownMenuLabel>
+            <DropdownMenuLabel>{api.MODE === "browser" ? "Not saved by this site: back up to keep it" : "Saved on this computer (data/)"}</DropdownMenuLabel>
             <DropdownMenuItem onClick={downloadBackup}><DownloadIcon />Back up everything</DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />

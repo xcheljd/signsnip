@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
 import { DEFAULT_RULES, type Preset, type Rules, type Sign, type Template, type Warning } from "../../src/core/types";
 import { RulesTab } from "./RulesTab";
-import { StartPage, WorkspaceMenu } from "./Workspace";
+import { SavingStatusBar, StartPage, WorkspaceMenu } from "./Workspace";
 import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
@@ -191,7 +191,8 @@ function SignoApp() {
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
+      <div className="sticky top-0 z-10">
+      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><SignpostIcon aria-hidden className="size-5 text-primary" /> Sign-O-Matic</h1>
         <TabsList className="order-last w-full overflow-x-auto md:order-none md:w-fit">
           <TabsTrigger value="make">Make signs</TabsTrigger>
@@ -207,6 +208,8 @@ function SignoApp() {
           <ToggleGroupItem value="dark" aria-label="Dark theme"><MoonIcon /></ToggleGroupItem>
         </ToggleGroup>
       </header>
+      {api.MODE === "browser" && <SavingStatusBar />}
+      </div>
 
       <main>
       <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-3 sm:p-6" keepMounted>

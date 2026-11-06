@@ -10,7 +10,7 @@ import { BatchSchema, PresetSchema, RulesSchema, TemplateSchema, type Brand, typ
 import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
 import type { Backend, State } from "../api";
 import { canvasImages } from "./canvas-images";
-import { BrowserRepo } from "./idb-repo";
+import { BACKUP_KEYS, BrowserRepo, markBackedUp, quietly } from "./idb-repo";
 
 const seedLogos = import.meta.glob("../../../seed/logos/*.png", { query: "?url", import: "default", eager: true }) as Record<string, string>;
 
@@ -94,11 +94,18 @@ export async function createBrowserBackend(): Promise<Backend> {
     fetchCalibration: (paper) => renderCalibration(paper),
     backup: async () => {
       await r.flush();
+      markBackedUp();
       return { blob: new Blob([JSON.stringify(exportWorkspace())], { type: "application/json" }), filename: `sign-o-matic-backup-${new Date().toISOString().slice(0, 10)}.signo-backup.json` };
     },
     inspectBackup: (raw) => run(() => summarizeWorkspace(parseWorkspace(raw))),
-    restoreBackup: async (raw) => { const s = restoreWorkspace(raw); await r.flush(); return s; },
-    start: async (from) => {
+    restoreBackup: (raw) => quietly(async () => {
+      const s = restoreWorkspace(raw);
+      await r.flush();
+      markBackedUp(); // what's here now is exactly what's in that file
+      localStorage.setItem(BACKUP_KEYS.changed, String(Date.now() - 1));
+      return s;
+    }),
+    start: (from) => quietly(async () => {
       if (from === "scratch") startFromScratch();
       else {
         const logos: Record<string, Uint8Array> = {};
@@ -106,7 +113,10 @@ export async function createBrowserBackend(): Promise<Backend> {
         startWithSamples({ brands: seedBrands as Brand[], presets: seedPresets as Preset[], logos });
       }
       await r.flush();
-    },
+      // a fresh start has nothing worth backing up yet
+      localStorage.removeItem(BACKUP_KEYS.backup);
+      localStorage.removeItem(BACKUP_KEYS.changed);
+    }),
     needsStart: () => workspaceMeta() === undefined,
   };
 }
