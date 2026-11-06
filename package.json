@@ -8,8 +8,8 @@
     "signo": "./bin/signo.mjs"
   },
   "scripts": {
-    "dev": "concurrently -k -n api,web \"tsx watch src/server/index.ts\" \"vite --config web/vite.config.ts\"",
-    "build": "vite build --config web/vite.config.ts",
+    "dev": "concurrently -k -n api,web \"tsx watch src/server/index.ts\" \"vite\"",
+    "build": "vite build",
     "start": "tsx src/server/index.ts",
     "signo": "tsx src/cli/index.ts",
     "seed:logos": "tsx scripts/make-fake-logos.ts",
@@ -17,15 +17,27 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/carlito": "^5.3.0",
     "@hono/node-server": "^2.1.6",
     "@pdf-lib/fontkit": "^1.1.1",
+    "@tailwindcss/vite": "^4.3.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "hono": "^4.13.16",
+    "lucide-react": "^1.68.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.5.438",
+    "radix-ui": "^1.8.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "shadcn": "^4.23.0",
     "sharp": "^0.35.5",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.4",
+    "tw-animate-css": "^1.4.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -7,3 +7,5 @@
 - Gates (check exit codes, never pipe through tail): `pnpm typecheck`, `pnpm test`, `pnpm build`.
 - pnpm 11 age gate: after any `pnpm add`, check pnpm-workspace.yaml; never bypass minimumReleaseAge.
 - Ports: API 7047, Vite dev 7048.
+- UI = shadcn/ui (style base-nova, Base UI primitives: use `render=` not `asChild`; ToggleGroup value is an array; Select needs `items`). Components live in web/src/components/ui; add more with `pnpm dlx shadcn@latest add <name>`. components.json + vite.config.ts are at the repo root (Vite `root` is web/) so the CLI detects the framework. Registry output imports `cn` from the "cn" package; this repo rewrites it to `@/lib/utils`, so re-check after any `add`.
+- Theme tokens (warm paper + orange primary) are in web/src/styles.css; no hand-written component CSS.

@@ -9,8 +9,25 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"],
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "paths": {
+      "@/*": [
+        "./web/src/*"
+      ]
+    }
   },
-  "include": ["src", "web/src", "scripts", "tests", "web/vite.config.ts"]
+  "include": [
+    "src",
+    "web/src",
+    "scripts",
+    "tests",
+    "vite.config.ts"
+  ]
 }

@@ -35,7 +35,7 @@ export function PdfView({ bytes, width: fixed, label }: { bytes: Uint8Array | nu
           const c = document.createElement("canvas");
           c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
           c.style.width = `${width}px`; c.style.height = `${(width * base.height) / base.width}px`;
-          c.className = "pdf-page";
+          c.className = "mx-auto mb-3 block bg-white shadow-md";
           await page.render({ canvas: c, canvasContext: c.getContext("2d")!, viewport: vp }).promise;
           canvases.push(c);
         }
@@ -46,9 +46,9 @@ export function PdfView({ bytes, width: fixed, label }: { bytes: Uint8Array | nu
   }, [bytes, width]);
 
   return (
-    <div className="pdf-host" aria-label={label} ref={outer}>
+    <div className="w-full max-w-full overflow-auto" aria-label={label} ref={outer}>
       <div ref={host} />
-      {err && <p className="err">{err}</p>}
+      {err && <p className="text-sm text-destructive">{err}</p>}
     </div>
   );
 }
