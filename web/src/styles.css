@@ -158,3 +158,23 @@
     @apply font-sans;
     }
 }
+/* Touch screens: fingers need ~44px targets. Desktop (fine pointer) keeps the compact Nova sizes. */
+@media (pointer: coarse) {
+  :where(button, [role="button"], [data-slot="select-trigger"], [data-slot="input-group"],
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"])):not(
+    [data-slot="checkbox"], [data-slot="switch"], [data-slot="radio-group-item"], [role="slider"], [data-slot="input-group"] *) {
+    min-height: 2.75rem;
+  }
+  :where(button, [role="button"]):not([data-slot="checkbox"], [data-slot="switch"], [data-slot="radio-group-item"], [role="slider"], [data-slot="input-group"] *) {
+    min-width: 2.75rem;
+  }
+  /* buttons inside a field (stepper − / +) fill the taller field */
+  [data-slot="input-group"] button { min-height: 2.25rem; min-width: 2.25rem; }
+  [data-slot="tabs-list"] { height: auto !important; }
+  /* small controls get an invisible 44px hit area instead of growing */
+  [data-slot="checkbox"], [data-slot="switch"], [data-slot="radio-group-item"] { position: relative; }
+  [data-slot="checkbox"]::after, [data-slot="switch"]::after, [data-slot="radio-group-item"]::after {
+    content: ""; position: absolute; inset: 50% auto auto 50%; width: 2.75rem; height: 2.75rem; transform: translate(-50%, -50%);
+  }
+  .text-xs { font-size: 0.8125rem; line-height: 1.125rem; }
+}

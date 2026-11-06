@@ -157,7 +157,7 @@ export function BatchPanel({
                 <BulkNumber label="Percent" after="%" emptyStart={50} min={1} max={99} onApply={(n) => patchSelected({ kind: "percent", percent: n }, `Set ${n}% off`)} />
                 <BulkNumber label="Price" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => patchSelected({ kind: "price", price: n }, `Set price ${money(n)}`)} />
                 <BulkNumber label="Copies" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
-                <Field className="w-44">
+                <Field className="w-56">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
                   <Select items={brands.map((b) => ({ value: b.id, label: b.name }))} value={null as unknown as string}
                     onValueChange={(v) => v && patchSelected({ brandId: v }, `Brand → ${brands.find((b) => b.id === v)?.name}`)}>
@@ -165,7 +165,7 @@ export function BatchPanel({
                     <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
-                <Field className="w-48">
+                <Field className="w-56">
                   <FieldLabel htmlFor="bulk-template">Template</FieldLabel>
                   <Select items={templates.map((t) => ({ value: t.id, label: t.name }))} value={null as unknown as string}
                     onValueChange={(v) => {
@@ -291,14 +291,14 @@ export function BatchPanel({
         )}
 
         <div className="flex flex-wrap items-end gap-4">
-          <Field className="w-32">
+          <Field className="w-40">
             <FieldLabel htmlFor="paper">Paper</FieldLabel>
             <Select value={batch.options.paper} items={[{ value: "letter", label: "Letter" }, { value: "a4", label: "A4" }]} onValueChange={(v) => v && setOptions({ paper: v as "letter" | "a4" })}>
               <SelectTrigger id="paper" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent><SelectGroup><SelectItem value="letter">Letter</SelectItem><SelectItem value="a4">A4</SelectItem></SelectGroup></SelectContent>
             </Select>
           </Field>
-          <Field className="w-64">
+          <Field className="w-56">
             <FieldLabel htmlFor="grid">Layout</FieldLabel>
             <Select value={batch.options.grid} items={[{ value: "landscape-5x2", label: "Landscape · 5×2 (10/page)" }, { value: "portrait-4x3", label: "Portrait · 4×3 (12/page)" }]}
               onValueChange={(v) => v && setOptions({ grid: v as Batch["options"]["grid"] })}>
@@ -325,10 +325,10 @@ export function BatchPanel({
 function BulkNumber({ label, onApply, ...num }: { label: string; onApply: (n: number) => void } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after" | "emptyStart">) {
   const [v, setV] = useState<number | undefined>(undefined);
   return (
-    <Field className="w-52">
+    <Field className="w-auto">
       <FieldLabel htmlFor={`bulk-${label.toLowerCase()}`}>{label}</FieldLabel>
-      <div className="flex gap-1">
-        <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className="min-w-0 flex-1" value={v} onChange={setV}
+      <div className="flex gap-2">
+        <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className="w-40" value={v} onChange={setV}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter" && v) { e.preventDefault(); onApply(v); } }} />
         <Button type="button" variant="outline" disabled={!v} onClick={() => v && onApply(v)}>Set</Button>
       </div>

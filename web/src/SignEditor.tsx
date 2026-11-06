@@ -3,10 +3,13 @@ import { PencilRulerIcon, PlusIcon, SaveIcon, XIcon } from "lucide-react";
 import { resolveTemplate, usedFields } from "../../src/core/template";
 import type { Preset, Sign, Template } from "../../src/core/types";
 import type { BrandWithLogo } from "./api";
+import { ChoiceOrOwn } from "./ChoiceOrOwn";
 import { NumField } from "./NumField";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -97,15 +100,8 @@ export function SignEditor({
             </div>
 
             {uses.has("prefix") && <Field>
-              <FieldLabel htmlFor="prefix">Lead word</FieldLabel>
-              <div className="flex flex-wrap items-center gap-2">
-                <Input id="prefix" className="w-36" value={draft.prefix} maxLength={24} placeholder="(none)" onChange={(e) => set({ prefix: e.target.value })} />
-                <ToggleGroup variant="outline" size="sm" spacing={1} value={[draft.prefix === "SELECT" ? "SELECT" : draft.prefix === "" ? "none" : ""]}
-                  onValueChange={(v) => { if (v[0]) set({ prefix: v[0] === "none" ? "" : v[0] }); }}>
-                  <ToggleGroupItem value="SELECT" type="button">SELECT</ToggleGroupItem>
-                  <ToggleGroupItem value="none" type="button">none</ToggleGroupItem>
-                </ToggleGroup>
-              </div>
+              <FieldLabel id="prefix-label" htmlFor="prefix">Lead word</FieldLabel>
+              <ChoiceOrOwn id="prefix" labelId="prefix-label" value={draft.prefix} choices={["SELECT"]} placeholder="e.g. NEW" onChange={(v) => set({ prefix: v })} />
             </Field>}
 
             {uses.has("collection") && <Field>
@@ -127,30 +123,24 @@ export function SignEditor({
             </Field>}
 
             {!isPrice ? (
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_8rem]">
-                <Field>
+              <Field>
                   <FieldLabel htmlFor="percent">Percent off</FieldLabel>
                   <div className="flex flex-wrap items-center gap-2">
                     <NumField id="percent" stepper="percent" className="w-40" after="%" value={draft.percent} min={1} max={99} onChange={(n) => n && set({ percent: n })} />
-                    <ToggleGroup variant="outline" size="sm" spacing={1} className="flex-wrap" value={[String(draft.percent)]}
+                    <ToggleGroup variant="outline" spacing={1} className="flex-wrap" aria-label="Common percents" value={[String(draft.percent)]}
                       onValueChange={(v) => { if (v[0]) set({ percent: Number(v[0]) }); }}>
                       {PERCENTS.map((p) => <ToggleGroupItem key={p} value={String(p)} type="button">{p}%</ToggleGroupItem>)}
                     </ToggleGroup>
                   </div>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="off">After the number</FieldLabel>
-                  <Input id="off" value={draft.offLabel} maxLength={20} onChange={(e) => set({ offLabel: e.target.value })} />
-                </Field>
-              </div>
+              </Field>
             ) : (
               <>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_11rem]">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem]">
                   <Field>
                     <FieldLabel htmlFor="price">Price</FieldLabel>
                     <div className="flex flex-wrap items-center gap-2">
-                      <NumField id="price" stepper="price" className="w-44" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
-                      <ToggleGroup variant="outline" size="sm" spacing={1} className="flex-wrap" value={[String(draft.price ?? "")]}
+                      <NumField id="price" stepper="price" className="w-40" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
+                      <ToggleGroup variant="outline" spacing={1} className="flex-wrap" aria-label="Common prices" value={[String(draft.price ?? "")]}
                         onValueChange={(v) => { if (v[0]) set({ price: Number(v[0]) }); }}>
                         {PRICES.map((p) => <ToggleGroupItem key={p} value={String(p)} type="button">${p}</ToggleGroupItem>)}
                       </ToggleGroup>
@@ -162,33 +152,32 @@ export function SignEditor({
                   </Field>}
                 </div>
                 {uses.has("label") && <Field>
-                    <FieldLabel htmlFor="plabel">Above the price</FieldLabel>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input id="plabel" className="w-36" value={draft.priceLabel} maxLength={24} placeholder="(none)" onChange={(e) => set({ priceLabel: e.target.value })} />
-                      <ToggleGroup variant="outline" size="sm" spacing={1} className="flex-wrap" value={[draft.priceLabel.toUpperCase() || "none"]}
-                        onValueChange={(v) => { if (v[0]) set({ priceLabel: v[0] === "none" ? "" : v[0] }); }}>
-                        <ToggleGroupItem value="none" type="button">none</ToggleGroupItem>
-                        {PRICE_LABELS.map((l) => <ToggleGroupItem key={l} value={l} type="button">{l}</ToggleGroupItem>)}
-                      </ToggleGroup>
-                    </div>
+                    <FieldLabel id="plabel-label" htmlFor="plabel">Above the price</FieldLabel>
+                    <ChoiceOrOwn id="plabel" labelId="plabel-label" value={draft.priceLabel} choices={PRICE_LABELS} placeholder="e.g. SALE" onChange={(v) => set({ priceLabel: v })} />
                 </Field>}
               </>
             )}
 
-            <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] gap-4">
-              {uses.has("footer") ? <Field>
-                <FieldLabel htmlFor="footer">Footer</FieldLabel>
-                <Input id="footer" value={draft.footer} maxLength={40} placeholder="(none)" onChange={(e) => set({ footer: e.target.value })} />
-              </Field> : <div />}
-              <Field>
-                <FieldLabel htmlFor="copies">Copies</FieldLabel>
-                <NumField id="copies" stepper="copies" stepWords={["Fewer", "More"]} value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
-              </Field>
-            </div>
+            {(!isPrice || uses.has("footer")) && (
+              <div className="grid gap-4 @md/field-group:grid-cols-[14rem_minmax(0,1fr)]">
+                {!isPrice && <Field>
+                  <FieldLabel htmlFor="off">After the number</FieldLabel>
+                  <Input id="off" value={draft.offLabel} maxLength={20} onChange={(e) => set({ offLabel: e.target.value })} />
+                </Field>}
+                {uses.has("footer") && <Field className={cn(isPrice && "@md/field-group:col-span-2")}>
+                  <FieldLabel htmlFor="footer">Footer</FieldLabel>
+                  <Input id="footer" value={draft.footer} maxLength={40} placeholder="(none)" onChange={(e) => set({ footer: e.target.value })} />
+                </Field>}
+              </div>
+            )}
           </FieldGroup>
         </form>
       </CardContent>
       <CardFooter className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="copies">Copies</Label>
+          <NumField id="copies" form="sign-form" stepper="copies" stepWords={["Fewer", "More"]} className="w-40" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
+        </div>
         <Button type="submit" form="sign-form" disabled={!brand}>
           {editing ? <SaveIcon data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
           {editing ? "Update sign" : "Add to batch"}

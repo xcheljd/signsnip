@@ -100,7 +100,7 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
       <Field>
         <div className="flex items-center justify-between">
           <FieldLabel htmlFor="obj-size">Font size</FieldLabel>
-          <NumField id="obj-size" stepper="font size" className="w-36" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
+          <NumField id="obj-size" stepper="font size" className="w-40" after="pt" decimals={1} step={0.5} min={4} max={120} value={o.size} onChange={(v) => v && set({ size: v, minSize: Math.min(o.minSize, v) })} />
         </div>
         <Slider min={6} max={60} step={0.5} value={[Math.min(60, o.size)]} aria-label="Font size" thumbLabel="Font size"
           onValueChange={(v) => { const s = Array.isArray(v) ? v[0]! : (v as number); set({ size: s, minSize: Math.min(o.minSize, s) }); }} />
@@ -231,7 +231,7 @@ function BackgroundFields({ t, set }: { t: Template; set: (p: Partial<Template>)
           <FieldDescription>{bg.fit === "cover" ? "Covers the whole sign; edges of the picture may be cropped." : "Shows all of the picture; white bands where the shapes differ."}</FieldDescription>
           <div className="flex items-center justify-between gap-3">
             <FieldLabel htmlFor="tpl-bg-strength">Strength</FieldLabel>
-            <NumField id="tpl-bg-strength" stepper="background strength" className="w-36" after="%" step={5} min={5} max={100}
+            <NumField id="tpl-bg-strength" stepper="background strength" className="w-40" after="%" step={5} min={5} max={100}
               value={strength} onChange={(v) => v && set({ background: { ...bg, opacity: v / 100 } })} />
           </div>
           <Slider min={5} max={100} step={5} value={[strength]} aria-label="Background strength" thumbLabel="Background strength"

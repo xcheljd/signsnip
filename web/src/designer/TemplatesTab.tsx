@@ -404,14 +404,14 @@ export function TemplatesTab({
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
-            <Field className="w-48">
+            <Field className="w-56">
               <FieldLabel htmlFor="sample-brand">Preview with</FieldLabel>
               <Select value={brand?.id ?? ""} items={brands.map((b) => ({ value: b.id, label: b.name }))} onValueChange={(v) => v && setBrandId(v)}>
                 <SelectTrigger id="sample-brand" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
               </Select>
             </Field>
-            <Toggle size="sm" variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
+            <Toggle variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
             {row && (
               <span className="flex items-center gap-2 text-sm">
                 <Badge variant="secondary">Showing row {previewRow! + 1}</Badge>

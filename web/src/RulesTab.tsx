@@ -13,7 +13,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 /**
@@ -89,12 +88,12 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
-              <Field className="w-56">
+              <Field className="w-full sm:w-56">
                 <FieldLabel htmlFor="abbr-from">Word or phrase</FieldLabel>
                 <Input id="abbr-from" placeholder="e.g. Moonphase" value={from} maxLength={40} onChange={(e) => setFrom(e.target.value)} />
               </Field>
-              <ArrowRightIcon className="mb-2 size-4 text-muted-foreground" aria-hidden />
-              <Field className="w-44">
+              <ArrowRightIcon className="mb-2 hidden size-4 text-muted-foreground sm:block" aria-hidden />
+              <Field className="w-full sm:w-56">
                 <FieldLabel htmlFor="abbr-to">Short</FieldLabel>
                 <Input id="abbr-to" placeholder="e.g. Moon" value={to} maxLength={40} onChange={(e) => setTo(e.target.value)} />
               </Field>
@@ -108,32 +107,26 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
                 </EmptyHeader>
               </Empty>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Word or phrase</TableHead>
-                    <TableHead>Short</TableHead>
-                    <TableHead className="w-32">In this batch</TableHead>
-                    <TableHead className="w-10"><span className="sr-only">Remove</span></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              // a list, not a table: on narrow screens each row stacks (word on top; short form, status, remove below)
+              <div className="@container/abbr">
+                <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem_2rem] gap-2 border-b pb-2 text-xs font-medium text-muted-foreground @lg/abbr:grid" aria-hidden>
+                  <span>Word or phrase</span><span>Short</span><span>In this batch</span><span />
+                </div>
+                <ul className="flex flex-col divide-y" aria-label="Abbreviations">
                   {draft.abbreviations.map((a, i) => {
                     const n = usedBy(a);
                     return (
-                      <TableRow key={`${a.from}-${i}`}>
-                        <TableCell><Input aria-label={`Word ${i + 1}`} className="h-7" value={a.from} maxLength={40} onChange={(e) => setAbbr(i, { from: e.target.value })} /></TableCell>
-                        <TableCell><Input aria-label={`Short form of ${a.from}`} className="h-7" value={a.to} maxLength={40} placeholder="(removed)" onChange={(e) => setAbbr(i, { to: e.target.value })} /></TableCell>
-                        <TableCell>{n ? <Badge variant="secondary">used on {n} sign{n === 1 ? "" : "s"}</Badge> : <span className="text-xs text-muted-foreground">not needed</span>}</TableCell>
-                        <TableCell>
-                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${a.from}`}
-                            onClick={() => change((r) => ({ ...r, abbreviations: r.abbreviations.filter((_, j) => j !== i) }))}><Trash2Icon /></Button>
-                        </TableCell>
-                      </TableRow>
+                      <li key={`${a.from}-${i}`} data-abbr-row="" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-2 @lg/abbr:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem_2rem]">
+                        <Input aria-label={`Word ${i + 1}`} className="col-span-3 @lg/abbr:col-span-1" value={a.from} maxLength={40} onChange={(e) => setAbbr(i, { from: e.target.value })} />
+                        <Input aria-label={`Short form of ${a.from}`} value={a.to} maxLength={40} placeholder="(removed)" onChange={(e) => setAbbr(i, { to: e.target.value })} />
+                        <span className="text-xs">{n ? <Badge variant="secondary">used on {n} sign{n === 1 ? "" : "s"}</Badge> : <span className="text-muted-foreground">not needed</span>}</span>
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${a.from}`}
+                          onClick={() => change((r) => ({ ...r, abbreviations: r.abbreviations.filter((_, j) => j !== i) }))}><Trash2Icon /></Button>
+                      </li>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </ul>
+              </div>
             )}
           </CardContent>
         </Card>
