@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
 import { DEFAULT_RULES, type Preset, type Rules, type Sign, type Template, type Warning } from "../../src/core/types";
 import { RulesTab } from "./RulesTab";
+import { StartPage, WorkspaceMenu } from "./Workspace";
 import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
@@ -52,7 +53,15 @@ export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1
   return { pdf, err };
 }
 
+/** The hosted build shows a start page on the first visit (blank / samples / restore a backup). */
 export function App() {
+  const [needStart, setNeedStart] = useState(() => api.needsStart());
+  const { resolved } = useTheme();
+  if (needStart) return (<><StartPage onDone={() => setNeedStart(false)} /><Toaster position="bottom-right" theme={resolved} /></>);
+  return <SignoApp />;
+}
+
+function SignoApp() {
   const [tab, setTab] = useState("make");
   const { theme, setTheme, resolved } = useTheme();
   const [brands, setBrands] = useState<api.BrandWithLogo[]>([]);
@@ -191,7 +200,8 @@ export function App() {
           <TabsTrigger value="brands">Brands &amp; logos</TabsTrigger>
         </TabsList>
         <Badge variant="secondary" className="ml-auto hidden lg:inline-flex">47 × 70 mm · sample data only</Badge>
-        <ToggleGroup variant="outline" size="sm" spacing={0} className="ml-auto lg:ml-0" value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
+        <span className="ml-auto lg:ml-0"><WorkspaceMenu /></span>
+        <ToggleGroup variant="outline" size="sm" spacing={0} value={[theme]} onValueChange={(v) => v[0] && setTheme(v[0] as typeof theme)} aria-label="Theme">
           <ToggleGroupItem value="light" aria-label="Light theme"><SunIcon /></ToggleGroupItem>
           <ToggleGroupItem value="system" aria-label="Match system theme"><MonitorIcon /></ToggleGroupItem>
           <ToggleGroupItem value="dark" aria-label="Dark theme"><MoonIcon /></ToggleGroupItem>

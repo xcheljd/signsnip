@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { brandMatches, findTemplate, listPresets, readBatch, writeBatch } from "./store.js";
 import { SignSchema, type Sign } from "./types.js";
 
@@ -31,7 +30,7 @@ export function buildSign(input: AddInput): Sign {
   if (kind === "price" && input.price === undefined && base.price === undefined) throw new Error("Need --price for a price template");
   if (kind === "percent" && input.percent === undefined && base.percent === undefined) throw new Error("Need --percent (or --price for a price sign)");
   const parsed = SignSchema.safeParse({
-    id: randomUUID(),
+    id: globalThis.crypto.randomUUID(), // Web Crypto: same call on Node 19+ and in browsers
     brandId: brand.id,
     kind,
     templateId: tpl?.id ?? base.templateId,

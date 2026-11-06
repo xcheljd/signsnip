@@ -1,46 +1,37 @@
-import { batchPages, pageLimitError } from "./geometry.js";
-import fs from "node:fs";
-import path from "node:path";
-import sharp from "sharp";
 import { z } from "zod";
-import { DATA_DIR, SEED_DIR } from "./paths.js";
+import { batchPages, pageLimitError } from "./geometry.js";
+import { imageOps, prepareLogo, rasterInfo, removeBackground, type LogoInfo } from "./images.js";
+import { repo } from "./repo.js";
 import {
   BatchSchema, BrandSchema, DEFAULT_OPTIONS, DEFAULT_RULES, PresetSchema, RulesSchema, SavedBatchSchema, TemplateSchema, TemplateSetSchema,
   type Batch, type Brand, type Preset, type Rules, type SavedBatch, type Template, type TemplateSet,
 } from "./types.js";
 import { DEFAULT_TEMPLATES, isBuiltin } from "./template.js";
 
-const f = (...p: string[]) => path.join(DATA_DIR, ...p);
+export type { LogoBackground, LogoInfo } from "./images.js";
 
-/** Copy seed data into the working data dir the first time we run. */
-export function ensureData(): void {
-  if (fs.existsSync(f("brands.json")) || DATA_DIR === SEED_DIR || !fs.existsSync(SEED_DIR)) return;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.cpSync(SEED_DIR, DATA_DIR, { recursive: true });
-}
+/** Business logic over the storage interface (repo.ts). Runs on Node (files) and in the browser (IndexedDB). */
 
-function readJson<T>(file: string, schema: z.ZodType<T>, fallback: T): T {
-  ensureData();
-  if (!fs.existsSync(file)) return fallback;
-  return schema.parse(JSON.parse(fs.readFileSync(file, "utf8")));
+function readJson<T>(key: string, schema: z.ZodType<T>, fallback: T): T {
+  const v = repo().getJson(key);
+  return v === undefined ? fallback : schema.parse(v);
 }
-function writeJson(file: string, data: unknown): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n");
-  fs.renameSync(tmp, file); // atomic: CLI and server can both write safely
-}
+const writeJson = (key: string, data: unknown) => repo().setJson(key, data);
 
 export const slugify = (s: string) =>
   s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "brand";
 
 // ---------- brands
+const LOGO = (id: string) => `logos/${id}`;
+/** Backup taken before an automatic edit (background removal) so it can be restored. */
+const ORIG = (id: string) => `logos/originals/${id}`;
+
 export function listBrands(): Brand[] {
-  const brands = readJson(f("brands.json"), z.array(BrandSchema), []);
-  return brands.map((b) => ({ ...b, hasLogo: fs.existsSync(logoPath(b.id)) }));
+  const brands = readJson("brands", z.array(BrandSchema), []);
+  return brands.map((b) => ({ ...b, hasLogo: repo().getBlob(LOGO(b.id)) !== null }));
 }
 export function saveBrands(brands: Brand[]): void {
-  writeJson(f("brands.json"), brands.map((b) => ({ ...b, hasLogo: undefined })));
+  writeJson("brands", brands.map((b) => ({ ...b, hasLogo: undefined })));
 }
 /** exact id/name first; a partial name only counts when it matches exactly one brand */
 export function brandMatches(ref: string): Brand[] {
@@ -65,149 +56,87 @@ export function upsertBrand(input: { id?: string; name: string; collections?: st
   });
   if (idx >= 0) brands[idx] = brand; else brands.push(brand);
   saveBrands(brands);
-  return { ...brand, hasLogo: fs.existsSync(logoPath(id)) };
+  return { ...brand, hasLogo: repo().getBlob(LOGO(id)) !== null };
 }
 export function deleteBrand(id: string): void {
   saveBrands(listBrands().filter((b) => b.id !== id));
-  fs.rmSync(logoPath(id), { force: true });
-  fs.rmSync(origLogoPath(id), { force: true });
+  repo().remove(LOGO(id));
+  repo().remove(ORIG(id));
+  infoCache.delete(id);
 }
 
 // ---------- logos
-export const logoPath = (brandId: string) => f("logos", `${brandId}.png`);
-/** Backup taken before an automatic edit (background removal) so it can be restored. */
-export const origLogoPath = (brandId: string) => f("logos", "originals", `${brandId}.png`);
-export const readLogo = (brandId: string): Buffer | null =>
-  fs.existsSync(logoPath(brandId)) ? fs.readFileSync(logoPath(brandId)) : null;
+export const readLogo = (brandId: string): Uint8Array | null => repo().getBlob(LOGO(brandId));
 
 /**
  * Accept any PNG/JPG/WebP/SVG/GIF, trim the empty border (so the logo fills its box),
  * cap the size, and store as PNG. Returns the stored aspect ratio.
  */
-export async function saveLogo(brandId: string, input: Buffer): Promise<{ aspect: number }> {
+export async function saveLogo(brandId: string, input: Uint8Array): Promise<{ aspect: number }> {
   if (!listBrands().some((b) => b.id === brandId)) throw new Error(`Unknown brand "${brandId}"`);
-  let img = sharp(input, { density: 300 }).rotate();
-  try {
-    img = sharp(await img.trim({ threshold: 12 }).toBuffer());
-  } catch {
-    img = sharp(input, { density: 300 }).rotate(); // fully uniform image: keep as is
-  }
-  const out = await img.resize({ width: 1400, height: 700, fit: "inside", withoutEnlargement: true })
-    .png().toBuffer({ resolveWithObject: true });
-  const { data: px } = await sharp(out.data).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  let visible = 0;
-  for (let i = 3; i < px.length; i += 4) if (px[i]! > 16) { visible++; if (visible > 20) break; }
-  if (visible <= 20) throw new Error("That image is empty (fully transparent) - nothing would print");
-  fs.mkdirSync(f("logos"), { recursive: true });
-  fs.writeFileSync(logoPath(brandId), out.data);
-  fs.rmSync(origLogoPath(brandId), { force: true }); // a fresh upload supersedes any old backup
+  const { png, raster } = await prepareLogo(input);
+  repo().setBlob(LOGO(brandId), png);
+  repo().remove(ORIG(brandId)); // a fresh upload supersedes any old backup
   infoCache.delete(brandId);
-  return { aspect: out.info.width / out.info.height };
+  return { aspect: raster.width / raster.height };
 }
 
-export type LogoBackground = "transparent" | "white" | "solid";
-export interface LogoInfo { width: number; height: number; aspect: number; background: LogoBackground; hasOriginal: boolean }
-const infoCache = new Map<string, { mtime: number; info: LogoInfo }>();
+const infoCache = new Map<string, { stamp: number; info: Omit<LogoInfo, "hasOriginal"> }>();
 
-/** Pixel size + whether the logo sits on an opaque box (sampled from the border). Cached by mtime. */
+/** Pixel size + whether the logo sits on an opaque box. Cached until the logo changes. */
 export async function logoInfo(brandId: string): Promise<LogoInfo | null> {
-  const file = logoPath(brandId);
-  if (!fs.existsSync(file)) return null;
-  const mtime = fs.statSync(file).mtimeMs;
+  const r = repo();
+  const bytes = r.getBlob(LOGO(brandId));
+  if (!bytes) return null;
+  const stamp = r.stamp(LOGO(brandId));
+  const hasOriginal = r.getBlob(ORIG(brandId)) !== null;
   const hit = infoCache.get(brandId);
-  if (hit && hit.mtime === mtime) return { ...hit.info, hasOriginal: fs.existsSync(origLogoPath(brandId)) };
-  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const { width: w, height: h } = info;
-  let opaque = 0, n = 0, minSum = 0;
-  const sample = (x: number, y: number) => {
-    const i = (y * w + x) * 4;
-    n++;
-    if (data[i + 3]! > 200) { opaque++; minSum += Math.min(data[i]!, data[i + 1]!, data[i + 2]!); }
-  };
-  for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 60))) { sample(x, 0); sample(x, h - 1); }
-  for (let y = 0; y < h; y += Math.max(1, Math.floor(h / 30))) { sample(0, y); sample(w - 1, y); }
-  let background: LogoBackground = "transparent";
-  if (opaque / n > 0.9) background = minSum / opaque >= 248 ? "white" : "solid";
-  const out: LogoInfo = { width: w, height: h, aspect: w / h, background, hasOriginal: fs.existsSync(origLogoPath(brandId)) };
-  infoCache.set(brandId, { mtime, info: out });
-  return out;
+  if (hit && hit.stamp === stamp) return { ...hit.info, hasOriginal };
+  const info = rasterInfo(await imageOps().decode(bytes));
+  infoCache.set(brandId, { stamp, info });
+  return { ...info, hasOriginal };
 }
 
-/**
- * Make the logo's background transparent: flood-fill from the border through pixels close to
- * the border colour, with a soft edge so anti-aliased outlines don't get a halo. Backs up first.
- */
+/** Make the logo's background transparent (see images.ts). Backs up the original first. */
 export async function removeLogoBackground(brandId: string): Promise<LogoInfo> {
-  const file = logoPath(brandId);
-  if (!fs.existsSync(file)) throw new Error(`"${brandId}" has no logo`);
-  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const { width: w, height: h } = info;
-  // background colour = average of opaque border pixels
-  let r = 0, g = 0, b = 0, c = 0;
-  const border: number[] = [];
-  for (let x = 0; x < w; x++) border.push(x, (h - 1) * w + x);
-  for (let y = 0; y < h; y++) border.push(y * w, y * w + w - 1);
-  for (const p of border) { const i = p * 4; if (data[i + 3]! > 200) { r += data[i]!; g += data[i + 1]!; b += data[i + 2]!; c++; } }
-  if (!c) throw new Error("The logo already has a transparent background");
-  r /= c; g /= c; b /= c;
-  const HARD = 22, SOFT = 70; // max channel distance: <=HARD fully clear, up to SOFT partially
-  const dist = (i: number) => Math.max(Math.abs(data[i]! - r), Math.abs(data[i + 1]! - g), Math.abs(data[i + 2]! - b));
-  const seen = new Uint8Array(w * h);
-  const stack: number[] = [];
-  for (const p of border) if (!seen[p] && dist(p * 4) <= SOFT) { seen[p] = 1; stack.push(p); }
-  while (stack.length) {
-    const p = stack.pop()!;
-    const i = p * 4;
-    const d = dist(i);
-    data[i + 3] = d <= HARD ? 0 : Math.round(data[i + 3]! * ((d - HARD) / (SOFT - HARD)));
-    if (d > HARD) continue; // soft pixels are the edge: don't spread through them
-    const x = p % w, y = (p - x) / w;
-    for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) {
-      if (q >= 0 && !seen[q] && dist(q * 4) <= SOFT) { seen[q] = 1; stack.push(q); }
-    }
-  }
-  let kept = 0;
-  for (let i = 3; i < data.length; i += 4) if (data[i]! > 16) kept++;
-  if (kept < (w * h) * 0.02) throw new Error("Removing the background would erase the whole logo (it's one solid colour). Upload a version with a transparent or white background instead.");
-  fs.mkdirSync(path.dirname(origLogoPath(brandId)), { recursive: true });
-  if (!fs.existsSync(origLogoPath(brandId))) fs.copyFileSync(file, origLogoPath(brandId));
-  const png = await sharp(data, { raw: { width: w, height: h, channels: 4 } }).trim({ threshold: 1 }).png().toBuffer();
-  fs.writeFileSync(file, png);
+  const r = repo();
+  const bytes = r.getBlob(LOGO(brandId));
+  if (!bytes) throw new Error(`"${brandId}" has no logo`);
+  const cleared = removeBackground(await imageOps().decode(bytes));
+  if (!r.getBlob(ORIG(brandId))) r.setBlob(ORIG(brandId), bytes);
+  r.setBlob(LOGO(brandId), await imageOps().encodePng(cleared));
   infoCache.delete(brandId);
   return (await logoInfo(brandId))!;
 }
 
 export async function restoreLogo(brandId: string): Promise<void> {
-  const orig = origLogoPath(brandId);
-  if (!fs.existsSync(orig)) throw new Error("No original to restore");
-  fs.copyFileSync(orig, logoPath(brandId));
-  fs.rmSync(orig);
+  const r = repo();
+  const orig = r.getBlob(ORIG(brandId));
+  if (!orig) throw new Error("No original to restore");
+  r.setBlob(LOGO(brandId), orig);
+  r.remove(ORIG(brandId));
   infoCache.delete(brandId);
 }
 
 // ---------- presets
-export const listPresets = (): Preset[] => readJson(f("presets.json"), z.array(PresetSchema), []);
-export function savePresets(p: Preset[]): void { writeJson(f("presets.json"), p); }
+export const listPresets = (): Preset[] => readJson("presets", z.array(PresetSchema), []);
+export function savePresets(p: Preset[]): void { writeJson("presets", p); }
 
 // ---------- batch (shared between web UI and CLI)
-export const readBatch = (): Batch => readJson(f("batch.json"), BatchSchema, { items: [], options: DEFAULT_OPTIONS });
+export const readBatch = (): Batch => readJson("batch", BatchSchema, { items: [], options: DEFAULT_OPTIONS });
 export function writeBatch(b: Batch): Batch {
   const parsed = BatchSchema.parse(b);
   // can't grow past the page limit (an older, bigger batch may still shrink)
   const over = pageLimitError(parsed);
   if (over && batchPages(parsed) > batchPages(readBatch())) throw new Error(over);
-  writeJson(f("batch.json"), parsed);
+  writeJson("batch", parsed);
   return parsed;
 }
 
 // ---------- saved batches ("Holiday sale", "Spring clearance")
-const batchFile = (id: string) => f("batches", `${id}.json`);
 export function listSavedBatches(): SavedBatch[] {
-  ensureData();
-  const dir = f("batches");
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((n) => n.endsWith(".json"))
-    .map((n) => SavedBatchSchema.parse(JSON.parse(fs.readFileSync(path.join(dir, n), "utf8"))))
+  return repo().list("batches/")
+    .map((id) => SavedBatchSchema.parse(repo().getJson(`batches/${id}`)))
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 export function findSavedBatch(ref: string): SavedBatch | undefined {
@@ -217,22 +146,20 @@ export function findSavedBatch(ref: string): SavedBatch | undefined {
 }
 export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedBatch & { replaced: boolean } {
   const saved = SavedBatchSchema.parse({ id: slugify(name), name: name.trim(), savedAt: new Date().toISOString(), batch });
-  const replaced = fs.existsSync(batchFile(saved.id));
-  writeJson(batchFile(saved.id), saved);
+  const replaced = repo().getJson(`batches/${saved.id}`) !== undefined;
+  writeJson(`batches/${saved.id}`, saved);
   return { ...saved, replaced };
 }
-export function deleteSavedBatch(id: string): void { fs.rmSync(batchFile(id), { force: true }); }
+export function deleteSavedBatch(id: string): void { repo().remove(`batches/${id}`); }
 
 // ---------- templates
-const templatesFile = () => f("templates.json");
-
 /** All templates. Built-ins are always present (restored from defaults if missing). */
 export function listTemplates(): Template[] {
-  const saved = readJson(templatesFile(), z.array(TemplateSchema), DEFAULT_TEMPLATES);
+  const saved = readJson("templates", z.array(TemplateSchema), DEFAULT_TEMPLATES);
   const missing = DEFAULT_TEMPLATES.filter((d) => isBuiltin(d.id) && !saved.some((t) => t.id === d.id));
   return [...missing, ...saved];
 }
-function writeTemplates(all: Template[]) { writeJson(templatesFile(), all); }
+function writeTemplates(all: Template[]) { writeJson("templates", all); }
 
 export function findTemplate(ref: string): Template | undefined {
   const r = ref.trim().toLowerCase();
@@ -289,6 +216,10 @@ const sameDesign = (a: Template, b: Template) =>
   JSON.stringify([a.kind, a.safeMargin, a.objects]) === JSON.stringify([b.kind, b.safeMargin, b.objects]);
 
 export interface ImportResult { added: string[]; replaced: string[]; renamed: { from: string; to: string }[]; unchanged: string[] }
+export interface SetPreview {
+  name?: string; exportedAt: string;
+  templates: { id: string; name: string; kind: "percent" | "price"; objects: number; status: "new" | "same" | "conflict"; mine?: string }[];
+}
 
 /** Parse a template-set file (throws a friendly error if it isn't one). */
 export function parseTemplateSet(raw: unknown): TemplateSet {
@@ -298,6 +229,20 @@ export function parseTemplateSet(raw: unknown): TemplateSet {
   const r = TemplateSetSchema.safeParse(raw);
   if (!r.success) throw new Error(`The template set is damaged: ${r.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   return r.data;
+}
+
+/** Look inside a set before importing: which templates are new, identical, or would clash. */
+export function inspectTemplateSet(set: TemplateSet): SetPreview {
+  const mine = listTemplates();
+  return {
+    name: set.name, exportedAt: set.exportedAt,
+    templates: set.templates.map((t) => {
+      const m = mine.find((x) => x.id === t.id);
+      const copy = mine.find((x) => x.id !== t.id && sameDesign(x, t));
+      const status = m && sameLayout(m, t) ? "same" : copy ? "same" : !m ? "new" : "conflict";
+      return { id: t.id, name: t.name, kind: t.kind, objects: t.objects.length, status, mine: m?.name };
+    }),
+  };
 }
 
 /**
@@ -331,13 +276,13 @@ export function importTemplateSet(set: TemplateSet, mode: "keep-both" | "replace
 }
 
 // ---------- text-fitting rules
-export const readRules = (): Rules => readJson(f("rules.json"), RulesSchema, DEFAULT_RULES);
+export const readRules = (): Rules => readJson("rules", RulesSchema, DEFAULT_RULES);
 export function writeRules(r: Rules): Rules {
   const parsed = RulesSchema.parse(r);
   // one entry per word (case-insensitive); last one wins
   const seen = new Map<string, (typeof parsed.abbreviations)[number]>();
   for (const a of parsed.abbreviations) seen.set(a.from.toLowerCase(), a);
   const clean = { ...parsed, abbreviations: [...seen.values()] };
-  writeJson(f("rules.json"), clean);
+  writeJson("rules", clean);
   return clean;
 }

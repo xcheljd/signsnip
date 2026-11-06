@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-import { createRequire } from "node:module";
 import { PDFDocument, PrintScaling, degrees, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { cellRect, sheetGeometry, MAX_PAGES } from "./geometry.js";
@@ -12,16 +9,15 @@ import { SIGN_H_MM, SIGN_W_MM, type Options, type Rules, type Sign, type Templat
 const MM = 72 / 25.4;
 const mm = (v: number) => v * MM;
 
-const fontCache = new Map<string, Buffer>();
-function fontBytes(weight: "bold" | "regular"): Buffer {
-  const file = `carlito-latin-${weight === "bold" ? 700 : 400}-normal.woff`;
-  let b = fontCache.get(file);
-  if (!b) {
-    const req = createRequire(import.meta.url);
-    const dir = path.dirname(req.resolve("@fontsource/carlito/package.json"));
-    b = fs.readFileSync(path.join(dir, "files", file));
-    fontCache.set(file, b);
-  }
+/** Where the Carlito font files come from: node_modules on Node, bundled assets in the browser. */
+export type FontSource = (weight: "bold" | "regular") => Promise<Uint8Array>;
+let fontSource: FontSource | null = null;
+const fontCache = new Map<string, Promise<Uint8Array>>();
+export function setFontSource(src: FontSource): void { fontSource = src; fontCache.clear(); }
+function fontBytes(weight: "bold" | "regular"): Promise<Uint8Array> {
+  if (!fontSource) throw new Error("No font source configured (call setFontSource first)");
+  let b = fontCache.get(weight);
+  if (!b) { b = fontSource(weight); fontCache.set(weight, b); }
   return b;
 }
 type Fonts = Record<"bold" | "regular", PDFFont>;
@@ -35,8 +31,8 @@ async function newDoc(title: string) {
   // Ask viewers to default the print dialog to "Actual size" (honoured by Acrobat/most PDF viewers).
   doc.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
   const fonts: Fonts = {
-    bold: await doc.embedFont(fontBytes("bold"), { subset: true }),
-    regular: await doc.embedFont(fontBytes("regular"), { subset: true }),
+    bold: await doc.embedFont(await fontBytes("bold"), { subset: true }),
+    regular: await doc.embedFont(await fontBytes("regular"), { subset: true }),
   };
   const font = fonts.bold;
   const measure: Measure = (t, size, weight = "bold") => fonts[weight].widthOfTextAtSize(t, size) / MM;

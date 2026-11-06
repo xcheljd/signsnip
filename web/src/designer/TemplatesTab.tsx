@@ -60,7 +60,7 @@ export function sampleSign(t: Template, brand: api.BrandWithLogo | undefined, lo
   };
 }
 export const logoSource = (b: api.BrandWithLogo | undefined): LogoSource | null =>
-  b?.logo ? { url: `/api/logos/${b.id}?v=${b.logo.width}-${b.logo.background}-${b.logo.hasOriginal}`, aspect: b.logo.aspect, scale: b.logoScale } : null;
+  b?.logo ? { url: api.logoUrl(b.id, `${b.logo.width}-${b.logo.background}-${b.logo.hasOriginal}`), aspect: b.logo.aspect, scale: b.logoScale } : null;
 
 function IconTip({ label, children, ...p }: { label: string } & React.ComponentProps<typeof Button>) {
   return (
@@ -521,7 +521,12 @@ function ExportDialog({ open, onOpenChange, templates, current, dirty }: { open:
         </Field>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={!picked.size} render={<a href={api.templateExportUrl([...picked], name)} download onClick={() => { onOpenChange(false); toast(`Exported ${picked.size} template${picked.size === 1 ? "" : "s"}`); }} />}>
+          <Button disabled={!picked.size} onClick={async () => {
+            try {
+              api.saveDownload(await api.exportTemplates([...picked], name));
+              onOpenChange(false); toast(`Exported ${picked.size} template${picked.size === 1 ? "" : "s"}`);
+            } catch (e) { toast.error((e as Error).message); }
+          }}>
             <DownloadIcon data-icon="inline-start" />Download
           </Button>
         </DialogFooter>

@@ -14,7 +14,9 @@
     "signo": "tsx src/cli/index.ts",
     "seed:logos": "tsx scripts/make-fake-logos.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:static": "VITE_SIGNO_MODE=browser vite build --base ./ --outDir dist-static --emptyOutDir",
+    "preview:static": "python3 -m http.server 7049 --bind 127.0.0.1 --directory web/dist-static"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

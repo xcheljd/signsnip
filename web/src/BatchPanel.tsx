@@ -219,7 +219,7 @@ export function BatchPanel({
                     <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <img className="h-5 w-12 rounded-sm bg-white object-contain px-0.5" src={`/api/logos/${s.brandId}?v=${brands.find((b) => b.id === s.brandId)?.logo?.width ?? 0}`} alt="" />
+                        <img className="h-5 w-12 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(s.brandId, String(brands.find((b) => b.id === s.brandId)?.logo?.width ?? 0))} alt="" />
                         <span className="truncate">{brands.find((b) => b.id === s.brandId)?.name ?? s.brandId}</span>
                       </div>
                     </TableCell>

@@ -57,6 +57,8 @@ examples: *Buy one get one* and *Final sale*.
 - **Export** writes a template set (`*.signo.json`) with the templates you pick. **Import** shows what's new,
   what you already have, and what differs from yours (keep both, or replace yours).
 
+**Hosted version (no server)**: `pnpm build:static` builds a copy that runs entirely in the browser and can be served by any static host (GitHub Pages workflow included). On first visit it asks how to start: from scratch, with the made-up samples, or by restoring a backup. Everything stays in that browser; use **Workspace → Back up everything** now and then. Backups move between the hosted app, the local app and the CLI (`signo backup`, `signo restore file --yes`).
+
 **Text rules**: a store-wide *readable minimum* (default 10pt) and your own abbreviation list. When text would shrink below the minimum, auto-fit applies abbreviations (only as many as needed), then the template's long-name fallback (set in the designer), and only then warns. Print/Download asks first if anything is still too small. "Try a name" previews the exact result.
 
 **Brands & logos**: drop in a PNG/JPG/WebP/SVG (margins auto-trimmed), see pixel size and printed dpi,

@@ -26,3 +26,10 @@
 - PdfView draws only pages near the viewport (IntersectionObserver, one screen ahead) and swaps visible pages together on edits.
 - Popups (select, menu, popover, autocomplete, tooltip) portal into `<div id="overlays">` inside `<main>` via `overlayRoot()` so they sit in a landmark. Remaining axe item: `aria-hidden-focus` while the collection autocomplete is open — Base UI hides the page from screen readers on purpose while its list is open (input outside popup forces its focus manager modal).
 - Print/Download in the UI pass a soft gate (AlertDialog) when any sign is still below the minimum; CLI `export --strict` refuses instead.
+
+## Two backends (local + hosted)
+- `src/core` is platform-neutral: storage goes through `repo.ts` (`Repo` interface), images through `images.ts` (`ImageOps`), fonts through `setFontSource` in pdf.ts. `tests/core-portable.test.ts` fails if a core file imports a Node module. Only `node.ts`, `repo-fs.ts` and `paths.ts` may touch Node.
+- Local: `src/core/node.ts` wires FsRepo (data/), sharp, Carlito from node_modules. The CLI and the server import it first.
+- Hosted: `pnpm build:static` (VITE_SIGNO_MODE=browser) -> `web/dist-static`, relative base, no server. `web/src/local/` = IndexedDB repo (in-memory copy + background writes), canvas ImageOps, bundled fonts + seed samples. `api.ts` picks the backend; `api.init()` runs before render.
+- Workspace backups (`src/core/workspace.ts`, format `sign-o-matic/workspace` v1, logos base64): Workspace menu in both versions, the hosted start page (scratch / samples / restore), and `signo backup|restore|start`. A backup moves freely between the local app, the CLI and the hosted app.
+- `.github/workflows/pages.yml` deploys the hosted build to GitHub Pages on push to main (not yet run).

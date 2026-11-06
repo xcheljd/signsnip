@@ -5,3 +5,4 @@ data/
 out/
 *.log
 .DS_Store
+web/dist-static/

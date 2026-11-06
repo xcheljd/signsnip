@@ -1,3 +1,4 @@
+import "../core/node.js";
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -14,6 +15,8 @@ import {
   resetTemplate, saveTemplate,
 } from "../core/store.js";
 import { FIELD_LABELS, isBuiltin, resolveTemplate } from "../core/template.js";
+import { seedSamples } from "../core/node.js";
+import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
 import { GridSchema, PaperSchema, TemplateSchema, type Sign, type Template } from "../core/types.js";
 
 const HELP = `signo - Sign-O-Matic CLI (47x70mm shelf signs -> print-ready PDF)
@@ -62,6 +65,11 @@ Readable text (auto-fit)
   signo templates min percent 9 | none      per-template readable minimum (none = use the store setting)
   signo export --strict                     refuse to export if any sign is still below the minimum
 
+Backups (everything: brands, logos, templates, text rules, presets, batches)
+  signo backup [-o file.signo-backup.json]  one file you can restore here or in the hosted app
+  signo restore <file> --yes                REPLACES everything with the backup
+  signo start scratch|samples --yes         wipe and start empty, or with the made-up sample brands
+
 Saved batches
   signo batches                             list saved batches
   signo save "Holiday sale"                 save the current batch under a name
@@ -86,7 +94,7 @@ const opts = {
   price: { type: "string" }, was: { type: "string" }, "price-label": { type: "string" }, rows: { type: "string" },
   template: { type: "string" }, name: { type: "string" }, replace: { type: "boolean" }, strict: { type: "boolean" },
   logo: { type: "string" }, collections: { type: "string" }, o: { type: "string", short: "o" }, grid: { type: "string" },
-  paper: { type: "string" }, "no-cut-marks": { type: "boolean" }, help: { type: "boolean", short: "h" },
+  paper: { type: "string" }, "no-cut-marks": { type: "boolean" }, help: { type: "boolean", short: "h" }, yes: { type: "boolean" },
 } as const;
 type Flags = Record<string, string | boolean | undefined>;
 
@@ -415,6 +423,30 @@ async function main() {
         writeRules({ ...r, abbreviations: left }); return log(`removed ${a}`);
       }
       return die(`unknown rules subcommand "${sub}"`);
+    }
+    case "backup": {
+      const ws = exportWorkspace();
+      const file = v.o ?? path.join(OUT_DIR, `sign-o-matic-backup-${new Date().toISOString().slice(0, 10)}.signo-backup.json`);
+      fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(ws));
+      const s = summarizeWorkspace(ws);
+      return log(`backed up ${s.brands} brands (${s.logos} logos), ${s.templates} templates, ${s.presets} presets, ${s.saved} saved batches, ${s.signs} signs in the batch -> ${file}`);
+    }
+    case "restore": {
+      if (!p[0]) die("usage: signo restore <file.signo-backup.json> --yes");
+      let raw: unknown;
+      try { raw = JSON.parse(fs.readFileSync(p[0], "utf8")); } catch { die(`can't read ${p[0]} as JSON`); }
+      const s = summarizeWorkspace(parseWorkspace(raw));
+      if (!v.yes) die(`this replaces EVERYTHING here with the backup from ${s.exportedAt.slice(0, 10)} (${s.brands} brands, ${s.templates} templates, ${s.saved} saved batches). Run again with --yes, and \`signo backup\` first if you want to keep the current data.`);
+      restoreWorkspace(raw);
+      return log(`restored: ${s.brands} brands (${s.logos} logos), ${s.templates} templates, ${s.presets} presets, ${s.saved} saved batches, ${s.signs} signs in the batch`);
+    }
+    case "start": {
+      const from = p[0];
+      if (from !== "scratch" && from !== "samples") die("usage: signo start scratch|samples --yes");
+      if (!v.yes) die(`this wipes all brands, logos, templates, batches and rules here. Run again with --yes (and \`signo backup\` first to keep them).`);
+      if (from === "scratch") startFromScratch(); else startWithSamples(seedSamples());
+      return log(from === "scratch" ? "started from scratch: no brands, built-in templates, default text rules" : `started with samples: ${listBrands().length} made-up brands and a ${readBatch().items.length}-row batch`);
     }
     case "check": {
       const b = readBatch();

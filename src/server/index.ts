@@ -1,3 +1,4 @@
+import "../core/node.js";
 import fs from "node:fs";
 import path from "node:path";
 import { serve } from "@hono/node-server";
@@ -6,14 +7,15 @@ import { z } from "zod";
 import { API_PORT, ROOT } from "../core/paths.js";
 import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
-  deleteBrand, deleteSavedBatch, ensureData, findBrand, listBrands, listPresets, listSavedBatches, logoInfo,
+  deleteBrand, deleteSavedBatch, findBrand, listBrands, listPresets, listSavedBatches, logoInfo,
   readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
   readRules, writeRules,
-  deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
+  deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
+import { seedSamples } from "../core/node.js";
+import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
 import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
-ensureData();
 const app = new Hono();
 
 app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
@@ -47,21 +49,7 @@ app.get("/api/templates/export", (c) => {
   });
 });
 /** Look inside a set before importing: which templates are new, identical, or would clash. */
-app.post("/api/templates/inspect", async (c) => {
-  const set = parseTemplateSet(await c.req.json());
-  const mine = listTemplates();
-  const strip = (t: object) => JSON.stringify({ ...t, updatedAt: undefined });
-  return c.json({
-    name: set.name, exportedAt: set.exportedAt,
-    templates: set.templates.map((t) => {
-      const m = mine.find((x) => x.id === t.id);
-      const design = (x: { kind: string; safeMargin: number; objects: unknown }) => JSON.stringify([x.kind, x.safeMargin, x.objects]);
-      const copy = mine.find((x) => x.id !== t.id && design(x) === design(t));
-      const status = m && strip(m) === strip(t) ? "same" : copy ? "same" : !m ? "new" : "conflict";
-      return { id: t.id, name: t.name, kind: t.kind, objects: t.objects.length, status, mine: m?.name };
-    }),
-  });
-});
+app.post("/api/templates/inspect", async (c) => c.json(inspectTemplateSet(parseTemplateSet(await c.req.json()))));
 app.post("/api/templates/import", async (c) => {
   const body = z.object({ set: z.unknown(), mode: z.enum(["keep-both", "replace"]).default("keep-both"), only: z.array(z.string()).optional() }).parse(await c.req.json());
   return c.json(importTemplateSet(parseTemplateSet(body.set), body.mode, body.only));
@@ -77,6 +65,18 @@ app.get("/api/calibration", async (c) => {
   return new Response(Buffer.from(await renderCalibration(paper)), {
     headers: { "content-type": "application/pdf", "content-disposition": 'inline; filename="printer-check.pdf"' },
   });
+});
+
+// whole-workspace backup / restore
+app.get("/api/workspace", () => new Response(JSON.stringify(exportWorkspace()), {
+  headers: { "content-type": "application/json", "content-disposition": `attachment; filename="sign-o-matic-backup-${new Date().toISOString().slice(0, 10)}.signo-backup.json"` },
+}));
+app.post("/api/workspace/inspect", async (c) => c.json(summarizeWorkspace(parseWorkspace(await c.req.json()))));
+app.post("/api/workspace/restore", async (c) => c.json(restoreWorkspace(await c.req.json())));
+app.post("/api/workspace/start", async (c) => {
+  const { from } = z.object({ from: z.enum(["scratch", "samples"]) }).parse(await c.req.json());
+  if (from === "scratch") startFromScratch(); else startWithSamples(seedSamples());
+  return c.json({ ok: true });
 });
 
 // saved batches
@@ -101,7 +101,7 @@ app.post("/api/brands", async (c) => {
 });
 app.delete("/api/brands/:id", (c) => { deleteBrand(c.req.param("id")); return c.json({ ok: true }); });
 app.post("/api/brands/:id/logo", async (c) => {
-  const buf = Buffer.from(await c.req.arrayBuffer());
+  const buf = new Uint8Array(await c.req.arrayBuffer());
   if (!buf.length) throw new Error("Empty upload");
   const id = c.req.param("id");
   if (!findBrand(id)) throw new Error(`Unknown brand "${id}"`);

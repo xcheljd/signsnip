@@ -169,6 +169,36 @@ describe("signo CLI end-to-end (isolated data dir)", () => {
     expect(signo("rm", "1").status).toBe(0); // shrinking is always allowed
     signo("clear");
   });
+  it("backs up and restores the whole workspace, and starts over from scratch or samples", () => {
+    const file = path.join(data, "ws.signo-backup.json");
+    signo("rules", "abbr", "Moonphase", "Moon");
+    signo("templates", "duplicate", "bogo", "Backup check");
+    signo("clear"); signo("add", "--brand", "orbital", "--collection", "Round trip", "--percent", "33");
+    expect(signo("backup", "-o", file).stdout).toMatch(/backed up \d+ brands \(\d+ logos\)/);
+    const ws = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(ws.format).toBe("sign-o-matic/workspace");
+    expect(Object.keys(ws.logos).length).toBeGreaterThan(0);
+    // refuses without --yes, and refuses a template set
+    expect(signo("start", "scratch").status).toBe(1);
+    expect(signo("restore", file).stderr).toContain("--yes");
+    signo("templates", "export", "-o", path.join(data, "set.json"));
+    expect(signo("restore", path.join(data, "set.json"), "--yes").stderr).toContain("template set, not a full backup");
+    // scratch really is empty
+    expect(signo("start", "scratch", "--yes").status).toBe(0);
+    expect(signo("brands").stdout).not.toContain("orbital");
+    expect(signo("templates").stdout).not.toContain("Backup check");
+    // restore brings everything back, logos included
+    expect(signo("restore", file, "--yes").stdout).toContain("restored");
+    expect(signo("batch").stdout).toContain("Round trip");
+    expect(signo("rules").stdout).toContain("Moonphase -> Moon");
+    expect(signo("templates").stdout).toContain("Backup check");
+    expect(signo("export", "-o", path.join(data, "after-restore.pdf")).status).toBe(0);
+    expect(signo("check").stdout).not.toContain("has no logo");
+    // samples: made-up brands + a small batch
+    expect(signo("start", "samples", "--yes").stdout).toMatch(/started with samples: 5 made-up brands and a 5-row batch/);
+    // put the original data back for the remaining tests
+    signo("restore", file, "--yes"); signo("clear");
+  });
   it("accepts a JPG logo and fits it", () => {
     const r = signo("brands", "add", "Test Co", "--logo", path.join(root, "tests/fixtures/orbital.jpg"), "--collections", "A,B");
     expect(r.status).toBe(0);
