@@ -19,6 +19,7 @@ const out = ({ data, info }: { data: Buffer; info: OutputInfo }): Raster =>
 setImageOps({
   decode: async (bytes) => out(await sharp(bytes, { density: 300 }).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true })),
   encodePng: async (r) => new Uint8Array(await raw(r).png().toBuffer()),
+  encodeJpeg: async (r, quality) => new Uint8Array(await raw(r).flatten({ background: "#ffffff" }).jpeg({ quality, mozjpeg: true }).toBuffer()),
   resize: async (r, width, height) => out(await raw(r).resize({ width, height, fit: "fill" }).raw().toBuffer({ resolveWithObject: true })),
 });
 

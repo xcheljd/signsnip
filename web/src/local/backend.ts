@@ -69,6 +69,20 @@ export async function createBrowserBackend(): Promise<Backend> {
     removeLogoBg: (id) => run(() => store.removeLogoBackground(id)),
     restoreLogo: (id) => run(() => store.restoreLogo(id)),
     logoUrl: (id) => logoUrl(id),
+    uploadBackground: async (file) => {
+      if (!file.size) throw new Error("Empty upload");
+      return store.saveBackground(new Uint8Array(await file.arrayBuffer()));
+    },
+    backgroundUrl: (image) => {
+      // pictures never change under the same id (content hash), so one URL each is enough
+      const hit = urls.get(`bg:${image}`);
+      if (hit) return hit.url;
+      const bytes = store.readBackground(image);
+      if (!bytes) return "";
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: bytes[0] === 0xff ? "image/jpeg" : "image/png" }));
+      urls.set(`bg:${image}`, { stamp: 0, url });
+      return url;
+    },
     savePreset: (p) => run(() => { const x = PresetSchema.parse(p); store.savePresets([...store.listPresets().filter((o) => o.id !== x.id), x]); return x; }),
     removePreset: (id) => run(() => store.savePresets(store.listPresets().filter((x) => x.id !== id))),
     check: (items) => checkSigns(items),

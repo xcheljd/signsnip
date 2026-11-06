@@ -8,6 +8,8 @@ export interface ImageOps {
   /** any common format (PNG/JPG/WebP/GIF/SVG), EXIF orientation applied, as RGBA */
   decode(bytes: Uint8Array): Promise<Raster>;
   encodePng(r: Raster): Promise<Uint8Array>;
+  /** opaque photos (backgrounds) are far smaller as JPEG; alpha is dropped onto white */
+  encodeJpeg(r: Raster, quality: number): Promise<Uint8Array>;
   resize(r: Raster, width: number, height: number): Promise<Raster>;
 }
 
@@ -119,6 +121,39 @@ export async function prepareLogo(bytes: Uint8Array): Promise<{ png: Uint8Array;
   if (size.width !== r.width || size.height !== r.height) r = await o.resize(r, size.width, size.height);
   if (visiblePixels(r, 21) <= 20) throw new Error("That image is empty (fully transparent) - nothing would print");
   return { png: await o.encodePng(r), raster: r };
+}
+
+// ---------- background pictures
+/** Big enough for a sharp 47x70 mm print (~550x830 px at 300 dpi) with room to crop. */
+export const MAX_BG = 1600;
+export function hasTransparency(r: Raster): boolean {
+  for (let i = 3; i < r.data.length; i += 4) if (r.data[i]! < 250) return true;
+  return false;
+}
+/** FNV-1a 64-bit as hex: a stable id for identical pictures (no crypto needed). */
+export function hashBytes(bytes: Uint8Array): string {
+  let h1 = 0x811c9dc5, h2 = 0x01000193 ^ bytes.length;
+  for (let i = 0; i < bytes.length; i++) {
+    h1 = Math.imul(h1 ^ bytes[i]!, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ bytes[(bytes.length - 1 - i)]!, 0x01000193) >>> 0;
+  }
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+export type ImageKind = "png" | "jpeg";
+export function imageKind(bytes: Uint8Array): ImageKind | null {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
+  return null;
+}
+/** Decode any picture, cap its size, store photos as JPEG (PNG only if it has see-through parts). */
+export async function prepareBackground(bytes: Uint8Array): Promise<{ bytes: Uint8Array; aspect: number; kind: ImageKind }> {
+  const o = imageOps();
+  let r = await o.decode(bytes);
+  const size = fitInside(r.width, r.height, MAX_BG, MAX_BG);
+  if (size.width !== r.width || size.height !== r.height) r = await o.resize(r, size.width, size.height);
+  if (visiblePixels(r, 21) <= 20) throw new Error("That image is empty (fully transparent) - nothing would print");
+  const alpha = hasTransparency(r);
+  return { bytes: alpha ? await o.encodePng(r) : await o.encodeJpeg(r, 86), aspect: r.width / r.height, kind: alpha ? "png" : "jpeg" };
 }
 
 // ---------- base64 (backups embed logos; no Buffer in the browser)

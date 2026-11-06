@@ -296,6 +296,16 @@ export function describeOverflow(d: OverflowDetail, where: string): string {
   return `${lead}, and it ${into}. Shorten it, add an abbreviation, or make the box bigger (or its "Smallest" size lower) in ${where}.`;
 }
 
+/** Where a background picture lands on the 47x70 mm sign (it may extend past the edge for "cover"; the edge clips it). */
+export function backgroundRect(bg: { aspect: number; fit: "cover" | "contain" }): { x: number; y: number; w: number; h: number } {
+  const signAspect = SIGN_W_MM / SIGN_H_MM;
+  const wide = bg.aspect > signAspect;
+  const fillWidth = bg.fit === "cover" ? !wide : wide;
+  const w = fillWidth ? SIGN_W_MM : SIGN_H_MM * bg.aspect;
+  const h = fillWidth ? SIGN_W_MM / bg.aspect : SIGN_H_MM;
+  return { x: (SIGN_W_MM - w) / 2, y: (SIGN_H_MM - h) / 2, w, h };
+}
+
 /** Fit a logo of this aspect into the template's logo box, with the brand's scale. */
 export function placeLogo(box: { x: number; y: number; w: number; h: number }, aspect: number, scale = 1) {
   return fitLogo(aspect, box, scale);
@@ -331,6 +341,9 @@ export function templateIssues(t: Template, sample?: { sign: Sign; measure: Meas
     }
   }
   if (t.fallbackId === t.id) out.push({ level: "warn", message: "A template can't fall back to itself." });
+  if (t.background && t.background.opacity > 0.5) {
+    out.push({ level: "warn", message: `The background prints at ${Math.round(t.background.opacity * 100)}% strength. Above about 40% the text gets hard to read; try 20-35%.` });
+  }
   if (sample) {
     const rules = sample.rules ?? DEFAULT_RULES;
     const here = fitSign(sample.sign, [t], sample.measure, rules, { template: t, noFallback: true });

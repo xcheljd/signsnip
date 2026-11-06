@@ -1,9 +1,10 @@
-import { PDFDocument, PrintScaling, degrees, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { PDFDocument, PrintScaling, clip, degrees, endPath, popGraphicsState, pushGraphicsState, rectangle, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { cellRect, sheetGeometry, MAX_PAGES } from "./geometry.js";
 import { fitLogo, type Measure } from "./layout.js";
-import { findBrand, listTemplates, logoInfo, readLogo, readRules } from "./store.js";
-import { describeOverflow, fitSign, overflowDetails, type FittedSign } from "./template.js";
+import { findBrand, listTemplates, logoInfo, readBackground, readLogo, readRules } from "./store.js";
+import { imageKind } from "./images.js";
+import { backgroundRect, describeOverflow, fitSign, overflowDetails, type FittedSign } from "./template.js";
 import { SIGN_H_MM, SIGN_W_MM, type Options, type Rules, type Sign, type Template, type Warning } from "./types.js";
 
 const MM = 72 / 25.4;
@@ -54,9 +55,18 @@ export function expandCopies(items: Sign[]): Sign[] {
 interface Logo { img: PDFImage; aspect: number; scale: number }
 
 /** The single source of truth for what a sign looks like on paper. */
-function drawSign(page: PDFPage, fonts: Fonts, ox: number, oy: number, fitted: FittedSign, logo: Logo | undefined) {
+function drawSign(page: PDFPage, fonts: Fonts, ox: number, oy: number, fitted: FittedSign, logo: Logo | undefined, bgs?: Map<string, PDFImage>) {
   // (ox, oy) = top-left corner of the sign in pt, y measured up from page bottom
   const placed = fitted.placed;
+  const bg = fitted.template.background;
+  const bgImg = bg && bgs?.get(bg.image);
+  if (bg && bgImg) {
+    const r = backgroundRect(bg);
+    // clip to the sign so a cropped ("cover") picture never spills into the next sign
+    page.pushOperators(pushGraphicsState(), rectangle(ox, oy - mm(SIGN_H_MM), mm(SIGN_W_MM), mm(SIGN_H_MM)), clip(), endPath());
+    page.drawImage(bgImg, { x: ox + mm(r.x), y: oy - mm(r.y + r.h), width: mm(r.w), height: mm(r.h), opacity: bg.opacity });
+    page.pushOperators(popGraphicsState());
+  }
   if (logo && placed.logo) {
     const r = fitLogo(logo.aspect, placed.logo.box, logo.scale);
     page.drawImage(logo.img, { x: ox + mm(r.x), y: oy - mm(r.y + r.h), width: mm(r.w), height: mm(r.h) });
@@ -87,6 +97,17 @@ async function embedLogos(doc: PDFDocument, signs: Sign[]) {
   return logos;
 }
 
+async function embedBackgrounds(doc: PDFDocument, fitted: FittedSign[]) {
+  const out = new Map<string, PDFImage>();
+  for (const id of new Set(fitted.flatMap((f) => (f.template.background ? [f.template.background.image] : [])))) {
+    const bytes = readBackground(id);
+    const kind = bytes && imageKind(bytes);
+    if (!bytes || !kind) continue;
+    out.set(id, kind === "png" ? await doc.embedPng(bytes) : await doc.embedJpg(bytes));
+  }
+  return out;
+}
+
 /** `templates` overrides the saved ones (the designer previews unsaved edits this way). */
 export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" | "single" = "sheet", templates?: Template[], rules: Rules = readRules()): Promise<PdfInfo> {
   const { doc, fonts, measure } = await newDoc("SignSnip");
@@ -98,19 +119,23 @@ export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" |
   if (mode === "single") {
     const s = signs[0];
     const page = doc.addPage([mm(SIGN_W_MM), mm(SIGN_H_MM)]);
-    if (s) drawSign(page, fonts, 0, mm(SIGN_H_MM), fit(s), logos.get(s.brandId));
+    if (s) { const f = fit(s); drawSign(page, fonts, 0, mm(SIGN_H_MM), f, logos.get(s.brandId), await embedBackgrounds(doc, [f])); }
     return { bytes: await doc.save(), pages: 1, signs: s ? 1 : 0 };
   }
 
   const g = sheetGeometry(options);
   const pageCount = Math.max(1, Math.ceil(signs.length / g.perPage));
   if (pageCount > MAX_PAGES) throw new Error(`That's ${pageCount} pages. One PDF can have at most ${MAX_PAGES}. Split the batch into separate saved batches.`);
+  // fit each distinct sign once (copies share it), then embed each background picture once
+  const fits = new Map<Sign, FittedSign>();
+  for (const s of signs) if (!fits.has(s)) fits.set(s, fit(s));
+  const bgs = await embedBackgrounds(doc, [...fits.values()]);
   for (let p = 0; p < pageCount; p++) {
     const page = doc.addPage([mm(g.pageW), mm(g.pageH)]);
     const chunk = signs.slice(p * g.perPage, (p + 1) * g.perPage);
     chunk.forEach((s, i) => {
       const r = cellRect(g, i);
-      drawSign(page, fonts, mm(r.x), mm(g.pageH - r.y), fit(s), logos.get(s.brandId));
+      drawSign(page, fonts, mm(r.x), mm(g.pageH - r.y), fits.get(s)!, logos.get(s.brandId), bgs);
     });
     if (options.cutMarks) {
       // hairline grid over every cell (full grid, so empty slots still show the cut lines)
@@ -210,7 +235,10 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
     if (info.background === "solid") {
       out.push({ items: idx, brandId, level: "warn", code: "logo-background", message: `${name}'s logo sits on a coloured box that will print as a rectangle.` });
     } else if (info.background === "white") {
-      out.push({ items: idx, brandId, level: "info", code: "logo-background", message: `${name}'s logo has a white background. Invisible on white paper; remove it if you print on coloured stock.` });
+      // over a background picture the white box shows; on plain paper it's invisible
+      const onPicture = idx.filter((i) => fitted[i]!.template.background);
+      if (onPicture.length) out.push({ items: onPicture, brandId, level: "warn", code: "logo-background", message: `${name}'s logo has a white box behind it, which prints as a white rectangle over the background picture. Remove its background.` });
+      else out.push({ items: idx, brandId, level: "info", code: "logo-background", message: `${name}'s logo has a white background. Invisible on white paper; remove it if you print on coloured stock.` });
     }
   }
   const logos = new Map<string, Awaited<ReturnType<typeof logoInfo>>>();

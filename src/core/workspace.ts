@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { csvToSigns } from "./batch.js";
-import { fromBase64, toBase64 } from "./images.js";
+import { fromBase64, imageKind, toBase64 } from "./images.js";
 import { repo } from "./repo.js";
 import {
   listBrands, listPresets, listSavedBatches, listTemplates, readBatch, readLogo, readRules,
@@ -24,6 +24,8 @@ const b64Png = z.string().max(8_000_000).refine((s) => {
   return PNG_MAGIC.every((b, i) => head[i] === b);
 }, "not a PNG image");
 
+const b64Picture = z.string().max(12_000_000).refine((s) => imageKind(fromBase64(s.slice(0, 16))) !== null, "not a PNG or JPEG image");
+
 export const WorkspaceSchema = z.object({
   format: z.enum([WORKSPACE_FORMAT, LEGACY_WORKSPACE_FORMAT]),
   version: z.literal(1),
@@ -38,6 +40,8 @@ export const WorkspaceSchema = z.object({
   logos: z.record(z.string(), b64Png),
   /** brand id -> original PNG kept for "Restore original" after background removal */
   originals: z.record(z.string(), b64Png).default({}),
+  /** template background pictures: image id -> PNG/JPEG (base64) */
+  backgrounds: z.record(z.string().regex(/^[a-f0-9]{8,64}$/), b64Picture).default({}),
 });
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 
@@ -56,10 +60,16 @@ export function exportWorkspace(): Workspace {
     const orig = repo().getBlob(`logos/originals/${b.id}`);
     if (orig) originals[b.id] = toBase64(orig);
   }
+  const templates = listTemplates();
+  const backgrounds: Record<string, string> = {};
+  for (const t of templates) if (t.background) {
+    const b = repo().getBlob(`backgrounds/${t.background.image}`);
+    if (b) backgrounds[t.background.image] = toBase64(b);
+  }
   return WorkspaceSchema.parse({
     format: WORKSPACE_FORMAT, version: 1, exportedAt: new Date().toISOString(),
     brands: brands.map((b) => ({ ...b, hasLogo: undefined })), presets: listPresets(), batch: readBatch(),
-    saved: listSavedBatches(), templates: listTemplates(), rules: readRules(), logos, originals,
+    saved: listSavedBatches(), templates, rules: readRules(), logos, originals, backgrounds,
   });
 }
 
@@ -77,7 +87,7 @@ export function summarizeWorkspace(w: Workspace) {
   return {
     exportedAt: w.exportedAt, brands: w.brands.length, logos: Object.keys(w.logos).length, presets: w.presets.length,
     templates: w.templates.length, saved: w.saved.length, signs: w.batch.items.reduce((n, s) => n + s.copies, 0),
-    abbreviations: w.rules.abbreviations.length,
+    abbreviations: w.rules.abbreviations.length, backgrounds: Object.keys(w.backgrounds).length,
   };
 }
 
@@ -87,6 +97,7 @@ function wipe(): void {
   for (const id of r.list("logos/originals/")) r.remove(`logos/originals/${id}`);
   for (const id of r.list("logos/")) r.remove(`logos/${id}`);
   for (const id of r.list("batches/")) r.remove(`batches/${id}`);
+  for (const id of r.list("backgrounds/")) r.remove(`backgrounds/${id}`);
   for (const k of ["brands", "presets", "batch", "templates", "rules", "meta"]) r.remove(k);
 }
 
@@ -101,8 +112,10 @@ export function restoreWorkspace(raw: unknown): ReturnType<typeof summarizeWorks
   saveBrands(w.brands);
   for (const [id, b64] of Object.entries(w.logos)) r.setBlob(`logos/${id}`, fromBase64(b64));
   for (const [id, b64] of Object.entries(w.originals)) r.setBlob(`logos/originals/${id}`, fromBase64(b64));
+  for (const [id, b64] of Object.entries(w.backgrounds)) r.setBlob(`backgrounds/${id}`, fromBase64(b64));
   savePresets(w.presets);
-  r.setJson("templates", w.templates);
+  // a template whose picture isn't in the backup keeps its layout, without the background
+  r.setJson("templates", w.templates.map((t) => (t.background && !w.backgrounds[t.background.image] ? { ...t, background: undefined } : t)));
   writeRules(w.rules);
   for (const s of w.saved) r.setJson(`batches/${s.id}`, s);
   r.setJson("batch", w.batch); // straight write: an old backup may predate the page cap

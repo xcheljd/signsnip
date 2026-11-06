@@ -56,6 +56,15 @@ export const canvasImages: ImageOps = {
     if (!blob) throw new Error("Couldn't encode the logo");
     return new Uint8Array(await blob.arrayBuffer());
   },
+  async encodeJpeg(r, quality) {
+    const src = fromRaster(r);
+    const { c, ctx } = canvas(r.width, r.height);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, r.width, r.height); // JPEG has no alpha: flatten onto paper white
+    ctx.drawImage(src, 0, 0);
+    const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", quality / 100));
+    if (!blob) throw new Error("Couldn't encode the picture");
+    return new Uint8Array(await blob.arrayBuffer());
+  },
   async resize(r, width, height) {
     const src = fromRaster(r);
     const { ctx } = canvas(width, height);

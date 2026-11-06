@@ -7,7 +7,7 @@ export interface SavedSummary { id: string; name: string; savedAt: string; signs
 export interface State { brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[]; templates: Template[]; rules: Rules }
 export interface Pdf { bytes: Uint8Array; pages: number; signs: number }
 export interface Download { blob: Blob; filename: string }
-export interface BackupSummary { exportedAt: string; brands: number; logos: number; presets: number; templates: number; saved: number; signs: number; abbreviations: number }
+export interface BackupSummary { exportedAt: string; brands: number; logos: number; presets: number; templates: number; saved: number; signs: number; abbreviations: number; backgrounds?: number }
 
 /**
  * Everything the UI can ask for. Two implementations:
@@ -24,6 +24,9 @@ export interface Backend {
   restoreLogo(id: string): Promise<unknown>;
   /** an <img src> for the brand's logo; `version` busts caches when the logo changes */
   logoUrl(id: string, version: string): string;
+  /** store a picture for a template background */
+  uploadBackground(file: File): Promise<{ image: string; aspect: number }>;
+  backgroundUrl(image: string): string;
   savePreset(p: Preset): Promise<Preset>;
   removePreset(id: string): Promise<unknown>;
   check(items: Sign[]): Promise<Warning[]>;
@@ -69,6 +72,8 @@ const server: Backend = {
   removeLogoBg: (id) => send(`/api/brands/${id}/logo/remove-bg`).then((r) => j<LogoInfo>(r)),
   restoreLogo: (id) => send(`/api/brands/${id}/logo/restore`).then((r) => j(r)),
   logoUrl: (id, version) => `/api/logos/${id}?v=${encodeURIComponent(version)}`,
+  uploadBackground: (file) => fetch("/api/backgrounds", { method: "POST", body: file }).then((r) => j<{ image: string; aspect: number }>(r)),
+  backgroundUrl: (image) => `/api/backgrounds/${image}`,
   savePreset: (p) => send("/api/presets", p).then((r) => j<Preset>(r)),
   removePreset: (id) => send(`/api/presets/${id}`, undefined, "DELETE").then((r) => j(r)),
   check: (items) => send("/api/check", { items }).then((r) => j<Warning[]>(r)),
@@ -123,6 +128,8 @@ export const uploadLogo = (id: string, file: File) => be().uploadLogo(id, file);
 export const removeLogoBg = (id: string) => be().removeLogoBg(id);
 export const restoreLogo = (id: string) => be().restoreLogo(id);
 export const logoUrl = (id: string, version: string) => be().logoUrl(id, version);
+export const uploadBackground = (file: File) => be().uploadBackground(file);
+export const backgroundUrl = (image: string) => be().backgroundUrl(image);
 export const savePreset = (p: Preset) => be().savePreset(p);
 export const removePreset = (id: string) => be().removePreset(id);
 export const check = (items: Sign[]) => be().check(items);

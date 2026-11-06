@@ -1,8 +1,11 @@
 import {
   AlignCenterIcon, AlignLeftIcon, AlignRightIcon, ArrowDownToLineIcon, ArrowUpToLineIcon, CopyIcon, FoldVerticalIcon,
-  ImageIcon, MoveHorizontalIcon, MoveVerticalIcon, Trash2Icon, TypeIcon,
+  ImageIcon, ImagePlusIcon, MoveHorizontalIcon, MoveVerticalIcon, RefreshCwIcon, Trash2Icon, TypeIcon,
 } from "lucide-react";
-import { FIELD_LABELS } from "../../../src/core/template";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import * as api from "../api";
+import { FIELD_LABELS, backgroundRect } from "../../../src/core/template";
 import { SIGN_H_MM, SIGN_W_MM, TEXT_FIELDS, type Template, type TemplateObject, type TextField, type TextObject } from "../../../src/core/types";
 import { NumField } from "../NumField";
 import { Button } from "@/components/ui/button";
@@ -182,6 +185,66 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
   );
 }
 
+/** Template background picture: add / replace / remove, fill or fit, print strength. */
+function BackgroundFields({ t, set }: { t: Template; set: (p: Partial<Template>) => void }) {
+  const file = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const bg = t.background;
+  const pick = async (f?: File) => {
+    if (!f) return;
+    setBusy(true);
+    try {
+      const { image, aspect } = await api.uploadBackground(f);
+      set({ background: { image, aspect, fit: bg?.fit ?? "cover", opacity: bg?.opacity ?? 0.3 } });
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); if (file.current) file.current.value = ""; }
+  };
+  const strength = bg ? Math.round(bg.opacity * 100) : 30;
+  const r = bg ? backgroundRect(bg) : null;
+  return (
+    <Field>
+      <FieldLabel>Background picture</FieldLabel>
+      <input ref={file} type="file" accept="image/*" hidden aria-label="Background picture file" onChange={(e) => pick(e.target.files?.[0])} />
+      {!bg || !r ? (
+        <>
+          <Button type="button" variant="outline" className="w-fit" disabled={busy} onClick={() => file.current?.click()}>
+            <ImagePlusIcon data-icon="inline-start" />{busy ? "Adding…" : "Add a picture"}
+          </Button>
+          <FieldDescription>Prints behind everything on the sign, edge to edge. A pattern or a soft photo works best.</FieldDescription>
+        </>
+      ) : (
+        <>
+          <div className="flex items-start gap-3">
+            <svg viewBox={`0 0 ${SIGN_W_MM} ${SIGN_H_MM}`} className="h-20 shrink-0 rounded-sm border bg-white" aria-label="Background preview" role="img">
+              <clipPath id="bg-inspector-clip"><rect width={SIGN_W_MM} height={SIGN_H_MM} /></clipPath>
+              <image href={api.backgroundUrl(bg.image)} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none" opacity={bg.opacity} clipPath="url(#bg-inspector-clip)" />
+            </svg>
+            <div className="flex flex-col gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => file.current?.click()}><RefreshCwIcon data-icon="inline-start" />{busy ? "Adding…" : "Replace"}</Button>
+              <Button type="button" size="sm" variant="outline" className="text-destructive" onClick={() => set({ background: undefined })}><Trash2Icon data-icon="inline-start" />Remove</Button>
+            </div>
+          </div>
+          <ToggleGroup variant="outline" size="sm" spacing={0} aria-label="Background fit" value={[bg.fit]} onValueChange={(v) => v[0] && set({ background: { ...bg, fit: v[0] as "cover" | "contain" } })}>
+            <ToggleGroupItem value="cover">Fill the sign</ToggleGroupItem>
+            <ToggleGroupItem value="contain">Whole picture</ToggleGroupItem>
+          </ToggleGroup>
+          <FieldDescription>{bg.fit === "cover" ? "Covers the whole sign; edges of the picture may be cropped." : "Shows all of the picture; white bands where the shapes differ."}</FieldDescription>
+          <div className="flex items-center justify-between gap-3">
+            <FieldLabel htmlFor="tpl-bg-strength">Strength</FieldLabel>
+            <NumField id="tpl-bg-strength" stepper="background strength" className="w-36" after="%" step={5} min={5} max={100}
+              value={strength} onChange={(v) => v && set({ background: { ...bg, opacity: v / 100 } })} />
+          </div>
+          <Slider min={5} max={100} step={5} value={[strength]} aria-label="Background strength" thumbLabel="Background strength"
+            onValueChange={(v) => { const n = Array.isArray(v) ? v[0]! : (v as number); set({ background: { ...bg, opacity: n / 100 } }); }} />
+          <FieldDescription className={cn(strength > 50 && "font-medium text-warning")}>
+            {strength > 50 ? "Strong: black text may get hard to read. 20–35% is safer." : "How strongly it prints. 20–35% keeps black text easy to read."}
+          </FieldDescription>
+        </>
+      )}
+    </Field>
+  );
+}
+
 export function TemplateInspector({
   t, set, objects, onPick, templates, storeMin,
 }: { t: Template; set: (p: Partial<Template>) => void; objects: TemplateObject[]; onPick: (id: string) => void; templates: Template[]; storeMin: number }) {
@@ -204,6 +267,7 @@ export function TemplateInspector({
         <NumField id="tpl-margin" stepper="safe margin" className="w-40" after="mm" decimals={1} step={0.5} min={0} max={10} value={t.safeMargin} onChange={(v) => v !== undefined && set({ safeMargin: v })} />
         <FieldDescription>The dashed line. Keep things inside it so the holder's edge doesn't cover them.</FieldDescription>
       </Field>
+      <BackgroundFields t={t} set={set} />
       <FieldSeparator />
       <Field>
         <FieldLabel htmlFor="tpl-min">Readable minimum</FieldLabel>

@@ -8,7 +8,7 @@ import { API_PORT, ROOT } from "../core/paths.js";
 import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
   deleteBrand, deleteSavedBatch, findBrand, listBrands, listPresets, listSavedBatches, logoInfo,
-  readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
+  readBackground, saveBackground, readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
   readRules, writeRules,
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
@@ -113,6 +113,18 @@ app.get("/api/logos/:id", (c) => {
   const buf = readLogo(c.req.param("id").replace(/\.png$/, ""));
   if (!buf) return c.notFound();
   return new Response(new Uint8Array(buf), { headers: { "content-type": "image/png", "cache-control": "no-store" } });
+});
+
+app.post("/api/backgrounds", async (c) => {
+  const buf = new Uint8Array(await c.req.arrayBuffer());
+  if (!buf.length) throw new Error("Empty upload");
+  return c.json(await saveBackground(buf));
+});
+app.get("/api/backgrounds/:id", (c) => {
+  const buf = readBackground(c.req.param("id"));
+  if (!buf) return c.notFound();
+  const jpeg = buf[0] === 0xff && buf[1] === 0xd8;
+  return new Response(new Uint8Array(buf), { headers: { "content-type": jpeg ? "image/jpeg" : "image/png", "cache-control": "max-age=31536000, immutable" } });
 });
 
 app.post("/api/presets", async (c) => {

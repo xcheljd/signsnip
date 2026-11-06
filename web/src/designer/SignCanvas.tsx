@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import * as api from "../api";
 import { fitLogo } from "../../../src/core/layout";
-import { fitSign, layoutTemplate } from "../../../src/core/template";
+import { backgroundRect, fitSign, layoutTemplate } from "../../../src/core/template";
 import { DEFAULT_RULES, SIGN_H_MM, SIGN_W_MM, type Rules, type Sign, type Template, type TemplateObject } from "../../../src/core/types";
 import { browserMeasure } from "./measure";
 
@@ -11,6 +12,22 @@ type Handle = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 export interface Guide { axis: "x" | "y"; at: number }
 
 export interface LogoSource { url: string; aspect: number; scale: number }
+
+/** The template's background picture, clipped to the sign, at its print strength. */
+function BackgroundImage({ template }: { template: Template }) {
+  const clip = useId().replace(/:/g, "");
+  const bg = template.background;
+  if (!bg) return null;
+  const url = api.backgroundUrl(bg.image);
+  if (!url) return null;
+  const r = backgroundRect(bg);
+  return (
+    <g>
+      <clipPath id={`bg-${clip}`}><rect x={0} y={0} width={SIGN_W_MM} height={SIGN_H_MM} /></clipPath>
+      <image href={url} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none" opacity={bg.opacity} clipPath={`url(#bg-${clip})`} data-background="" />
+    </g>
+  );
+}
 
 /**
  * Live, vector rendering of a sign from its template, with drag-to-move, resize handles and
@@ -150,6 +167,7 @@ export function SignCanvas({
         </filter>
       </defs>
       <rect x={0} y={0} width={SIGN_W_MM} height={SIGN_H_MM} fill="white" filter={readOnly ? undefined : "url(#paper-shadow)"} />
+      <BackgroundImage template={template} />
       {!readOnly && m > 0 && (
         <rect x={m} y={m} width={SIGN_W_MM - 2 * m} height={SIGN_H_MM - 2 * m} fill="none" stroke="var(--nord9)" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
       )}
@@ -237,6 +255,7 @@ function ThumbBody({ template, sign, logo }: { template: Template; sign: Sign; l
   const lp = placed.logo && logo ? fitLogo(logo.aspect, placed.logo.box, logo.scale) : null;
   return (
     <>
+      <BackgroundImage template={template} />
       {lp && logo ? <image href={logo.url} x={lp.x} y={lp.y} width={lp.w} height={lp.h} preserveAspectRatio="none" />
         : placed.logo && <rect {...placed.logo.box} fill="var(--nord5)" />}
       {placed.lines.map((l, i) => (

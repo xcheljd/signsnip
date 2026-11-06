@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { batchPages, pageLimitError } from "./geometry.js";
-import { imageOps, prepareLogo, rasterInfo, removeBackground, type LogoInfo } from "./images.js";
+import { fromBase64, hashBytes, imageKind, imageOps, prepareBackground, prepareLogo, rasterInfo, removeBackground, toBase64, type LogoInfo } from "./images.js";
 import { repo } from "./repo.js";
 import {
   BatchSchema, BrandSchema, DEFAULT_OPTIONS, DEFAULT_RULES, PresetSchema, RulesSchema, SavedBatchSchema, TemplateSchema, TemplateSetSchema,
@@ -118,6 +118,30 @@ export async function restoreLogo(brandId: string): Promise<void> {
   infoCache.delete(brandId);
 }
 
+// ---------- background pictures (shared by templates; stored once per distinct picture)
+const BG = (id: string) => `backgrounds/${id}`;
+export const readBackground = (id: string): Uint8Array | null => repo().getBlob(BG(id));
+/** Store a picture for a template background. Returns what goes in template.background. */
+export async function saveBackground(input: Uint8Array): Promise<{ image: string; aspect: number }> {
+  const { bytes, aspect } = await prepareBackground(input);
+  const image = hashBytes(bytes);
+  if (!repo().getBlob(BG(image))) repo().setBlob(BG(image), bytes);
+  return { image, aspect };
+}
+/** Delete stored pictures no template uses any more. */
+export function pruneBackgrounds(keep: Iterable<string> = []): void {
+  const used = new Set([...listTemplates().flatMap((t) => (t.background ? [t.background.image] : [])), ...keep]);
+  for (const id of repo().list("backgrounds/")) if (!used.has(id)) repo().remove(BG(id));
+}
+function writeImages(images: Record<string, string>, ids: Set<string>): void {
+  for (const [id, b64] of Object.entries(images)) {
+    if (!ids.has(id) || repo().getBlob(BG(id))) continue;
+    const bytes = fromBase64(b64);
+    if (!imageKind(bytes)) throw new Error(`The file is damaged: background ${id} isn't a PNG or JPEG`);
+    repo().setBlob(BG(id), bytes);
+  }
+}
+
 // ---------- presets
 export const listPresets = (): Preset[] => readJson("presets", z.array(PresetSchema), []);
 export function savePresets(p: Preset[]): void { writeJson("presets", p); }
@@ -169,10 +193,12 @@ export function findTemplate(ref: string): Template | undefined {
 
 export function saveTemplate(t: Template): Template {
   const parsed = TemplateSchema.parse({ ...t, updatedAt: new Date().toISOString() });
+  if (parsed.background && !readBackground(parsed.background.image)) throw new Error("The background picture is missing. Add it again.");
   const all = listTemplates();
   const i = all.findIndex((x) => x.id === parsed.id);
   if (i >= 0) all[i] = parsed; else all.push(parsed);
   writeTemplates(all);
+  pruneBackgrounds();
   return parsed;
 }
 
@@ -196,24 +222,32 @@ export function deleteTemplate(id: string): void {
   if (isBuiltin(id)) throw new Error(`"${id}" is built in - you can reset it, but not delete it`);
   // templates that fell back to this one stop falling back (instead of pointing at nothing)
   writeTemplates(listTemplates().filter((t) => t.id !== id).map((t) => (t.fallbackId === id ? { ...t, fallbackId: undefined } : t)));
+  pruneBackgrounds();
 }
 export function resetTemplate(id: string): Template {
   const d = DEFAULT_TEMPLATES.find((t) => t.id === id);
   if (!d) throw new Error(`"${id}" has no original to reset to`);
-  return saveTemplate(structuredClone(d));
+  const t = saveTemplate(structuredClone(d));
+  pruneBackgrounds();
+  return t;
 }
 
 export function exportTemplateSet(ids?: string[], name?: string): TemplateSet {
   const all = listTemplates();
   const pick = ids?.length ? ids.map((id) => all.find((t) => t.id === id) ?? (() => { throw new Error(`No template "${id}"`); })()) : all;
-  return TemplateSetSchema.parse({ format: "signsnip/template-set", version: 1, name, exportedAt: new Date().toISOString(), templates: pick });
+  const images: Record<string, string> = {};
+  for (const t of pick) if (t.background) {
+    const b = readBackground(t.background.image);
+    if (b) images[t.background.image] = toBase64(b);
+  }
+  return TemplateSetSchema.parse({ format: "signsnip/template-set", version: 1, name, exportedAt: new Date().toISOString(), templates: pick, images });
 }
 
 const sameLayout = (a: Template, b: Template) =>
   JSON.stringify({ ...a, updatedAt: undefined }) === JSON.stringify({ ...b, updatedAt: undefined });
 /** same design regardless of id/name (catches re-importing something already imported as a copy) */
 const sameDesign = (a: Template, b: Template) =>
-  JSON.stringify([a.kind, a.safeMargin, a.objects]) === JSON.stringify([b.kind, b.safeMargin, b.objects]);
+  JSON.stringify([a.kind, a.safeMargin, a.objects, a.background ?? null]) === JSON.stringify([b.kind, b.safeMargin, b.objects, b.background ?? null]);
 
 export interface ImportResult { added: string[]; replaced: string[]; renamed: { from: string; to: string }[]; unchanged: string[] }
 export interface SetPreview {
@@ -271,7 +305,12 @@ export function importTemplateSet(set: TemplateSet, mode: "keep-both" | "replace
     const r = res.renamed.find((x) => x.from === t.fallbackId);
     if (r && imported.has(t.id)) t.fallbackId = r.to;
   }
-  writeTemplates(all.map((t) => TemplateSchema.parse(t)));
+  const imported2 = all.filter((t) => imported.has(t.id));
+  writeImages(set.images ?? {}, new Set(imported2.flatMap((t) => (t.background ? [t.background.image] : []))));
+  // a picture missing from the file: keep the template, drop the background it can't show
+  const fixed = all.map((t) => (t.background && !readBackground(t.background.image) ? { ...t, background: undefined } : t));
+  writeTemplates(fixed.map((t) => TemplateSchema.parse(t)));
+  pruneBackgrounds();
   return res;
 }
 

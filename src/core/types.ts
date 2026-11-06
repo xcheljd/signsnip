@@ -83,6 +83,19 @@ export type TextObject = z.infer<typeof TextObjectSchema>;
 export type LogoObject = z.infer<typeof LogoObjectSchema>;
 export type TemplateObject = z.infer<typeof TemplateObjectSchema>;
 
+/** A picture printed behind everything on the sign (stored once, referenced by id). */
+export const BackgroundSchema = z.object({
+  /** content hash of the stored image (backgrounds/<image>) */
+  image: z.string().regex(/^[a-f0-9]{8,64}$/),
+  /** width / height of the stored image */
+  aspect: z.number().positive().max(50),
+  /** cover = fill the whole sign (edges cropped); contain = show the whole picture */
+  fit: z.enum(["cover", "contain"]).default("cover"),
+  /** how strongly it prints, 0.05-1 (1 = full colour). Keep it light so text stays readable. */
+  opacity: z.number().min(0.05).max(1).default(0.3),
+});
+export type Background = z.infer<typeof BackgroundSchema>;
+
 export const TemplateSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/).max(40),
   name: z.string().min(1).max(60),
@@ -95,6 +108,7 @@ export const TemplateSchema = z.object({
   readableMin: z.number().min(4).max(40).optional(),
   /** if text would print below the readable minimum, try this template instead (same kind) */
   fallbackId: z.string().max(40).optional(),
+  background: BackgroundSchema.optional(),
   updatedAt: z.string().optional(),
 });
 export type Template = z.infer<typeof TemplateSchema>;
@@ -106,6 +120,8 @@ export const TemplateSetSchema = z.object({
   name: z.string().max(80).optional(),
   exportedAt: z.string(),
   templates: z.array(TemplateSchema).min(1).max(200),
+  /** background images the templates use: image id -> PNG/JPEG (base64) */
+  images: z.record(z.string().regex(/^[a-f0-9]{8,64}$/), z.string().max(12_000_000)).default({}),
 });
 export type TemplateSet = z.infer<typeof TemplateSetSchema>;
 
