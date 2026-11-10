@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { fitLogo, fitSize, layoutSign, LOGO_BOX, LOGO_MAX, MAX_TEXT_W, maxLogoScale, money, wrapWords } from "../src/core/layout";
+import { fitLogo, growArea, LOGO_BOX, maxLogoScale, money, wrapWords, type Measure } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
-import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
+import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, defaultTemplate, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
 const sign = (o: Partial<Sign> = {}): Sign => ({
   id: "x", brandId: "b", kind: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*", priceLabel: "", footer: "*MSRP", copies: 1, ...o,
 });
+
+const MAX_TEXT_W = LOGO_BOX.w; // the default templates keep text inside the same 4 mm side padding
+const LOGO_MAX = growArea(LOGO_BOX);
+/** a sign laid out with its kind's built-in template */
+const layoutSign = (s: Sign, m: Measure) => layoutTemplate(defaultTemplate(s.kind ?? "percent"), s, m);
 
 describe("fitLogo", () => {
   it("wide logos are width-limited and centred", () => {
@@ -25,11 +30,6 @@ describe("fitLogo", () => {
 });
 
 describe("text fitting", () => {
-  it("shrinks long text to fit the width", () => {
-    const s = fitSize(measure, "DEEP FIELD CHRONOGRAPH", 14, MAX_TEXT_W);
-    expect(s).toBeLessThan(14);
-    expect(measure("DEEP FIELD CHRONOGRAPH", s)).toBeLessThanOrEqual(MAX_TEXT_W + 1e-6);
-  });
   it("wraps on words, max two lines", () => {
     const l = wrapWords(measure, "FIELD MASTER AUTOMATIC", 14, MAX_TEXT_W, 2);
     expect(l.length).toBeLessThanOrEqual(2);

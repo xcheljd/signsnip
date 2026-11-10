@@ -200,5 +200,3 @@ export interface Warning {
   code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template" | "was-price" | "spill";
   message: string;
 }
-
-export const PERCENT_CHOICES = [10, 20, 25, 30, 40, 50, 60, 70, 75, 80];
