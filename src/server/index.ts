@@ -7,7 +7,7 @@ import { z } from "zod";
 import { API_PORT, ROOT } from "../core/paths.js";
 import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
-  deleteBrand, deleteSavedBatch, findBrand, listBrands, listPresets, listSavedBatches, logoInfo,
+  MAX_ID, deleteBrand, deleteSavedBatch, getBrand, listBrands, listPresets, listSavedBatches, logoInfo,
   readBackground, saveBackground, readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
   readRules, writeRules,
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
@@ -17,6 +17,40 @@ import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, st
 import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
 const app = new Hono();
+
+/**
+ * Only this computer's own pages may talk to the API. Without this, any website open in the
+ * same browser could send writes to http://127.0.0.1:7047 (wipe the workspace, replace the batch).
+ *  - Host must be a loopback name: stops DNS-rebinding (a hostile domain pointed at 127.0.0.1).
+ *  - Browsers attach Origin to every cross-site write. It must be this server's own page or the
+ *    Vite dev page (port DEV_PORT, see vite.config.ts), on 127.0.0.1, localhost or [::1]; any
+ *    other local page (another app on another port) is refused too.
+ *  - A write with no Origin and no Sec-Fetch-Site but a form-style body is what an old browser's
+ *    cross-site form post looks like, so it is refused. The app always sends Origin; the CLI,
+ *    curl and tests either send no body type or send application/json and are unaffected.
+ */
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const DEV_PORT = 7048;
+const PAGE_PORTS = new Set([String(API_PORT), String(DEV_PORT)]);
+const FORM_TYPES = new Set(["text/plain", "application/x-www-form-urlencoded", "multipart/form-data"]);
+const parse = (v: string) => { try { return new URL(v.includes("://") ? v : `http://${v}`); } catch { return undefined; } };
+const hostOf = (v: string) => parse(v)?.hostname ?? "";
+const ownPage = (origin: string) => {
+  const u = parse(origin);
+  return !!u && u.protocol === "http:" && LOOPBACK.has(u.hostname) && PAGE_PORTS.has(u.port || "80");
+};
+app.use("*", async (c, next) => {
+  const refuse = (why: string) => c.json({ error: `Refused: ${why}. SignSnip only answers pages opened from this computer (http://127.0.0.1:${API_PORT}).` }, 403);
+  if (!LOOPBACK.has(hostOf(c.req.header("host") ?? ""))) return refuse("unexpected Host");
+  const origin = c.req.header("origin");
+  if (origin !== undefined && !ownPage(origin)) return refuse("request from another site");
+  if (c.req.method === "GET" || c.req.method === "HEAD" || origin !== undefined) return next();
+  const site = c.req.header("sec-fetch-site");
+  if (site === "cross-site") return refuse("request from another site");
+  const type = (c.req.header("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+  if (site === undefined && FORM_TYPES.has(type)) return refuse(`a ${type} write with no Origin (send application/json, or the file's own type for uploads)`);
+  return next();
+});
 
 app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
 
@@ -94,7 +128,9 @@ app.put("/api/batch", async (c) => c.json(writeBatch(BatchSchema.parse(await c.r
 
 app.post("/api/brands", async (c) => {
   const body = z.object({
-    id: z.string().optional(), name: z.string().min(1), collections: z.array(z.string()).optional(),
+    // new ids are capped at MAX_ID where they are made (idForName); a longer id that is already on disk stays editable
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).refine((id) => id.length <= MAX_ID || !!getBrand(id), `at most ${MAX_ID} characters`).optional(),
+    name: z.string().min(1), collections: z.array(z.string()).optional(),
     logoScale: z.number().min(0.5).max(1.6).optional(),
   }).parse(await c.req.json());
   return c.json(upsertBrand(body));
@@ -104,7 +140,7 @@ app.post("/api/brands/:id/logo", async (c) => {
   const buf = new Uint8Array(await c.req.arrayBuffer());
   if (!buf.length) throw new Error("Empty upload");
   const id = c.req.param("id");
-  if (!findBrand(id)) throw new Error(`Unknown brand "${id}"`);
+  if (!getBrand(id)) throw new Error(`Unknown brand "${id}"`);
   return c.json(await saveLogo(id, buf));
 });
 app.post("/api/brands/:id/logo/remove-bg", async (c) => c.json(await removeLogoBackground(c.req.param("id"))));

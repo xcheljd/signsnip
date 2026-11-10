@@ -1,4 +1,4 @@
-import { brandMatches, findTemplate, listPresets, readBatch, writeBatch } from "./store.js";
+import { brandMatches, listPresets, readBatch, templateMatches, writeBatch } from "./store.js";
 import { SignSchema, type Sign } from "./types.js";
 
 export interface AddInput {
@@ -24,7 +24,9 @@ export function buildSign(input: AddInput): Sign {
   if (matches.length > 1) throw new Error(`"${brandRef}" matches several brands (${matches.map((b) => b.name).join(", ")}). Be more specific.`);
   const brand = matches[0];
   if (!brand) throw new Error(`No brand matching "${brandRef}". Try: signsnip brands`);
-  const tpl = input.template ? findTemplate(input.template) : undefined;
+  const tpls = input.template ? templateMatches(input.template) : [];
+  if (tpls.length > 1) throw new Error(`"${input.template}" matches several templates (${tpls.map((t) => t.name).join(", ")}). Be more specific.`);
+  const tpl = tpls[0];
   if (input.template && !tpl) throw new Error(`No template matching "${input.template}". Try: signsnip templates`);
   const kind = tpl?.kind ?? (input.price !== undefined ? "price" : input.percent !== undefined ? "percent" : (base.kind ?? "percent"));
   if (kind === "price" && input.price === undefined && base.price === undefined) throw new Error("Need --price for a price template");
@@ -57,7 +59,7 @@ export function addToBatch(signs: Sign[]) {
 }
 
 /** Minimal CSV (quotes supported) with a header row: brand,collection,percent|price[,was,price_label,template,copies,prefix,footer]. */
-export function parseCsv(text: string): Record<string, string>[] {
+function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = [];
   let row: string[] = [], cell = "", q = false;
   for (let i = 0; i < text.length; i++) {

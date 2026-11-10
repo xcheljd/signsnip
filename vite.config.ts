@@ -7,6 +7,6 @@ export default defineConfig({
   root: path.join(__dirname, "web"),
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.join(__dirname, "web/src") } },
-  server: { port: 7048, host: "127.0.0.1", proxy: { "/api": "http://127.0.0.1:7047" } },
+  server: { port: 7048, strictPort: true, host: "127.0.0.1", proxy: { "/api": "http://127.0.0.1:7047" } },
   build: { outDir: path.join(__dirname, "web/dist"), emptyOutDir: true },
 });

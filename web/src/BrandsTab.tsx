@@ -28,7 +28,11 @@ export function BrandsTab({ brands, refresh, focusBrand }: { brands: api.BrandWi
   const run: Run = async (fn, ok) => {
     try { await fn(); await refresh(); if (ok) toast(ok); } catch (e) { toast.error((e as Error).message); }
   };
-  const add = () => newName.trim() && run(async () => { await api.saveBrand({ name: newName.trim() }); setNewName(""); }, "Brand added - now drop its logo on the card");
+  const add = () => newName.trim() && run(async () => {
+    const b = await api.saveBrand({ name: newName.trim() });
+    setNewName("");
+    toast(b.created ? "Brand added - now drop its logo on the card" : `"${b.name}" is already a brand - nothing new added`);
+  });
   return (
     <div className="flex flex-col gap-4">
       <Card>

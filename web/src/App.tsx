@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { count } from "../../src/core/words";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
@@ -106,7 +107,8 @@ function SignoApp() {
   }, [checkKey]);
 
   const brand = brands.find((b) => b.id === draft?.brandId);
-  const single = useMemo(() => (draft && brand ? [draft] : []), [draft, brand]);
+  // a sign whose brand was deleted still previews, as it prints: without a logo (like the sheet and `signsnip check`)
+  const single = useMemo(() => (draft?.brandId ? [draft] : []), [draft]);
   const logoKey = brands.map((b) => `${b.id}:${b.logoScale}:${b.logo?.width}:${b.logo?.background}`).join("|")
     + templates.map((t) => `${t.id}@${t.updatedAt ?? ""}`).join("|") + JSON.stringify(rules);
   // logoKey: re-render when a logo is replaced, rescaled or has its background removed
@@ -147,7 +149,7 @@ function SignoApp() {
     try {
       const p = sheetPdf.pdf ?? await api.fetchPdf(batch.items, batch.options, "sheet");
       printPdf(p.bytes);
-      toast(`Printing ${p.signs} signs. Set scale to 100% / Actual size.`);
+      toast(`Printing ${count(p.signs, "sign")}. Set scale to 100% / Actual size.`);
     } catch (e) { fail(e); }
   }, [batch, sheetPdf.pdf]); // eslint-disable-line react-hooks/exhaustive-deps
   const exportPdf = async (force = false) => {
@@ -155,7 +157,7 @@ function SignoApp() {
     try {
       const p = await api.fetchPdf(batch.items, batch.options, "sheet");
       downloadPdf(p.bytes, `signs-${new Date().toISOString().slice(0, 10)}.pdf`);
-      toast(`Downloaded ${p.signs} signs on ${p.pages} page${p.pages === 1 ? "" : "s"}`);
+      toast(`Downloaded ${count(p.signs, "sign")} on ${count(p.pages, "page")}`);
     } catch (e) { fail(e); }
   };
   const calibrate = async () => {
@@ -192,7 +194,6 @@ function SignoApp() {
   const g = sheetGeometry(batch.options);
   const signCount = batch.items.reduce((a, s) => a + s.copies, 0);
   const pageCount = signCount ? Math.ceil(signCount / g.perPage) : 0;
-  const n = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
   const THEMES = ["light", "dark", "system"] as const;
   const themeName = { light: "Light", dark: "Dark", system: "Match system" } as const;
   const nextTheme = THEMES[(THEMES.indexOf(theme as (typeof THEMES)[number]) + 1) % THEMES.length]!;
@@ -295,7 +296,7 @@ function SignoApp() {
         <div className="sticky bottom-0 z-10 -mx-3 lg:col-span-2 sm:-mx-6" data-slot="print-bar">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-card px-4 py-2 shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.15)] sm:px-6">
             <div className="flex min-w-0 flex-col">
-              <span className="text-sm font-medium tabular-nums">{signCount ? `${n(signCount, "sign")} · ${n(pageCount, "page")}` : "Nothing to print yet"}</span>
+              <span className="text-sm font-medium tabular-nums">{signCount ? `${count(signCount, "sign")} · ${count(pageCount, "page")}` : "Nothing to print yet"}</span>
               <span className="text-xs text-muted-foreground">Print at 100% (“Actual size”) · {g.perPage} per page</span>
             </div>
             <div className="ml-auto flex flex-wrap gap-2">
@@ -312,12 +313,13 @@ function SignoApp() {
         <div id="overlays" />
       </main>
 
-      <Toaster position="bottom-right" theme={resolved} offset={tab === "make" ? 88 : 24} mobileOffset={tab === "make" ? 120 : 16} />
+      {/* only the bottom clears the sticky print bar; a plain number would set all four sides and squeeze toasts on a phone */}
+      <Toaster position="bottom-right" theme={resolved} offset={tab === "make" ? { bottom: 88 } : 24} mobileOffset={tab === "make" ? { bottom: 120 } : 16} />
 
       <AlertDialog open={!!gate} onOpenChange={(o) => !o && setGate(null)}>
         <AlertDialogContent size="lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>{gate?.small.length} sign{gate?.small.length === 1 ? "" : "s"} will print below {rules.readableMin}pt</AlertDialogTitle>
+            <AlertDialogTitle>{count(gate?.small.length ?? 0, "sign")} will print below {rules.readableMin}pt</AlertDialogTitle>
             <AlertDialogDescription render={<div />}>
               <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-left">
                 {gate?.small.slice(0, 5).map((w, i) => <li key={i}>{w.message.replace(/ Add an abbreviation.*$/, "")}</li>)}

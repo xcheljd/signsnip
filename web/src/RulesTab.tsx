@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { count } from "../../src/core/words";
 import { ArrowRightIcon, CheckIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { fitSign, resolveTemplate } from "../../src/core/template";
@@ -73,7 +74,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
             {items.length > 0 && fonts && (
               <p className={cn("flex items-center gap-2 text-sm", stillSmall ? "text-destructive" : "text-muted-foreground")}>
                 {stillSmall ? <TriangleAlertIcon className="size-4" /> : <CheckIcon className="size-4" />}
-                {stillSmall ? `${stillSmall} sign${stillSmall === 1 ? "" : "s"} in the batch would still print below the minimum.` : "Every sign in the batch prints at or above the minimum."}
+                {stillSmall ? `${count(stillSmall, "sign")} in the batch would still print below the minimum.` : "Every sign in the batch prints at or above the minimum."}
               </p>
             )}
           </CardContent>
@@ -119,7 +120,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
                       <li key={`${a.from}-${i}`} data-abbr-row="" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-2 @lg/abbr:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem_2rem]">
                         <Input aria-label={`Word ${i + 1}`} className="col-span-3 @lg/abbr:col-span-1" value={a.from} maxLength={40} onChange={(e) => setAbbr(i, { from: e.target.value })} />
                         <Input aria-label={`Short form of ${a.from}`} value={a.to} maxLength={40} placeholder="(removed)" onChange={(e) => setAbbr(i, { to: e.target.value })} />
-                        <span className="text-xs">{n ? <Badge variant="secondary">used on {n} sign{n === 1 ? "" : "s"}</Badge> : <span className="text-muted-foreground">not needed</span>}</span>
+                        <span className="text-xs">{n ? <Badge variant="secondary">used on {count(n, "sign")}</Badge> : <span className="text-muted-foreground">not needed</span>}</span>
                         <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${a.from}`}
                           onClick={() => change((r) => ({ ...r, abbreviations: r.abbreviations.filter((_, j) => j !== i) }))}><Trash2Icon /></Button>
                       </li>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { count } from "../../src/core/words";
 import {
   ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, GripVerticalIcon, InfoIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
@@ -28,7 +29,6 @@ import { cn } from "@/lib/utils";
 
 type Update = (fn: (b: Batch) => Batch, opts?: { undo?: string; coalesce?: string }) => boolean | void;
 const uid = () => crypto.randomUUID();
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 export const offerText = (s: Sign) =>
   s.kind === "price" && s.price ? `${s.priceLabel ? s.priceLabel.toUpperCase() + " " : ""}${money(s.price)}` : `${s.percent}%`;
@@ -72,7 +72,7 @@ export function BatchPanel({
   const [overRow, setOverRow] = useState<number | null>(null);
 
   const patchSelected = (patch: Partial<Sign>, label: string) =>
-    update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, ...patch } : s)) }), { undo: `${label} on ${plural(sel.length, "row")}` });
+    update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, ...patch } : s)) }), { undo: `${label} on ${count(sel.length, "row")}` });
   const setOptions = (patch: Partial<Batch["options"]>) => update((b) => ({ ...b, options: { ...b.options, ...patch } }));
 
   return (
@@ -80,14 +80,14 @@ export function BatchPanel({
       <CardHeader>
         <CardTitle>Batch</CardTitle>
         <CardDescription>
-          {plural(total, "sign")} · {plural(total ? fill.pages : 0, "page")}
+          {count(total, "sign")} · {count(total ? fill.pages : 0, "page")}
           {total > 0 && fill.pages >= MAX_PAGES - 2 && <span className="font-medium text-warning"> · {fill.pages} of {MAX_PAGES} pages max</span>}
         </CardDescription>
         <CardAction className="flex gap-2">
           <Button type="button" variant="ghost" size="sm" disabled={!canUndo} onClick={undo}><Undo2Icon data-icon="inline-start" />Undo</Button>
           <SavedBatches batch={batch} saved={saved} update={update} refresh={refresh} />
           <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={!items.length}
-            onClick={() => { update((b) => ({ ...b, items: [] }), { undo: `Cleared ${plural(items.length, "row")}` }); setSelected(new Set()); }}><Trash2Icon data-icon="inline-start" />Clear</Button>
+            onClick={() => { update((b) => ({ ...b, items: [] }), { undo: `Cleared ${count(items.length, "row")}` }); setSelected(new Set()); }}><Trash2Icon data-icon="inline-start" />Clear</Button>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -134,7 +134,7 @@ export function BatchPanel({
             <AlertDescription>{w.message}</AlertDescription>
             <AlertAction>
               {w.code === "logo-background" && <Button type="button" size="sm" variant="outline" onClick={() => onFixBg(w.brandId)}><WandSparklesIcon data-icon="inline-start" />Remove background</Button>}
-              {(w.code === "low-res-logo" || w.code === "no-logo") && <Button type="button" size="sm" variant="outline" onClick={() => onGoToBrand(w.brandId)}>Open brand</Button>}
+              {(w.code === "low-res-logo" || w.code === "no-logo") && brands.some((b) => b.id === w.brandId) && <Button type="button" size="sm" variant="outline" onClick={() => onGoToBrand(w.brandId)}>Open brand</Button>}
               {w.code === "small-text" && /too big for its box/.test(w.message) && <Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(w.items[0]!)}>See it in the designer</Button>}
               {(w.code === "small-text" || w.code === "was-price") && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
             </AlertAction>
@@ -153,7 +153,7 @@ export function BatchPanel({
             {sel.length > 0 && (
               <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/50 p-3">
                 <div className="flex h-8 items-center gap-2 text-sm font-medium">
-                  {plural(sel.length, "row")} selected
+                  {count(sel.length, "row")} selected
                   <IconButton label="Clear selection" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
                 </div>
                 <Separator orientation="vertical" className="h-8" />
@@ -175,17 +175,17 @@ export function BatchPanel({
                       const t = templates.find((x) => x.id === v);
                       if (!t) return;
                       update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, templateId: t.id, kind: t.kind, price: t.kind === "price" ? (s.price ?? 199) : s.price } : s)) }),
-                        { undo: `Template → ${t.name} on ${plural(sel.length, "row")}` });
+                        { undo: `Template → ${t.name} on ${count(sel.length, "row")}` });
                     }}>
                     <SelectTrigger id="bulk-template" className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
                     <SelectContent><SelectGroup>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
                 <div className="ml-auto flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => update((b) => ({ ...b, items: b.items.flatMap((s) => (selected.has(s.id) ? [s, { ...s, id: uid() }] : [s])) }), { undo: `Duplicated ${plural(sel.length, "row")}` })}>
+                  <Button type="button" variant="outline" onClick={() => update((b) => ({ ...b, items: b.items.flatMap((s) => (selected.has(s.id) ? [s, { ...s, id: uid() }] : [s])) }), { undo: `Duplicated ${count(sel.length, "row")}` })}>
                     <CopyIcon data-icon="inline-start" />Duplicate
                   </Button>
-                  <Button type="button" variant="destructive" onClick={() => { update((b) => ({ ...b, items: b.items.filter((s) => !selected.has(s.id)) }), { undo: `Removed ${plural(sel.length, "row")}` }); setSelected(new Set()); }}>
+                  <Button type="button" variant="destructive" onClick={() => { update((b) => ({ ...b, items: b.items.filter((s) => !selected.has(s.id)) }), { undo: `Removed ${count(sel.length, "row")}` }); setSelected(new Set()); }}>
                     <Trash2Icon data-icon="inline-start" />Remove
                   </Button>
                 </div>
@@ -377,7 +377,7 @@ function SavedBatches({ batch, saved, update, refresh }: { batch: Batch; saved: 
                 <div key={s.id} className="flex items-center gap-2 rounded-md p-1 hover:bg-muted">
                   <button type="button" className="flex min-w-0 flex-1 flex-col items-start rounded-sm px-1 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50" onClick={() => load(s)}>
                     <span className="truncate text-sm font-medium">{s.name}</span>
-                    <span className="text-xs text-muted-foreground">{plural(s.signs, "sign")} · {new Date(s.savedAt).toLocaleDateString()}</span>
+                    <span className="text-xs text-muted-foreground">{count(s.signs, "sign")} · {new Date(s.savedAt).toLocaleDateString()}</span>
                   </button>
                   <IconButton label={`Delete “${s.name}”`} onClick={async () => { await api.deleteSaved(s.id); await refresh(); toast(`Deleted “${s.name}”`); }}><Trash2Icon /></IconButton>
                 </div>

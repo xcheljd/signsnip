@@ -2,6 +2,7 @@
 # CLI / engine edge cases. Each line: what, exit code, first line of output.
 cd "$(dirname "$0")/.."
 export SIGNSNIP_DATA=$(mktemp -d)
+trap 'rm -rf "$SIGNSNIP_DATA"' EXIT
 S=bin/signsnip.mjs; O=$SIGNSNIP_DATA
 t() { local name="$1"; shift; out=$("$@" 2>&1); code=$?; printf '%-46s exit=%s  %s\n' "$name" "$code" "$(echo "$out" | head -1 | cut -c1-150)"; }
 $S brands >/dev/null

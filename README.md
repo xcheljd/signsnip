@@ -57,7 +57,7 @@ examples: *Buy one get one* and *Final sale*.
 - **Export** writes a template set (`*.signsnip.json`) with the templates you pick. **Import** shows what's new,
   what you already have, and what differs from yours (keep both, or replace yours).
 
-**Hosted version (no server)**: `pnpm build:static` builds a copy that runs entirely in the browser and can be served by any static host (GitHub Pages workflow included). On first visit it asks how to start: from scratch, with the made-up samples, or by restoring a backup. **The site does not save your work**: nothing is uploaded, and the browser's own temporary copy can be erased without warning. To pick up where you left off, download a backup (**Back up now** in the status bar) and use **Restore** next time; **Start over** is next to it and restore it next time. The status bar shows whether you have changes since your last backup. Backups move between the hosted app, the local app and the CLI (`signsnip backup`, `signsnip restore file --yes`).
+**Hosted version (no server)**: `pnpm build:static` builds a copy that runs entirely in the browser and can be served by any static host (GitHub Pages workflow included). On first visit it asks how to start: from scratch, with the made-up samples, or by restoring a backup. **The site does not save your work**: nothing is uploaded, and the browser's own temporary copy can be erased without warning. To pick up where you left off, download a backup (**Back up now** in the status bar) and restore it next time (**Continue your work** on the start page, or **Restore** in the header). **Start over** (in the header) replaces everything here with an empty workspace or the samples. The status bar shows whether you have changes since your last backup. Backups move between the hosted app, the local app and the CLI (`signsnip backup`, `signsnip restore file --yes`).
 
 **Background pictures** (Templates → template settings): a picture printed behind the whole sign. *Fill the sign* crops the edges, *Whole picture* shows all of it; *Strength* (default 30%) keeps black text readable, and above 50% the designer warns. The picture is stored once per template, included in backups and template-set files, and logos with a white box get flagged once they'd print over it.
 
@@ -101,8 +101,9 @@ signsnip export -o out/signs.pdf [--grid portrait-4x3] [--paper a4] [--no-cut-ma
 - `src/core/template.ts`: templates (objects in mm, sizes in pt), built-ins, `layoutTemplate()` (wrap,
   shrink-to-fit by width *and* height, alignment), designer checks. `layout.ts`: shared text/logo fitting
   helpers.
-- `src/core/layout.ts`: pure sign geometry (logo box + scale, text sizes 14/30/13 pt like the old
-  spreadsheet, auto-shrink and word-wrap, price lines). `geometry.ts`: sheet grid, shared by the
+- `src/core/layout.ts`: small shared helpers (logo box, `fitLogo` + `maxLogoScale`, word-wrap,
+  percent/money text). Text sizes and shrink-to-fit live in the templates (`template.ts`, `fitSign`
+  for auto-fit). `geometry.ts`: sheet grid, shared by the
   PDF and the UI's click/drag overlay. `pdf.ts`: draws with pdf-lib + embedded Carlito Bold (OFL);
   sets PrintScaling=None so viewers default to actual size.
 - Web UI: Vite + React + shadcn/ui (base-nova / Base UI). The preview *is* the PDF, rendered with pdf.js.

@@ -7,7 +7,7 @@ import { ChoiceOrOwn } from "./ChoiceOrOwn";
 import { NumField } from "./NumField";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ export function SignEditor({
   onPickPreset: (p: Preset) => void; onDeletePreset: (p: Preset) => void;
 }) {
   const brand = brands.find((b) => b.id === draft.brandId);
+  /** the sign points at a brand that no longer exists (it was deleted after the sign was made) */
+  const deleted = !!draft.brandId && !brand;
   const collectionRef = useRef<HTMLInputElement>(null);
   const brandItems = brands.map((b) => ({ value: b.id, label: b.name }));
   const suggestions = ["MODELS", ...(brand?.collections ?? []).filter((c) => c.toUpperCase() !== "MODELS")];
@@ -77,12 +79,17 @@ export function SignEditor({
         >
           <FieldGroup>
             <div className="grid gap-4 @md/field-group:grid-cols-2">
-              <Field>
+              <Field data-invalid={deleted || undefined}>
                 <FieldLabel htmlFor="brand">Brand</FieldLabel>
                 <Select value={draft.brandId} items={brandItems} onValueChange={(v) => v && set({ brandId: v })}>
-                  <SelectTrigger id="brand" className="w-full"><SelectValue placeholder="Pick a brand" /></SelectTrigger>
+                  <SelectTrigger id="brand" className="w-full" aria-invalid={deleted || undefined} aria-describedby={deleted ? "brand-deleted" : undefined}><SelectValue placeholder="Pick a brand" /></SelectTrigger>
                   <SelectContent><SelectGroup>{brandItems.map((b) => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
+                {deleted && (
+                  <FieldError id="brand-deleted">
+                    The brand “{draft.brandId}” was deleted, so this sign prints without a logo (the preview shows it as it will print). Pick a brand to {editing ? "update" : "add"} it.
+                  </FieldError>
+                )}
               </Field>
               <Field>
                 <FieldLabel htmlFor="template">Template</FieldLabel>

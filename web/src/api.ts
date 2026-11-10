@@ -16,8 +16,10 @@ export interface BackupSummary { exportedAt: string; brands: number; logos: numb
  */
 export interface Backend {
   getState(): Promise<State>;
-  putBatch(b: Batch): Promise<Batch>;
-  saveBrand(b: { id?: string; name: string; collections?: string[]; logoScale?: number }): Promise<Brand>;
+  /** `closing`: the page is being hidden or closed, so the save must outlive it */
+  putBatch(b: Batch, closing?: boolean): Promise<Batch>;
+  /** `created`: false when a brand with this name already existed and was updated */
+  saveBrand(b: { id?: string; name: string; collections?: string[]; logoScale?: number }): Promise<Brand & { created: boolean }>;
   removeBrand(id: string): Promise<unknown>;
   uploadLogo(id: string, file: File): Promise<{ aspect: number }>;
   removeLogoBg(id: string): Promise<LogoInfo>;
@@ -59,14 +61,23 @@ async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText);
   return body as T;
 }
-const send = (url: string, body?: unknown, method = "POST") =>
-  fetch(url, { method, headers: body === undefined ? {} : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+/** keepalive bodies share a 64 KB budget per page; stay under it with room for one small request */
+const KEEPALIVE_MAX = 60_000;
+const send = (url: string, body?: unknown, method = "POST", keepalive = false) => {
+  const text = body === undefined ? undefined : JSON.stringify(body);
+  // keepalive lets a request finish after the tab closes. The cap counts bytes, so measure UTF-8,
+  // not string length. A bigger body goes out as an ordinary request: fine while the tab is only
+  // hidden, but if the tab is closing the browser may cancel it, and the last edit (made in the
+  // 300 ms before closing) is then lost without a message.
+  const bytes = text === undefined ? 0 : new TextEncoder().encode(text).length;
+  return fetch(url, { method, headers: text === undefined ? {} : { "content-type": "application/json" }, body: text, keepalive: keepalive && bytes < KEEPALIVE_MAX });
+};
 const filename = (res: Response, fallback: string) => /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallback;
 
 const server: Backend = {
   getState: () => fetch("/api/state", { cache: "no-store" }).then((r) => j<State>(r)),
-  putBatch: (b) => send("/api/batch", b, "PUT").then((r) => j<Batch>(r)),
-  saveBrand: (b) => send("/api/brands", b).then((r) => j<Brand>(r)),
+  putBatch: (b, closing) => send("/api/batch", b, "PUT", closing).then((r) => j<Batch>(r)),
+  saveBrand: (b) => send("/api/brands", b).then((r) => j<Brand & { created: boolean }>(r)),
   removeBrand: (id) => send(`/api/brands/${id}`, undefined, "DELETE").then((r) => j(r)),
   uploadLogo: (id, file) => fetch(`/api/brands/${id}/logo`, { method: "POST", body: file }).then((r) => j<{ aspect: number }>(r)),
   removeLogoBg: (id) => send(`/api/brands/${id}/logo/remove-bg`).then((r) => j<LogoInfo>(r)),
@@ -121,7 +132,7 @@ export async function init(): Promise<void> {
 const be = () => impl;
 
 export const getState = () => be().getState();
-export const putBatch = (b: Batch) => be().putBatch(b);
+export const putBatch = (b: Batch, closing?: boolean) => be().putBatch(b, closing);
 export const saveBrand: Backend["saveBrand"] = (b) => be().saveBrand(b);
 export const removeBrand = (id: string) => be().removeBrand(id);
 export const uploadLogo = (id: string, file: File) => be().uploadLogo(id, file);

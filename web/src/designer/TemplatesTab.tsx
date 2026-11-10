@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { count } from "../../../src/core/words";
 import {
   CopyIcon, DownloadIcon, FilePlus2Icon, GridIcon, ImageIcon, PlusIcon, Redo2Icon, RotateCcwIcon, SaveIcon,
   ScanEyeIcon, SquareDashedIcon, Trash2Icon, TriangleAlertIcon, TypeIcon, Undo2Icon, UploadIcon,
@@ -345,7 +346,7 @@ export function TemplatesTab({
             {isBuiltin(draft.id) && <Badge variant="secondary">built in</Badge>}
             {dirty && <Badge variant="outline">unsaved</Badge>}
           </CardTitle>
-          <CardDescription>{usage(draft.id) ? `${usage(draft.id)} sign${usage(draft.id) === 1 ? "" : "s"} in the batch use this. Saving updates them all.` : "Not used in the current batch."}</CardDescription>
+          <CardDescription>{usage(draft.id) ? `${count(usage(draft.id), "sign")} in the batch use this. Saving updates them all.` : "Not used in the current batch."}</CardDescription>
           <CardAction className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="outline" size="sm" disabled={!dirty} onClick={revert}>Discard changes</Button>
             <Button type="button" size="sm" disabled={!dirty} onClick={save}><SaveIcon data-icon="inline-start" />Save template</Button>
@@ -442,7 +443,7 @@ export function TemplatesTab({
                 {(() => {
                   const bad = new Set(rowProblems.filter((p) => !p.d.harmless).map((p) => p.i)).size;
                   const tight = new Set(rowProblems.filter((p) => p.d.harmless).map((p) => p.i)).size;
-                  const n = (k: number) => `${k} sign${k === 1 ? "" : "s"}`;
+                  const n = (k: number) => count(k, "sign");
                   return [bad && `${n(bad)} in your batch ${bad === 1 ? "runs" : "run"} into something`, tight && `${n(tight)} ${tight === 1 ? "is" : "are"} a tight fit but ${tight === 1 ? "prints" : "print"} fine`].filter(Boolean).join(" · ");
                 })()}
               </p>
@@ -505,7 +506,7 @@ export function TemplatesTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete “{draft.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              {usage(draft.id) ? `${usage(draft.id)} sign${usage(draft.id) === 1 ? "" : "s"} in the batch use it and will switch to the built-in ${draft.kind === "price" ? "Price" : "Percent off"} layout. ` : ""}
+              {usage(draft.id) ? `${count(usage(draft.id), "sign")} in the batch use it and will switch to the built-in ${draft.kind === "price" ? "Price" : "Percent off"} layout. ` : ""}
               Export it first if you might want it back.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -589,7 +590,7 @@ function ExportDialog({ open, onOpenChange, templates, current, dirty }: { open:
           <Button disabled={!picked.size} onClick={async () => {
             try {
               api.saveDownload(await api.exportTemplates([...picked], name));
-              onOpenChange(false); toast(`Exported ${picked.size} template${picked.size === 1 ? "" : "s"}`);
+              onOpenChange(false); toast(`Exported ${count(picked.size, "template")}`);
             } catch (e) { toast.error((e as Error).message); }
           }}>
             <DownloadIcon data-icon="inline-start" />Download
@@ -611,7 +612,7 @@ function ImportDialog({ data, onClose, onDone }: { data: { raw: unknown; preview
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Import {data.preview.name ? `“${data.preview.name}”` : "template set"}</DialogTitle>
-          <DialogDescription>{rows.length} template{rows.length === 1 ? "" : "s"}, exported {new Date(data.preview.exportedAt).toLocaleDateString()}.</DialogDescription>
+          <DialogDescription>{count(rows.length, "template")}, exported {new Date(data.preview.exportedAt).toLocaleDateString()}.</DialogDescription>
         </DialogHeader>
         <div className="flex max-h-64 flex-col gap-2 overflow-y-auto rounded-lg border p-3">
           {rows.map((r) => (

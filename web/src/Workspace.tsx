@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { describeSummary } from "../../src/core/workspace";
 import { ArchiveRestoreIcon, CircleAlertIcon, RotateCcwIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, ScissorsIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as api from "./api";
@@ -7,9 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const describe = (s: api.BackupSummary) =>
-  [plural(s.brands, "brand"), plural(s.logos, "logo"), plural(s.templates, "template"), plural(s.presets, "preset"), plural(s.saved, "saved batch"), `${s.signs} signs in the batch`].join(" · ");
+const describe = (s: api.BackupSummary) => describeSummary(s);
 
 export async function downloadBackup() {
   try { api.saveDownload(await api.backup()); toast("Backup downloaded. Keep it somewhere safe (it includes your logos)."); }

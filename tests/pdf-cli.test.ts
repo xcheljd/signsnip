@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const root = path.resolve(__dirname, "..");
 const bin = path.join(root, "bin/signsnip.mjs");
@@ -10,6 +10,7 @@ let data: string;
 const signo = (...a: string[]) => spawnSync(process.execPath, [bin, ...a], { env: { ...process.env, SIGNSNIP_DATA: data }, encoding: "utf8" });
 
 beforeAll(() => { data = fs.mkdtempSync(path.join(os.tmpdir(), "signsnip-")); });
+afterAll(() => fs.rmSync(data, { recursive: true, force: true }));
 
 describe("signsnip CLI end-to-end (isolated data dir)", () => {
   it("lists the seeded fake brands", () => {

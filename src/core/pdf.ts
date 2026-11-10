@@ -2,7 +2,7 @@ import { PDFDocument, PrintScaling, clip, degrees, endPath, popGraphicsState, pu
 import fontkit from "@pdf-lib/fontkit";
 import { cellRect, sheetGeometry, MAX_PAGES } from "./geometry.js";
 import { fitLogo, type Measure } from "./layout.js";
-import { findBrand, listTemplates, logoInfo, readBackground, readLogo, readRules } from "./store.js";
+import { getBrand, listTemplates, logoInfo, readBackground, readLogo, readRules } from "./store.js";
 import { imageKind } from "./images.js";
 import { backgroundRect, describeOverflow, fitSign, overflowDetails, type FittedSign } from "./template.js";
 import { SIGN_H_MM, SIGN_W_MM, type Options, type Rules, type Sign, type Template, type Warning } from "./types.js";
@@ -92,7 +92,7 @@ async function embedLogos(doc: PDFDocument, signs: Sign[]) {
     const buf = readLogo(id);
     const info = await logoInfo(id);
     if (!buf || !info) continue;
-    logos.set(id, { img: await doc.embedPng(buf), aspect: info.aspect, scale: findBrand(id)?.logoScale ?? 1 });
+    logos.set(id, { img: await doc.embedPng(buf), aspect: info.aspect, scale: getBrand(id)?.logoScale ?? 1 });
   }
   return logos;
 }
@@ -214,7 +214,7 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
   const byBrand = new Map<string, number[]>();
   items.forEach((s, i) => byBrand.set(s.brandId, [...(byBrand.get(s.brandId) ?? []), i]));
   for (const [brandId, idx] of byBrand) {
-    const brand = findBrand(brandId);
+    const brand = getBrand(brandId);
     const name = brand?.name ?? brandId;
     const info = await logoInfo(brandId);
     if (!brand) {
@@ -248,7 +248,7 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
     const row = `Row ${i + 1}`;
     if (f.placed.overflow.length) {
       const info = logos.get(s.brandId);
-      const logo = info && f.placed.logo ? fitLogo(info.aspect, f.placed.logo.box, findBrand(s.brandId)?.logoScale ?? 1) : null;
+      const logo = info && f.placed.logo ? fitLogo(info.aspect, f.placed.logo.box, getBrand(s.brandId)?.logoScale ?? 1) : null;
       for (const d of overflowDetails(f.template, f.placed, logo)) {
         out.push({ items: [i], brandId: s.brandId, level: d.harmless ? "info" : "warn", code: d.harmless ? "spill" : "small-text", message: `${row}: ${describeOverflow(d, `the “${f.template.name}” template`)}` });
       }

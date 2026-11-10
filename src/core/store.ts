@@ -18,8 +18,41 @@ function readJson<T>(key: string, schema: z.ZodType<T>, fallback: T): T {
 }
 const writeJson = (key: string, data: unknown) => repo().setJson(key, data);
 
-export const slugify = (s: string) =>
-  s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "brand";
+export const slugify = (s: string, fallback = "brand") =>
+  s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
+
+/** Longest id the local server accepts for a brand ("&" -> "and" can make a slug longer than its name). */
+export const MAX_ID = 80;
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/**
+ * The id for a new thing called `name`. Reuses the id of an existing thing with the same name
+ * (saving it again updates it); a *different* name that happens to slug the same ("Tom & Co" /
+ * "Tom and Co", or two names with no latin letters) gets -2, -3 ... instead of overwriting.
+ * New ids are cut to fit MAX_ID with room for the suffix; ids already on disk are never changed.
+ */
+function idForName(name: string, taken: { id: string; name: string }[], fallback: string): string {
+  const same = taken.find((t) => sameName(t.name, name));
+  if (same) return same.id;
+  const root = slugify(name, fallback).slice(0, MAX_ID - 8).replace(/-+$/, "") || fallback;
+  if (!taken.some((t) => t.id === root)) return root;
+  let n = 2;
+  while (taken.some((t) => t.id === `${root}-${n}`)) n++;
+  return `${root}-${n}`;
+}
+
+/**
+ * Look something up by what a person typed (CLI args, CSV cells): an exact id wins, then an exact
+ * name; otherwise every name that contains it. Nothing typed matches nothing. Callers act only on a
+ * single match, so a vague name can never pick (or delete) the wrong thing.
+ */
+function matchRef<T extends { id: string; name: string }>(all: T[], ref: string, partialId = false): T[] {
+  const r = ref.trim().toLowerCase();
+  if (!r) return [];
+  const byId = all.filter((x) => x.id === r);
+  if (byId.length) return byId;
+  const exact = all.filter((x) => x.name.toLowerCase() === r);
+  return exact.length ? exact : all.filter((x) => x.name.toLowerCase().includes(r) || (partialId && x.id.includes(r)));
+}
 
 // ---------- brands
 const LOGO = (id: string) => `logos/${id}`;
@@ -33,30 +66,43 @@ export function listBrands(): Brand[] {
 export function saveBrands(brands: Brand[]): void {
   writeJson("brands", brands.map((b) => ({ ...b, hasLogo: undefined })));
 }
-/** exact id/name first; a partial name only counts when it matches exactly one brand */
-export function brandMatches(ref: string): Brand[] {
-  const r = ref.trim().toLowerCase();
-  if (!r) return [];
-  const all = listBrands();
-  const exact = all.filter((b) => b.id === r || b.name.toLowerCase() === r);
-  return exact.length ? exact : all.filter((b) => b.name.toLowerCase().includes(r) || b.id.includes(r));
-}
-export function findBrand(ref: string): Brand | undefined {
-  const m = brandMatches(ref);
-  return m.length === 1 ? m[0] : undefined;
-}
-export function upsertBrand(input: { id?: string; name: string; collections?: string[]; logoScale?: number }): Brand {
+/** what a typed brand could mean (see matchRef) */
+export const brandMatches = (ref: string): Brand[] => matchRef(listBrands(), ref, true);
+/** the brand with exactly this id (for ids stored on signs: never a partial match) */
+export const getBrand = (id: string): Brand | undefined => listBrands().find((b) => b.id === id);
+/**
+ * Save a brand: by `id`, or else by name (see idForName). This is the one place that decides
+ * whether a brand is new; `created` says which it was, so callers never have to guess.
+ */
+export function upsertBrand(input: { id?: string; name: string; collections?: string[]; logoScale?: number }): Brand & { created: boolean } {
   const brands = listBrands();
-  const id = input.id ?? slugify(input.name);
+  const typed = input.name.trim();
+  if (!typed) throw new Error("A brand needs a name");
+  const id = input.id ?? idForName(typed, brands, "brand");
   const idx = brands.findIndex((b) => b.id === id);
   const prev = idx >= 0 ? brands[idx] : undefined;
+  // Saving by id is an edit, so the name may change. Adding a name that already exists
+  // ("tom & co " for "Tom & Co") updates that brand but keeps the name it already has.
+  const name = input.id || !prev ? typed : prev.name;
   const brand = BrandSchema.parse({
-    id, name: input.name, collections: input.collections ?? prev?.collections ?? [],
+    id, name, collections: input.collections ?? prev?.collections ?? [],
     logoScale: input.logoScale ?? prev?.logoScale ?? 1, hasLogo: prev?.hasLogo ?? false,
   });
   if (idx >= 0) brands[idx] = brand; else brands.push(brand);
   saveBrands(brands);
-  return { ...brand, hasLogo: repo().getBlob(LOGO(id)) !== null };
+  return { ...brand, hasLogo: repo().getBlob(LOGO(id)) !== null, created: !prev };
+}
+/**
+ * Add a brand by name (or update the one with that name), optionally with a logo. The logo is
+ * read and converted *before* anything is written, so a file that isn't a picture changes nothing.
+ */
+export async function addBrand(input: { name: string; collections?: string[] }, logo?: Uint8Array): Promise<Brand & { created: boolean }> {
+  const png = logo
+    ? await prepareLogo(logo).then((r) => r.png, (e: Error) => { throw new Error(`that file isn't a picture SignSnip can read (${e.message})`); })
+    : undefined;
+  const brand = upsertBrand(input);
+  if (png) storeLogo(brand.id, png);
+  return { ...brand, hasLogo: brand.hasLogo || !!png };
 }
 export function deleteBrand(id: string): void {
   saveBrands(listBrands().filter((b) => b.id !== id));
@@ -75,10 +121,13 @@ export const readLogo = (brandId: string): Uint8Array | null => repo().getBlob(L
 export async function saveLogo(brandId: string, input: Uint8Array): Promise<{ aspect: number }> {
   if (!listBrands().some((b) => b.id === brandId)) throw new Error(`Unknown brand "${brandId}"`);
   const { png, raster } = await prepareLogo(input);
+  storeLogo(brandId, png);
+  return { aspect: raster.width / raster.height };
+}
+function storeLogo(brandId: string, png: Uint8Array) {
   repo().setBlob(LOGO(brandId), png);
   repo().remove(ORIG(brandId)); // a fresh upload supersedes any old backup
   infoCache.delete(brandId);
-  return { aspect: raster.width / raster.height };
 }
 
 const infoCache = new Map<string, { stamp: number; info: Omit<LogoInfo, "hasOriginal"> }>();
@@ -163,13 +212,9 @@ export function listSavedBatches(): SavedBatch[] {
     .map((id) => SavedBatchSchema.parse(repo().getJson(`batches/${id}`)))
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
-export function findSavedBatch(ref: string): SavedBatch | undefined {
-  const r = ref.trim().toLowerCase();
-  const all = listSavedBatches();
-  return all.find((b) => b.id === r) ?? all.find((b) => b.name.toLowerCase() === r) ?? all.find((b) => b.name.toLowerCase().includes(r));
-}
+export const savedBatchMatches = (ref: string): SavedBatch[] => matchRef(listSavedBatches(), ref);
 export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedBatch & { replaced: boolean } {
-  const saved = SavedBatchSchema.parse({ id: slugify(name), name: name.trim(), savedAt: new Date().toISOString(), batch });
+  const saved = SavedBatchSchema.parse({ id: idForName(name, listSavedBatches(), "batch"), name: name.trim(), savedAt: new Date().toISOString(), batch });
   const replaced = repo().getJson(`batches/${saved.id}`) !== undefined;
   writeJson(`batches/${saved.id}`, saved);
   return { ...saved, replaced };
@@ -185,11 +230,7 @@ export function listTemplates(): Template[] {
 }
 function writeTemplates(all: Template[]) { writeJson("templates", all); }
 
-export function findTemplate(ref: string): Template | undefined {
-  const r = ref.trim().toLowerCase();
-  const all = listTemplates();
-  return all.find((t) => t.id === r) ?? all.find((t) => t.name.toLowerCase() === r) ?? all.find((t) => t.name.toLowerCase().includes(r));
-}
+export const templateMatches = (ref: string): Template[] => matchRef(listTemplates(), ref);
 
 export function saveTemplate(t: Template): Template {
   const parsed = TemplateSchema.parse({ ...t, updatedAt: new Date().toISOString() });
@@ -203,7 +244,7 @@ export function saveTemplate(t: Template): Template {
 }
 
 export function uniqueTemplateId(base: string, taken = listTemplates()): string {
-  const root = slugify(base).slice(0, 34) || "template";
+  const root = slugify(base, "template").slice(0, 34);
   if (!taken.some((t) => t.id === root)) return root;
   let n = 2;
   while (taken.some((t) => t.id === `${root}-${n}`)) n++;

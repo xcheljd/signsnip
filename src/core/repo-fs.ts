@@ -18,8 +18,13 @@ export class FsRepo implements Repo {
     fs.mkdirSync(this.dir, { recursive: true });
     fs.cpSync(s, this.dir, { recursive: true });
   }
-  private jsonFile = (k: string) => path.join(this.dir, `${k}.json`);
-  private blobFile = (k: string) => path.join(this.dir, `${k}.png`);
+  /** Keys become file paths, so none may climb out of the data folder ("../x", "/etc/x", "a\\b"). */
+  private file(k: string, ext: string) {
+    if (!k.split("/").every((seg) => seg !== "" && seg !== "." && seg !== ".." && !/[\\\0:]/.test(seg))) throw new Error(`"${k}" isn't a valid name`);
+    return path.join(this.dir, `${k}.${ext}`);
+  }
+  private jsonFile = (k: string) => this.file(k, "json");
+  private blobFile = (k: string) => this.file(k, "png");
   private write(file: string, data: string | Uint8Array) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;

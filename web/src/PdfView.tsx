@@ -48,6 +48,14 @@ export function PdfView({
   drawnRef.current = drawn;
 
   // new bytes or width: load, redraw the visible pages, swap them in together
+  // nothing to show: clear the old pages, so a stale preview never stands in for the current one
+  useEffect(() => {
+    if (bytes) return;
+    ver.current++;
+    setCount(0); setDrawn([]); setErr("");
+    const old = docRef.current; docRef.current = null;
+    if (old) void old.task.destroy();
+  }, [bytes]);
   useEffect(() => {
     if (!bytes || width < 50) return;
     const v = ++ver.current;

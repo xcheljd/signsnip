@@ -2,6 +2,7 @@ import { z } from "zod";
 import { csvToSigns } from "./batch.js";
 import { fromBase64, imageKind, toBase64 } from "./images.js";
 import { repo } from "./repo.js";
+import { count } from "./words.js";
 import {
   listBrands, listPresets, listSavedBatches, listTemplates, readBatch, readLogo, readRules,
   saveBrands, savePresets, writeBatch, writeRules,
@@ -91,6 +92,11 @@ export function summarizeWorkspace(w: Workspace) {
   };
 }
 
+/** What a backup holds, in words (the restore dialog shows this before replacing anything). */
+export function describeSummary(s: { brands: number; logos: number; templates: number; presets: number; saved: number; signs: number }): string {
+  return [count(s.brands, "brand"), count(s.logos, "logo"), count(s.templates, "template"), count(s.presets, "preset"), count(s.saved, "saved batch"), `${count(s.signs, "sign")} in the batch`].join(" · ");
+}
+
 /** Remove everything (brands, logos, batches, templates, rules). */
 function wipe(): void {
   const r = repo();
@@ -147,7 +153,6 @@ export function startWithSamples(seed: SampleData): void {
   for (const [id, png] of Object.entries(seed.logos)) repo().setBlob(`logos/${id}`, png);
   savePresets(seed.presets.map((p) => PresetSchema.parse(p)));
   writeRules(DEFAULT_RULES);
-  writeBatch({ items: [], options: DEFAULT_OPTIONS });
   writeBatch({ items: csvToSigns(SAMPLE_BATCH_CSV), options: DEFAULT_OPTIONS });
   markStarted("samples");
 }

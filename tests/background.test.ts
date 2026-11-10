@@ -3,21 +3,24 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import sharp from "sharp";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { backgroundRect } from "../src/core/template";
 import { SIGN_H_MM, SIGN_W_MM } from "../src/core/types";
 
 const root = path.resolve(__dirname, "..");
 const bin = path.join(root, "bin/signsnip.mjs");
 let data: string, data2: string, pic: string, clear: string;
+const temp: string[] = [];
+const tmpDir = (name: string) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), name)); temp.push(d); return d; };
+afterAll(() => { for (const d of temp) fs.rmSync(d, { recursive: true, force: true }); });
 const run = (dir: string, ...a: string[]) => spawnSync(process.execPath, [bin, ...a], { env: { ...process.env, SIGNSNIP_DATA: dir }, encoding: "utf8" });
 const signo = (...a: string[]) => run(data, ...a);
 const bgFiles = (dir: string) => (fs.existsSync(path.join(dir, "backgrounds")) ? fs.readdirSync(path.join(dir, "backgrounds")) : []);
 const images = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Subtype\s*\/Image/g) ?? []).length;
 
 beforeAll(async () => {
-  data = fs.mkdtempSync(path.join(os.tmpdir(), "signsnip-bg-"));
-  data2 = fs.mkdtempSync(path.join(os.tmpdir(), "signsnip-bg2-"));
+  data = tmpDir("signsnip-bg-");
+  data2 = tmpDir("signsnip-bg2-");
   // a made-up wide stripe pattern (a "photo": opaque, so it's stored as JPEG)
   const w = 2400, h = 1200, raw = Buffer.alloc(w * h * 3);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 3, on = ((x + y) >> 6) & 1; raw[i] = on ? 40 : 220; raw[i + 1] = 120; raw[i + 2] = on ? 200 : 60; }
@@ -87,7 +90,7 @@ describe("template background pictures (CLI end-to-end)", () => {
     expect(bgFiles(data2)).toHaveLength(1);
     const set = path.join(data, "s.signsnip.json");
     expect(signo("templates", "export", "percent", "-o", set).status).toBe(0);
-    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "signsnip-bg3-"));
+    const fresh = tmpDir("signsnip-bg3-");
     run(fresh, "brands");
     expect(run(fresh, "templates", "import", set, "--replace").status).toBe(0);
     expect(run(fresh, "templates", "show", "percent").stdout).toContain("25% strength");

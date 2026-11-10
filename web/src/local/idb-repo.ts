@@ -21,6 +21,33 @@ export function markBackedUp(at = Date.now()) {
   window.dispatchEvent(new Event("signsnip:saved-state"));
 }
 
+/**
+ * Each tab works from its own in-memory copy, so a second tab that keeps editing would save
+ * over this one's changes. Every write is announced; other tabs stop and ask for a reload.
+ */
+const tabs = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("signsnip");
+/**
+ * Set the moment another tab says it saved. From then on this tab writes nothing: its copy is
+ * out of date, and a write still waiting (an autosave due a few ms later, before the notice is
+ * drawn) would replace the other tab's newer work.
+ */
+let otherTabSaved = false;
+tabs?.addEventListener("message", () => { otherTabSaved = true; });
+/**
+ * Why this tab's copy is out of date: "changed" = another tab saved something;
+ * "closed" = this tab can't save at all any more (the browser's storage for SignSnip was
+ * cleared or deleted while the tab was open), so its work exists only in memory.
+ */
+export type Stale = "changed" | "closed";
+/** listeners told when this tab can no longer save (our database was closed or deleted) */
+const staleHere = new Set<(why: Stale) => void>();
+export function onChangedElsewhere(fn: (why: Stale) => void): () => void {
+  const h = () => fn("changed");
+  staleHere.add(fn);
+  tabs?.addEventListener("message", h);
+  return () => { staleHere.delete(fn); tabs?.removeEventListener("message", h); };
+}
+
 function req<T>(r: IDBRequest<T>): Promise<T> {
   return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 }
@@ -38,6 +65,12 @@ export class BrowserRepo extends MemoryRepo {
     };
     const db = await req(open);
     const r = new BrowserRepo(db);
+    // A newer SignSnip in another tab (or "clear site data") needs the database: let go of it so
+    // that tab doesn't hang. This tab can't save any more, so show the reload notice.
+    // `onclose` is the browser closing it for us ("clear site data", storage evicted).
+    const lost = () => { if (r.closed) return; r.closed = true; for (const f of staleHere) f("closed"); };
+    db.onversionchange = () => { db.close(); lost(); };
+    db.onclose = lost;
     const tx = db.transaction(["json", "blobs"], "readonly");
     const [jk, jv, bk, bv] = await Promise.all([
       req(tx.objectStore("json").getAllKeys()), req(tx.objectStore("json").getAll()),
@@ -48,17 +81,29 @@ export class BrowserRepo extends MemoryRepo {
     return r;
   }
 
+  /** writes dropped because another tab saved first (see otherTabSaved) */
+  skipped = 0;
+  /** the database was closed for another tab; every later write fails (reload to reopen) */
+  closed = false;
+  /** Queue one write. A failed write is reported (onError, then flush) and never blocks the next one. */
   private persist(fn: (tx: IDBTransaction) => void) {
     markChanged();
     this.queue = this.queue.then(() => new Promise<void>((res) => {
-      const tx = this.db.transaction(["json", "blobs"], "readwrite");
-      fn(tx);
-      tx.oncomplete = () => res();
-      tx.onerror = tx.onabort = () => {
-        this.failed = tx.error ?? new Error("Saving to browser storage failed");
+      let done = false;
+      const fail = (e: unknown) => {
+        if (done) return;
+        done = true;
+        this.failed = e instanceof Error ? e : new Error("Saving to browser storage failed");
         this.onError?.(this.failed);
         res();
       };
+      if (this.closed) return fail(new Error("This browser's storage for SignSnip was cleared while this tab was open"));
+      if (otherTabSaved) { done = true; this.skipped++; return res(); } // the reload notice is already on its way
+      let tx: IDBTransaction;
+      try { tx = this.db.transaction(["json", "blobs"], "readwrite"); } catch (e) { return fail(e); }
+      tx.oncomplete = () => { if (done) return; done = true; tabs?.postMessage("changed"); res(); };
+      tx.onerror = tx.onabort = () => fail(tx.error ?? new Error("Saving to browser storage failed"));
+      try { fn(tx); } catch (e) { fail(e); try { tx.abort(); } catch { /* already finished */ } }
     }));
   }
   override setJson(key: string, value: unknown) {
@@ -80,4 +125,8 @@ export class BrowserRepo extends MemoryRepo {
     await this.queue;
     if (this.failed) { const e = this.failed; this.failed = null; throw e; }
   }
+  /** forget an earlier failure, so the next flush() reports only writes made after this */
+  async clearFailure(): Promise<void> { await this.queue; this.failed = null; }
+  /** resolves once every queued write has finished, whether or not it reached IndexedDB */
+  settled(): Promise<void> { return this.queue; }
 }

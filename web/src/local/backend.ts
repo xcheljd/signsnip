@@ -8,6 +8,7 @@ import { repo, setRepo } from "../../../src/core/repo";
 import * as store from "../../../src/core/store";
 import { BatchSchema, PresetSchema, RulesSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
 import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
+import { toast } from "sonner";
 import type { Backend, State } from "../api";
 import { canvasImages } from "./canvas-images";
 import { BACKUP_KEYS, BrowserRepo, markBackedUp, quietly } from "./idb-repo";
@@ -29,6 +30,7 @@ const run = async <T>(fn: () => T | Promise<T>): Promise<T> => fn();
 export async function createBrowserBackend(): Promise<Backend> {
   const r = await BrowserRepo.open();
   setRepo(r);
+  r.onError = (e) => toast.error("Couldn't save to this browser's storage", { id: "signsnip-storage", duration: Infinity, description: `${e.message}. Your changes are only in this tab for now - use Back up to keep a copy.` });
   setImageOps(canvasImages);
   setFontSource((w) => bytesOf(w === "bold" ? boldUrl : regularUrl));
   // ask the browser not to evict our data under storage pressure (best effort)
@@ -107,12 +109,15 @@ export async function createBrowserBackend(): Promise<Backend> {
     },
     fetchCalibration: (paper) => renderCalibration(paper),
     backup: async () => {
-      await r.flush();
+      // A backup is the way out after a storage failure, so it never fails because of one:
+      // wait for pending writes, then export this tab's in-memory copy (the full, current work).
+      await r.settled();
       markBackedUp();
       return { blob: new Blob([JSON.stringify(exportWorkspace())], { type: "application/json" }), filename: `signsnip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json` };
     },
     inspectBackup: (raw) => run(() => summarizeWorkspace(parseWorkspace(raw))),
     restoreBackup: (raw) => quietly(async () => {
+      await r.clearFailure(); // report only this restore's own writes
       const s = restoreWorkspace(raw);
       await r.flush();
       markBackedUp(); // what's here now is exactly what's in that file
@@ -120,6 +125,7 @@ export async function createBrowserBackend(): Promise<Backend> {
       return s;
     }),
     start: (from) => quietly(async () => {
+      await r.clearFailure();
       if (from === "scratch") startFromScratch();
       else {
         const logos: Record<string, Uint8Array> = {};
