@@ -37,6 +37,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { controlHasKey, describeTarget, destructiveAllowed } from "./keys";
 
 /** key-order-independent fingerprint (server JSON and local objects list keys in different orders) */
 const canon = (v: unknown): unknown =>
@@ -227,15 +228,15 @@ export function TemplatesTab({
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      const el = e.target as HTMLElement;
-      const typing = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable || el.getAttribute("role") === "slider";
-      if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); save(); return; }
-      if (typing) return;
+      const t = describeTarget(e.target as HTMLElement);
+      if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); save(); return; } // save works everywhere
+      // typing, or operating a menu / dialog / control: the key belongs to it, not to the canvas
+      if (controlHasKey(t)) return;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
       if (!selected) return;
       if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); duplicateObj(selected); return; }
-      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeObj(selected); return; }
+      if (e.key === "Delete" || e.key === "Backspace") { if (!destructiveAllowed(t)) return; e.preventDefault(); removeObj(selected); return; }
       if (e.key === "Escape") { setSelected(null); return; }
       const step = e.shiftKey ? 1 : 0.1;
       const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
