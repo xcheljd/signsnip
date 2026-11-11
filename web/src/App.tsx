@@ -10,6 +10,7 @@ import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
 import { latestOnly } from "./latest";
+import { closeNotice, nextNotice, noticeText, parseNoticeMemory, type NoticeMemory } from "./dataNotice";
 import { logosKey } from "./logoVersion";
 import { pdfKey, reusablePdf } from "./pdfKey";
 import { BatchPanel, PrintSettings, moveItem } from "./BatchPanel";
@@ -44,17 +45,6 @@ const uid = () => crypto.randomUUID();
 const keep = <T,>(next: T) => (prev: T): T => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
 const fail = (e: unknown) => toast.error((e as Error).message);
 
-/** What a stored part is called in the damaged-data notice. */
-const PART_NAMES: Record<string, string> = { brands: "brands", batch: "the current batch", templates: "templates", presets: "presets", rules: "text rules" };
-const partName = (key: string) => (key.startsWith("batches/") ? `the saved batch “${key.slice("batches/".length)}”` : PART_NAMES[key] ?? key);
-/** One notice for every part that couldn't be read, or "" when all of it could. */
-function problemNotice(problems: NonNullable<api.State["problems"]> = []): string {
-  if (!problems.length) return "";
-  const many = problems.length > 1;
-  // the hosted build can't keep a copy (keptAt is unset there), so it doesn't claim one
-  const kept = problems.every((p) => p.keptAt) ? ` and kept ${many ? "copies of the damaged files" : "a copy of the damaged file"}` : "";
-  return `Part of your saved data couldn't be read (${problems.map((p) => partName(p.key)).join(", ")}). SignSnip started without it${kept}. Restore a backup to get it back.`;
-}
 const blank = (brandId: string): Sign => ({
   id: uid(), brandId, kind: "percent", templateId: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*",
   priceLabel: "", footer: "*MSRP", copies: 1,
@@ -106,17 +96,33 @@ function SignoApp() {
   const [calibrated, setCalibratedState] = useState(() => (localStorage.getItem("signsnip.calibrated") ?? localStorage.getItem("signo.calibrated")) === "1");
   const setCalibrated = (v: boolean) => { localStorage.setItem("signsnip.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
+  // The damaged-data notice stays until someone presses Close, also across reloads (remembered in localStorage).
+  const notice = useRef<NoticeMemory | null>(null);
   const shownProblems = useRef("");
-  const onRemote = useCallback((s: api.State) => {
-    // one fixed toast id, and only when the text changes: polling every 2.5 s must not stack notices
-    const notice = problemNotice(s.problems);
-    if (notice !== shownProblems.current) {
-      shownProblems.current = notice;
-      if (notice) toast.error(notice, { id: "data-problems", duration: Infinity }); else toast.dismiss("data-problems");
+  const setNotice = useCallback(function setNotice(mem: NoticeMemory) {
+    notice.current = mem;
+    try {
+      if (mem.open.length || mem.closed.length) localStorage.setItem("signsnip.dataProblems", JSON.stringify(mem));
+      else localStorage.removeItem("signsnip.dataProblems");
+    } catch { /* storage blocked or full: the notice still shows for this visit */ }
+    // one fixed toast id, and only when the text changes: polling every 2.5 s must not stack notices.
+    // Nothing dismisses it automatically: only Close takes it away (sonner removes the toast on its action).
+    const text = noticeText(mem.open);
+    if (text === shownProblems.current) return;
+    shownProblems.current = text;
+    if (text) {
+      toast.error(text, {
+        id: "data-problems", duration: Infinity, dismissible: false,
+        action: { label: "Close", onClick: () => setNotice(closeNotice(notice.current ?? mem)) },
+      });
     }
+  }, []);
+  const onRemote = useCallback((s: api.State) => {
+    notice.current ??= parseNoticeMemory(localStorage.getItem("signsnip.dataProblems"));
+    setNotice(nextNotice(notice.current, s.problems));
     setBrands(keep(s.brands)); setPresets(keep(s.presets)); setSaved(keep(s.saved)); setTemplates(keep(s.templates)); setRules(keep(s.rules));
     setDraft((d) => d ?? blank(s.brands[0]?.id ?? ""));
-  }, []);
+  }, [setNotice]);
   const { batch, update, undo, canUndo, refresh } = useBatch(onRemote);
   useEffect(() => { refresh(true).catch(fail); }, [refresh]);
 
