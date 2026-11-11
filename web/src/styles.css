@@ -170,7 +170,11 @@
   }
   /* buttons inside a field (stepper − / +) fill the taller field */
   [data-slot="input-group"] button { min-height: 2.25rem; min-width: 2.25rem; }
-  [data-slot="tabs-list"] { height: auto !important; }
+  /* "safe": on a very narrow phone the row scrolls from its first tab instead of cutting both ends off */
+  [data-slot="tabs-list"] { height: auto !important; justify-content: safe center; }
+  /* a tab is never narrower than its label: the 44px minimum above would otherwise let the tabs
+     share the width equally and squeeze a long label ("Brands & logos") out of its tab */
+  [data-slot="tabs-trigger"] { min-width: max-content; }
   /* small controls get an invisible 44px hit area instead of growing */
   [data-slot="checkbox"], [data-slot="switch"], [data-slot="radio-group-item"] { position: relative; }
   [data-slot="checkbox"]::after, [data-slot="switch"]::after, [data-slot="radio-group-item"]::after {
