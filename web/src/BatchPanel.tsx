@@ -7,7 +7,7 @@ import {
 import { toast } from "sonner";
 import { MAX_PAGES, pageFill, sheetGeometry } from "../../src/core/geometry";
 import { money } from "../../src/core/layout";
-import { resolveTemplate } from "../../src/core/template";
+import { resolveTemplate, withKind } from "../../src/core/template";
 import type { Batch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
 import { NumField } from "./NumField";
@@ -136,7 +136,7 @@ export function BatchPanel({
               {w.code === "logo-background" && <Button type="button" size="sm" variant="outline" onClick={() => onFixBg(w.brandId)}><WandSparklesIcon data-icon="inline-start" />Remove background</Button>}
               {(w.code === "low-res-logo" || w.code === "no-logo") && brands.some((b) => b.id === w.brandId) && <Button type="button" size="sm" variant="outline" onClick={() => onGoToBrand(w.brandId)}>Open brand</Button>}
               {w.code === "small-text" && /too big for its box/.test(w.message) && <Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(w.items[0]!)}>See it in the designer</Button>}
-              {(w.code === "small-text" || w.code === "was-price") && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
+              {(w.code === "small-text" || w.code === "was-price" || w.code === "kind-mismatch") && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
             </AlertAction>
           </Alert>
         ))}
@@ -157,8 +157,8 @@ export function BatchPanel({
                   <IconButton label="Clear selection" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
                 </div>
                 <Separator orientation="vertical" className="h-8" />
-                <BulkNumber label="Percent" after="%" emptyStart={50} min={1} max={99} onApply={(n) => patchSelected({ kind: "percent", percent: n }, `Set ${n}% off`)} />
-                <BulkNumber label="Price" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => patchSelected({ kind: "price", price: n }, `Set price ${money(n)}`)} />
+                <BulkNumber label="Percent" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
+                <BulkNumber label="Price" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
                 <BulkNumber label="Copies" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
                 <Field className="w-56">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>

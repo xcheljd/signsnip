@@ -197,6 +197,6 @@ export interface Warning {
   items: number[];
   brandId: string;
   level: "warn" | "info";
-  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template" | "was-price" | "spill";
+  code: "low-res-logo" | "logo-background" | "small-text" | "no-logo" | "auto-abbrev" | "auto-template" | "was-price" | "spill" | "kind-mismatch";
   message: string;
 }

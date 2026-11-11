@@ -79,6 +79,19 @@ export function resolveTemplate(sign: Pick<Sign, "templateId" | "kind">, templat
   return templates.find((t) => t.id === id) ?? templates.find((t) => t.id === (sign.kind ?? "percent")) ?? defaultTemplate(sign.kind ?? "percent");
 }
 
+/**
+ * Change a sign's kind and keep its template in step: a sign whose template is of the other
+ * kind moves to the built-in template for the new kind (the template decides what prints).
+ * The default footer follows the kind, like the sign editor does.
+ */
+export function withKind<S extends Sign>(sign: S, kind: Sign["kind"], templates: Template[]): S {
+  const same = resolveTemplate(sign, templates).kind === kind;
+  const footer = sign.kind === kind ? sign.footer
+    : kind === "price" ? (sign.footer === "*MSRP" ? "" : sign.footer)
+    : (sign.footer === "" ? "*MSRP" : sign.footer);
+  return { ...sign, kind, templateId: same ? sign.templateId : kind, footer };
+}
+
 /** Which sign fields a template actually prints (drives which inputs the editor shows). */
 export function usedFields(t: Template): Set<TextField | "logo" | "prefix" | "collection"> {
   const out = new Set<TextField | "logo">();

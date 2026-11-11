@@ -257,6 +257,9 @@ export async function checkSigns(items: Sign[]): Promise<Warning[]> {
       const what = f.belowMin.map((l) => `"${l.text}" (${l.sizePt.toFixed(1)}pt)`).join(", ");
       out.push({ items: [i], brandId: s.brandId, level: "warn", code: "small-text", message: `${row}: ${what} ${f.belowMin.length === 1 ? "is" : "are"} below your ${f.min}pt readable minimum. Add an abbreviation, shorten the name, or give the template a long-name fallback.` });
     }
+    if (f.template.kind !== s.kind) {
+      out.push({ items: [i], brandId: s.brandId, level: "warn", code: "kind-mismatch", message: `${row}: set as a ${s.kind} sign but its template “${f.template.name}” prints a ${f.template.kind} offer. Pick a ${s.kind} template, or change the sign.` });
+    }
     if (s.kind === "price" && s.price && s.wasPrice && s.wasPrice <= s.price) {
       out.push({ items: [i], brandId: s.brandId, level: "warn", code: "was-price", message: `${row}: the “was” price (${s.wasPrice}) isn't higher than the sale price (${s.price}).` });
     }

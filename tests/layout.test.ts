@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fitLogo, growArea, LOGO_BOX, maxLogoScale, money, wrapWords, type Measure } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
-import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, defaultTemplate, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields } from "../src/core/template";
+import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, defaultTemplate, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields, withKind } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
@@ -250,5 +250,51 @@ describe("line spacing and spill checks", () => {
     const t = base(); delete (heading(t) as { lineSpacing?: number }).lineSpacing;
     const a = lines(t); const b = lines(base());
     expect(a.map((l) => l.cy)).toEqual(b.map((l) => l.cy));
+  });
+});
+
+describe("withKind (bulk Percent/Price keeps the template in step)", () => {
+  const harborPrice: Template = { ...defaultTemplate("price"), id: "harbor-price", name: "Harbor price" };
+  const templates = [...DEFAULT_TEMPLATES, harborPrice];
+
+  it("moves a percent sign on the percent template to the built-in price template", () => {
+    const s = withKind(sign({ templateId: "percent" }), "price", templates);
+    expect(s.kind).toBe("price");
+    expect(s.templateId).toBe("price");
+    expect(s.footer).toBe("");
+    expect(resolveTemplate(s, templates).kind).toBe("price");
+  });
+  it("keeps a template that already prints the new kind", () => {
+    const s = withKind(sign({ templateId: "harbor-price" }), "price", templates);
+    expect(s.templateId).toBe("harbor-price");
+    expect(s.kind).toBe("price");
+  });
+  it("leaves a sign of the same kind unchanged (new object)", () => {
+    const before = sign({ templateId: "percent", footer: "Harbor only" });
+    const after = withKind(before, "percent", templates);
+    expect(after).toEqual(before);
+    expect(after).not.toBe(before);
+  });
+  it("going back to percent restores the default footer and fixes an old mismatch", () => {
+    const s = withKind(sign({ kind: "price", price: 120, templateId: "price", footer: "" }), "percent", templates);
+    expect(s).toMatchObject({ kind: "percent", templateId: "percent", footer: "*MSRP" });
+    const stale = withKind(sign({ kind: "percent", templateId: "harbor-price" }), "percent", templates);
+    expect(stale.templateId).toBe("percent");
+  });
+});
+
+describe("checkSigns kind-mismatch warning", () => {
+  it("flags a sign whose template prints the other kind, and nothing after withKind", async () => {
+    await import("../src/core/node"); // fonts + images; storage is swapped for memory below
+    const { MemoryRepo, setRepo } = await import("../src/core/repo");
+    setRepo(new MemoryRepo());
+    const { checkSigns } = await import("../src/core/pdf");
+    const bad = sign({ brandId: "northwind", collection: "HARBOR", kind: "price", price: 120, templateId: "percent", footer: "" });
+    const mismatch = (await checkSigns([bad])).filter((w) => w.code === "kind-mismatch");
+    expect(mismatch).toHaveLength(1);
+    expect(mismatch[0]).toMatchObject({ items: [0], level: "warn" });
+    expect(mismatch[0]!.message).toContain("set as a price sign");
+    const fixed = { ...withKind(sign({ brandId: "northwind", collection: "HARBOR", templateId: "percent" }), "price", DEFAULT_TEMPLATES), price: 120 };
+    expect((await checkSigns([fixed])).filter((w) => w.code === "kind-mismatch")).toHaveLength(0);
   });
 });
