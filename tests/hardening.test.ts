@@ -1,19 +1,17 @@
 import fs from "node:fs";
-import http from "node:http";
-import os from "node:os";
 import path from "node:path";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { addToBatch, buildSign } from "../src/core/batch";
+import { checkSigns } from "../src/core/pdf";
 import { MemoryRepo, setRepo } from "../src/core/repo";
 import { FsRepo } from "../src/core/repo-fs";
-import { MAX_ID, brandMatches, listBrands, listSavedBatches, saveNamedBatch, savedBatchMatches, templateMatches, upsertBrand } from "../src/core/store";
+import {
+  MAX_ID, addBrand, brandMatches, deleteBrand, getBrand, listBrands, listSavedBatches, readBatch, readLogo, saveNamedBatch,
+  savedBatchMatches, templateMatches, upsertBrand, writeBatch,
+} from "../src/core/store";
 import { DEFAULT_OPTIONS } from "../src/core/types";
-
-const root = path.resolve(__dirname, "..");
-const bin = path.join(root, "bin/signsnip.mjs");
-const temp: string[] = [];
-const tmpDir = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), "signsnip-hard-")); temp.push(d); return d; };
-afterAll(() => { for (const d of temp) fs.rmSync(d, { recursive: true, force: true }); });
+import { describeSummary, exportWorkspace, startFromScratch, summarizeWorkspace } from "../src/core/workspace";
+import { assertSafeRepo, assertTempDir, removeLater, root, startServer, tmpWorkspace, useNodeWorkspace, type Call } from "./helpers";
 
 describe("names never overwrite each other", () => {
   beforeEach(() => setRepo(new MemoryRepo()));
@@ -86,8 +84,14 @@ describe("typed lookups", () => {
 });
 
 describe("data folder", () => {
+  it("the test helpers refuse the owner's real data folder", async () => {
+    expect(() => assertTempDir(path.join(root, "data"))).toThrow(/refusing/);
+    await expect(useNodeWorkspace(path.join(root, "data"))).rejects.toThrow(/refusing/);
+    await expect(startServer(path.join(root, "data"))).rejects.toThrow(/refusing/);
+    expect(fs.existsSync(path.join(root, "data"))).toBe(false);
+  });
   it("refuses keys that would leave it", () => {
-    const dir = tmpDir();
+    const dir = tmpWorkspace("signsnip-hard-");
     // data folder = dir/data, so batches/../../victim would be dir/victim.json: put the victim exactly there
     const outside = path.join(dir, "victim.json");
     fs.writeFileSync(outside, "{}");
@@ -104,110 +108,74 @@ describe("data folder", () => {
   });
 });
 
-describe("CLI guards", () => {
+describe("brand guards (core, on disk)", () => {
   let data: string;
-  const cli = (...a: string[]) => spawnSync(process.execPath, [bin, ...a], { env: { ...process.env, SIGNSNIP_DATA: data }, encoding: "utf8" });
-  beforeAll(() => { data = tmpDir(); });
-  it("a missing name never picks a saved batch or a template", () => {
-    cli("add", "--brand", "northwind", "--collection", "T", "--percent", "50");
-    cli("save", "Alpha"); cli("save", "Beta");
-    for (const args of [["batches", "rm"], ["batches", "rm", ""], ["load"], ["templates", "reset"], ["templates", "rm"], ["brands", "rm"]]) {
-      const r = cli(...args);
-      expect(r.status, args.join(" ")).toBe(1);
-      expect(r.stderr, args.join(" ")).toContain("usage:");
-    }
-    expect(cli("load", "a").stderr).toContain("matches several saved batches");
-    expect(cli("batches").stdout).toMatch(/Alpha[\s\S]*|Beta[\s\S]*/);
-    expect(cli("batches").stdout.trim().split("\n")).toHaveLength(2);
-  });
-  it("a logo that can't be read changes no brand, old or new", () => {
-    const logo = path.join(root, "seed/logos/kestrel-vale.png");
-    expect(cli("brands", "add", "Lumen!").stdout).toContain("added brand lumen");
-    expect(cli("brands", "add", "Lumen", "--logo", logo).stdout).toContain("added brand lumen-2 with logo");
-    const before = cli("brands").stdout;
-    const bad = path.join(data, "bad.png"); fs.writeFileSync(bad, "not a picture");
+  beforeAll(async () => { data = await useNodeWorkspace(tmpWorkspace("signsnip-hard-")); assertSafeRepo(); });
+  const notAPicture = new TextEncoder().encode("not a picture");
+  it("a logo that can't be read changes no brand, old or new", async () => {
+    const logo = fs.readFileSync(path.join(root, "seed/logos/kestrel-vale.png"));
+    expect(await addBrand({ name: "Lumen!" })).toMatchObject({ id: "lumen", created: true, hasLogo: false });
+    expect(await addBrand({ name: "Lumen" }, logo)).toMatchObject({ id: "lumen-2", created: true, hasLogo: true });
+    const before = JSON.stringify(listBrands()), logoBefore = readLogo("lumen-2");
     for (const name of ["Lumen", "lumen", "Lumen!"]) {
-      const r = cli("brands", "add", name, "--logo", bad);
-      expect(r.status, name).toBe(1);
-      expect(r.stderr, name).toContain("nothing changed");
+      await expect(addBrand({ name }, notAPicture), name).rejects.toThrow("isn't a picture SignSnip can read");
     }
-    expect(cli("brands").stdout).toBe(before);
-    expect(cli("brands", "add", "Lumen", "--collections", "Dawn").stdout).toContain("updated brand lumen-2");
+    expect(JSON.stringify(listBrands())).toBe(before);
+    expect(readLogo("lumen-2")).toEqual(logoBefore);
+    expect(readLogo("lumen")).toBeNull();
+    expect(await addBrand({ name: "Lumen", collections: ["Dawn"] })).toMatchObject({ id: "lumen-2", created: false, collections: ["Dawn"] });
   });
-  it("adding an existing brand again says so and keeps its name", () => {
-    expect(cli("brands", "add", "Tom & Co").stdout).toContain("added brand tom-and-co");
-    expect(cli("brands", "add", "tom & co ").stdout).toContain("updated brand tom-and-co");
-    const list = cli("brands").stdout;
-    expect(list).toContain("Tom & Co");
-    expect(list).not.toContain("tom & co");
+  it("adding an existing brand again says so and keeps its name", async () => {
+    expect(await addBrand({ name: "Tom & Co" })).toMatchObject({ id: "tom-and-co", created: true });
+    expect(await addBrand({ name: "tom & co " })).toMatchObject({ id: "tom-and-co", name: "Tom & Co", created: false });
+    const names = listBrands().map((b) => b.name);
+    expect(names).toContain("Tom & Co");
+    expect(names).not.toContain("tom & co");
   });
-  it("counts read as words: 1 brand, 0 saved batches, 1 sign", () => {
-    const own = tmpDir();
-    const run = (...a: string[]) => spawnSync(process.execPath, [bin, ...a], { env: { ...process.env, SIGNSNIP_DATA: own }, encoding: "utf8" });
-    run("start", "scratch", "--yes"); run("brands", "add", "Solo");
-    run("add", "--brand", "solo", "--collection", "One", "--percent", "10");
-    const r = run("backup", "-o", path.join(own, "b.signsnip-backup.json"));
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain("backed up 1 brand (0 logos)");
-    expect(r.stdout).toContain("0 saved batches, 1 sign in the batch");
-    expect(run("batch").stdout).toContain("1 sign · 1 page");
+  it("counts read as words: 1 brand, 0 saved batches, 1 sign", async () => {
+    await useNodeWorkspace(tmpWorkspace("signsnip-hard-own-"));
+    startFromScratch();
+    await addBrand({ name: "Solo" });
+    addToBatch([buildSign({ brand: "solo", collection: "One", percent: 10 })]);
+    const text = describeSummary(summarizeWorkspace(exportWorkspace()));
+    expect(text).toContain("1 brand · 0 logos");
+    expect(text).toContain("0 saved batches · 1 sign in the batch");
+    await useNodeWorkspace(data);
   });
-  it("a logo that can't be read doesn't leave a brand behind", () => {
-    const bad = path.join(data, "bad.png"); fs.writeFileSync(bad, "not a picture");
-    for (const logo of ["/nope/missing.png", bad]) {
-      const r = cli("brands", "add", "Ghost Co", "--logo", logo);
-      expect(r.status).toBe(1);
-      expect(cli("brands").stdout).not.toContain("Ghost Co");
-    }
+  it("a logo that can't be read doesn't leave a brand behind", async () => {
+    await expect(addBrand({ name: "Ghost Co" }, notAPicture)).rejects.toThrow("isn't a picture");
+    expect(listBrands().map((b) => b.name)).not.toContain("Ghost Co");
   });
-  it("templates set rejects a yes/no it can't read, and rm on an empty batch says so", () => {
-    const r = cli("templates", "set", "percent", "offer.uppercase=ye");
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain("must be yes or no");
-    cli("clear");
-    expect(cli("rm", "1").stderr).toContain("the batch is empty");
-  });
-  it("a sign whose brand was deleted is shown as deleted, not as a look-alike brand", () => {
-    cli("add", "--brand", "kestrel", "--collection", "K", "--percent", "20");
-    expect(cli("brands", "rm", "kestrel").status).toBe(0);
+  it("a sign whose brand was deleted is shown as deleted, not as a look-alike brand", async () => {
+    writeBatch({ ...readBatch(), items: [] });
+    addToBatch([buildSign({ brand: "kestrel", collection: "K", percent: 20 })]);
+    deleteBrand("kestrel-vale");
     // a look-alike whose id contains the deleted one: a partial lookup of "kestrel-vale" would pick it
-    expect(cli("brands", "add", "Kestrel Vale Outlet").stdout).toContain("kestrel-vale-outlet");
-    const batch = cli("batch").stdout;
-    expect(batch).toContain("kestrel-vale (deleted brand)");
-    expect(batch).not.toContain("Kestrel Vale Outlet");
-    expect(cli("check").stdout).toContain("a brand that was deleted");
+    expect((await addBrand({ name: "Kestrel Vale Outlet" })).id).toBe("kestrel-vale-outlet");
+    const sign = readBatch().items[0]!;
+    expect(sign.brandId).toBe("kestrel-vale");
+    expect(getBrand(sign.brandId)).toBeUndefined();
+    const w = (await checkSigns(readBatch().items)).filter((x) => x.code === "no-logo");
+    expect(w).toHaveLength(1);
+    expect(w[0]!.message).toContain("a brand that was deleted");
+    expect(w[0]!.message).toContain("kestrel-vale");
+    expect(w[0]!.message).not.toContain("Kestrel Vale Outlet");
   });
 });
 
 describe("local server only answers this computer's own pages", () => {
-  const port = 7900 + Math.floor(Math.random() * 90);
-  let server: ChildProcess, data: string;
-  const call = (method: string, url: string, headers: Record<string, string> = {}, body?: string) =>
-    new Promise<{ status: number; body: string }>((resolve, reject) => {
-      const req = http.request({ host: "127.0.0.1", port, path: url, method, headers }, (res) => {
-        let text = ""; res.on("data", (d) => (text += d)); res.on("end", () => resolve({ status: res.statusCode ?? 0, body: text }));
-      });
-      req.on("error", reject); req.end(body);
-    });
+  // started the way `pnpm start` does (tsx + src/server/index.ts), on a temp data dir and a random port
+  let server: Awaited<ReturnType<typeof startServer>> | undefined, data: string, port = 0;
+  const call: Call = (...a) => server!.call(...a);
   const brands = async () => (JSON.parse((await call("GET", "/api/state")).body) as { brands: unknown[] }).brands.length;
 
   beforeAll(async () => {
-    data = tmpDir();
-    server = spawn(process.execPath, [bin, "serve"], { env: { ...process.env, SIGNSNIP_DATA: data, SIGNSNIP_PORT: String(port) }, stdio: "ignore" });
-    for (let i = 0; i < 200; i++) {
-      if (await call("GET", "/api/state").then((r) => r.status === 200, () => false)) return;
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    throw new Error("server didn't start");
+    data = tmpWorkspace("signsnip-hard-srv-");
+    server = await startServer(data);
+    port = server.port;
   });
   // Wait until the server has really exited (SIGKILL after 5s) before the temp data dir is removed.
-  afterAll(async () => {
-    if (!server || server.exitCode !== null || server.signalCode !== null) return;
-    const gone = new Promise((r) => server.once("exit", r));
-    server.kill();
-    const t = setTimeout(() => server.kill("SIGKILL"), 5000);
-    await gone; clearTimeout(t);
-  });
+  afterAll(async () => { await server?.stop(); });
 
   it("refuses writes sent by another website", async () => {
     const before = await brands();
@@ -260,7 +228,7 @@ describe("local server only answers this computer's own pages", () => {
   });
   it("can't be steered outside the data folder through an id in the URL", async () => {
     const victim = path.join(path.dirname(data), `${path.basename(data)}-victim.json`);
-    fs.writeFileSync(victim, "{}"); temp.push(victim);
+    fs.writeFileSync(victim, "{}"); removeLater(victim);
     const r = await call("DELETE", `/api/batches/..%2F..%2F${path.basename(victim, ".json")}`);
     expect(r.status).toBeGreaterThanOrEqual(400);
     expect(fs.existsSync(victim)).toBe(true);

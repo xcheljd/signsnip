@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fitLogo, growArea, LOGO_BOX, maxLogoScale, money, wrapWords, type Measure } from "../src/core/layout";
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
+import { tmpWorkspace, useNodeWorkspace } from "./helpers";
 import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, defaultTemplate, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields, withKind } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
@@ -285,7 +286,8 @@ describe("withKind (bulk Percent/Price keeps the template in step)", () => {
 
 describe("checkSigns kind-mismatch warning", () => {
   it("flags a sign whose template prints the other kind, and nothing after withKind", async () => {
-    await import("../src/core/node"); // fonts + images; storage is swapped for memory below
+    // fonts + images (node.ts loaded with a temp data dir, never the real one); storage is swapped for memory below
+    await useNodeWorkspace(tmpWorkspace("signsnip-layout-"));
     const { MemoryRepo, setRepo } = await import("../src/core/repo");
     setRepo(new MemoryRepo());
     const { checkSigns } = await import("../src/core/pdf");
