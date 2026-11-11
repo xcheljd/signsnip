@@ -9,6 +9,7 @@ import { DEFAULT_TEMPLATES, FIELD_LABELS, describeOverflow, fitSign, isBuiltin, 
 import { fitLogo } from "../../../src/core/layout";
 import { DEFAULT_RULES, TEXT_FIELDS, type Rules, type Sign, type Template, type TemplateObject, type TextField } from "../../../src/core/types";
 import * as api from "../api";
+import { logoVersion, logosKey } from "../logoVersion";
 import { usePdf } from "../App";
 import { PdfView } from "../PdfView";
 import { Inspector } from "./InspectorPanel";
@@ -64,7 +65,7 @@ export function sampleSign(t: Template, brand: api.BrandWithLogo | undefined, lo
   };
 }
 export const logoSource = (b: api.BrandWithLogo | undefined): LogoSource | null =>
-  b?.logo ? { url: api.logoUrl(b.id, `${b.logo.width}-${b.logo.background}-${b.logo.hasOriginal}`), aspect: b.logo.aspect, scale: b.logoScale } : null;
+  b?.logo ? { url: api.logoUrl(b.id, logoVersion(b)), aspect: b.logo.aspect, scale: b.logoScale } : null;
 
 function IconTip({ label, children, ...p }: { label: string } & React.ComponentProps<typeof Button>) {
   return (
@@ -280,7 +281,7 @@ export function TemplatesTab({
     const cur = issueMap.get(i.objectId);
     if (!cur || rank[i.level] > rank[cur]) issueMap.set(i.objectId, i.level);
   }
-  const printPdf = usePdf(view === "print" && sample ? [sample] : [], OPTIONS, "single", `${strip(draft)}:${brand?.logoScale}:${JSON.stringify(rules)}`, draft ? [draft] : undefined);
+  const printPdf = usePdf(view === "print" && sample ? [sample] : [], OPTIONS, "single", `${strip(draft)}:${logosKey(brands)}:${JSON.stringify(rules)}`, draft ? [draft] : undefined);
   const usage = (id: string) => items.filter((s) => resolveTemplate(s, templates).id === id).reduce((a, s) => a + s.copies, 0);
   const canvasW = Math.max(240, Math.min(holderW, 560));
   const sel = draft?.objects.find((o) => o.id === selected) ?? null;

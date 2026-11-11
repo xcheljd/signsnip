@@ -58,10 +58,14 @@ export function visiblePixels(r: Raster, stopAt = Infinity): number {
 }
 
 export type LogoBackground = "transparent" | "white" | "solid";
-export interface LogoInfo { width: number; height: number; aspect: number; background: LogoBackground; hasOriginal: boolean }
+export interface LogoInfo {
+  width: number; height: number; aspect: number; background: LogoBackground; hasOriginal: boolean;
+  /** hash of the stored logo bytes: changes whenever the picture does, even at the same size (computed on read, never stored) */
+  version: string;
+}
 
 /** Pixel size + whether the logo sits on an opaque box (sampled from the border). */
-export function rasterInfo(r: Raster): Omit<LogoInfo, "hasOriginal"> {
+export function rasterInfo(r: Raster): Omit<LogoInfo, "hasOriginal" | "version"> {
   const { data, width: w, height: h } = r;
   let opaque = 0, n = 0, minSum = 0;
   const sample = (x: number, y: number) => {

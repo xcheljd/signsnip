@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { fitLogo, maxLogoScale } from "../../src/core/layout";
 import type { Sign } from "../../src/core/types";
 import * as api from "./api";
+import { logoVersion, logosKey } from "./logoVersion";
 import { usePdf } from "./App";
 import { PdfView } from "./PdfView";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +78,7 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
     id: `preview-${b.id}`, brandId: b.id, kind: "percent", prefix: "SELECT", collection: b.collections[0] ?? "MODELS",
     percent: 50, offLabel: "OFF*", priceLabel: "", footer: "*MSRP", copies: 1,
   };
-  const preview = usePdf([sample], OPTIONS, "single", `${b.logoScale}:${logo?.width}:${logo?.background}:${logo?.hasOriginal}`);
+  const preview = usePdf([sample], OPTIONS, "single", logosKey([b]));
 
   return (
     <Card ref={ref} className={cn(focused && "ring-3 ring-primary")}>
@@ -101,7 +102,7 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files[0]); }}
           >
-            {logo ? <img className="max-h-16 max-w-full rounded-sm bg-white object-contain p-1" src={api.logoUrl(b.id, `${logo.width}-${logo.background}-${logo.hasOriginal}`)} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
+            {logo ? <img className="max-h-16 max-w-full rounded-sm bg-white object-contain p-1" src={api.logoUrl(b.id, logoVersion(b))} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
             <span>{logo ? "Drop a new logo to replace" : "Drop a logo here or click to choose"}</span>
             <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; upload(f); }} />
           </label>

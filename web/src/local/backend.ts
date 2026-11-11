@@ -37,20 +37,21 @@ export async function createBrowserBackend(): Promise<Backend> {
   // ask the browser not to evict our data under storage pressure (best effort)
   void navigator.storage?.persist?.().catch(() => {});
 
-  // object URLs for logos, rebuilt whenever a logo changes
-  const urls = new Map<string, { stamp: number; url: string }>();
-  const logoUrl = (id: string) => {
-    const key = `logos/${id}`;
-    const stamp = repo().stamp(key);
-    const hit = urls.get(id);
-    if (hit && hit.stamp === stamp) return hit.url;
-    if (hit) URL.revokeObjectURL(hit.url);
+  // Object URLs for logos: one per brand, made again when the logo's version (hash of its bytes)
+  // or its storage stamp changes. The old URL is revoked then, and when the logo is gone.
+  const logoUrls = new Map<string, { version: string; stamp: number; url: string }>();
+  const logoUrl = (id: string, version: string) => {
+    const stamp = repo().stamp(`logos/${id}`);
+    const hit = logoUrls.get(id);
+    if (hit && hit.version === version && hit.stamp === stamp) return hit.url;
+    if (hit) { URL.revokeObjectURL(hit.url); logoUrls.delete(id); }
     const bytes = store.readLogo(id);
     if (!bytes) return "";
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "image/png" }));
-    urls.set(id, { stamp, url });
+    logoUrls.set(id, { version, stamp, url });
     return url;
   };
+  const urls = new Map<string, { stamp: number; url: string }>(); // background pictures
 
   const getState = async (): Promise<State> => {
     const brands = await Promise.all(store.listBrands().map(async (b) => ({ ...b, logo: await store.logoInfo(b.id) })));
@@ -72,7 +73,7 @@ export async function createBrowserBackend(): Promise<Backend> {
     },
     removeLogoBg: (id) => run(() => store.removeLogoBackground(id)),
     restoreLogo: (id) => run(() => store.restoreLogo(id)),
-    logoUrl: (id) => logoUrl(id),
+    logoUrl: (id, version) => logoUrl(id, version),
     uploadBackground: async (file) => {
       if (!file.size) throw new Error("Empty upload");
       return store.saveBackground(new Uint8Array(await file.arrayBuffer()));

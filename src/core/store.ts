@@ -154,9 +154,12 @@ function storeLogo(brandId: string, png: Uint8Array) {
   infoCache.delete(brandId);
 }
 
-const infoCache = new Map<string, { stamp: number; info: Omit<LogoInfo, "hasOriginal"> }>();
+const infoCache = new Map<string, { stamp: number; size: number; info: Omit<LogoInfo, "hasOriginal"> }>();
 
-/** Pixel size + whether the logo sits on an opaque box. Cached until the logo changes. */
+/**
+ * Pixel size, whether the logo sits on an opaque box, and `version` (a hash of the stored bytes,
+ * so a different picture of the same size still counts as a change). Cached until the logo changes.
+ */
 export async function logoInfo(brandId: string): Promise<LogoInfo | null> {
   const r = repo();
   const bytes = r.getBlob(LOGO(brandId));
@@ -164,9 +167,9 @@ export async function logoInfo(brandId: string): Promise<LogoInfo | null> {
   const stamp = r.stamp(LOGO(brandId));
   const hasOriginal = r.getBlob(ORIG(brandId)) !== null;
   const hit = infoCache.get(brandId);
-  if (hit && hit.stamp === stamp) return { ...hit.info, hasOriginal };
-  const info = rasterInfo(await imageOps().decode(bytes));
-  infoCache.set(brandId, { stamp, info });
+  if (hit && hit.stamp === stamp && hit.size === bytes.length) return { ...hit.info, hasOriginal };
+  const info = { ...rasterInfo(await imageOps().decode(bytes)), version: hashBytes(bytes) };
+  infoCache.set(brandId, { stamp, size: bytes.length, info });
   return { ...info, hasOriginal };
 }
 

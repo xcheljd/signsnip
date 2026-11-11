@@ -10,6 +10,7 @@ import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
 import { latestOnly } from "./latest";
+import { logosKey } from "./logoVersion";
 import { pdfKey, reusablePdf } from "./pdfKey";
 import { BatchPanel, PrintSettings, moveItem } from "./BatchPanel";
 import { BrandsTab } from "./BrandsTab";
@@ -122,7 +123,7 @@ function SignoApp() {
   }, [batch.items, editing]);
 
   // pre-print checks (debounced)
-  const checkKey = JSON.stringify([batch.items, brands.map((b) => [b.id, b.logoScale, b.logo?.width, b.logo?.background]), templates.map((t) => t.updatedAt), rules]);
+  const checkKey = JSON.stringify([batch.items, logosKey(brands), templates.map((t) => t.updatedAt), rules]);
   useEffect(() => {
     if (!batch.items.length) { setWarnings([]); return; }
     const t = setTimeout(() => { api.check(batch.items).then(setWarnings).catch((e) => console.error("sign check failed:", e)); }, 400);
@@ -133,7 +134,7 @@ function SignoApp() {
   const brand = brands.find((b) => b.id === draft?.brandId);
   // a sign whose brand was deleted still previews, as it prints: without a logo (like the sheet and the print check)
   const single = useMemo(() => (draft?.brandId ? [draft] : []), [draft]);
-  const logoKey = brands.map((b) => `${b.id}:${b.logoScale}:${b.logo?.width}:${b.logo?.background}`).join("|")
+  const logoKey = logosKey(brands) + "#"
     + templates.map((t) => `${t.id}@${t.updatedAt ?? ""}`).join("|") + JSON.stringify(rules);
   // logoKey: re-render when a logo is replaced, rescaled or has its background removed
   const singlePdf = usePdf(single, batch.options, "single", logoKey);

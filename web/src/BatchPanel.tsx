@@ -10,6 +10,7 @@ import { money } from "../../src/core/layout";
 import { resolveTemplate, withKind, withTemplate } from "../../src/core/template";
 import type { Batch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
+import { logoVersion } from "./logoVersion";
 import { OpenBatchFile, ShareBatchDialog } from "./BatchFile";
 import { NumField } from "./NumField";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -240,7 +241,7 @@ export function BatchPanel({
                     <TableCell className="max-md:min-w-0 max-md:p-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground tabular-nums md:hidden">{i + 1}</span>
-                        <img className="h-5 w-12 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(s.brandId, String(brands.find((b) => b.id === s.brandId)?.logo?.width ?? 0))} alt="" />
+                        <img className="h-5 w-12 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(s.brandId, logoVersion(brands.find((b) => b.id === s.brandId)))} alt="" />
                         <span className="truncate">{brands.find((b) => b.id === s.brandId)?.name ?? s.brandId}</span>
                       </div>
                     </TableCell>
