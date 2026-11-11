@@ -287,10 +287,12 @@ export function TemplatesTab({
 
   const onFile = async (f?: File) => {
     if (!f) return;
-    let raw: unknown;
-    try { raw = JSON.parse(await f.text()); } catch { toast.error(`${f.name} isn't a template-set file`); return; }
-    try { setImportPreview({ raw, preview: await api.inspectSet(raw) }); } catch (e) { toast.error((e as Error).message); }
-    if (fileRef.current) fileRef.current.value = "";
+    try {
+      let raw: unknown;
+      try { raw = JSON.parse(await f.text()); } catch { toast.error(`${f.name} isn't a template-set file`); return; }
+      setImportPreview({ raw, preview: await api.inspectSet(raw) });
+    } catch (e) { toast.error((e as Error).message); }
+    finally { if (fileRef.current) fileRef.current.value = ""; }
   };
 
   if (!draft || !saved) return null;

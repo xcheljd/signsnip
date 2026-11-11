@@ -103,7 +103,7 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
           >
             {logo ? <img className="max-h-16 max-w-full rounded-sm bg-white object-contain p-1" src={api.logoUrl(b.id, `${logo.width}-${logo.background}-${logo.hasOriginal}`)} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
             <span>{logo ? "Drop a new logo to replace" : "Drop a logo here or click to choose"}</span>
-            <input type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; upload(f); }} />
           </label>
           <div className="rounded-lg bg-muted p-2">
             <PdfView bytes={preview.pdf?.bytes ?? null} width={80} label={`${b.name} sample sign`} aspect={47 / 70} />
