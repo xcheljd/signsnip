@@ -207,7 +207,7 @@ function SignoApp() {
     if (!draft || !presetName.trim()) return;
     const { id: _id, copies: _c, ...sign } = draft;
     try {
-      await api.savePreset({ id: presetName.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: presetName.trim(), sign });
+      await api.savePreset({ name: presetName.trim(), sign });
       await refresh(); setPresetDialog(false); toast("Preset saved");
     } catch (e) { fail(e); }
   };

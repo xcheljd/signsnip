@@ -231,6 +231,20 @@ function writeImages(images: Record<string, string>, ids: Set<string>): void {
 // ---------- presets
 export const listPresets = (): Preset[] => readJson("presets", z.array(PresetSchema), []);
 export function savePresets(p: Preset[]): void { writeJson("presets", p); }
+/** What the app sends to save a preset: a name and the sign. An `id` from an older open tab is ignored. */
+export const PresetInputSchema = z.object({ name: z.string().trim().min(1).max(60), sign: PresetSchema.shape.sign });
+/**
+ * Save a preset by name: the same name (any case/spacing) updates it, a new name gets its own id
+ * (see idForName). This is the one place that decides a preset's id. Presets saved earlier under
+ * other ids (e.g. "50-off-") keep theirs: saving the same name again updates them in place.
+ */
+export function upsertPreset(name: string, sign: Preset["sign"]): Preset & { created: boolean } {
+  const all = listPresets();
+  const id = idForName(name, all, "preset");
+  const preset = PresetSchema.parse({ id, name: name.trim(), sign });
+  savePresets([...all.filter((x) => x.id !== id), preset]);
+  return { ...preset, created: !all.some((x) => x.id === id) };
+}
 
 // ---------- batch (shared by every window on the local server)
 export const readBatch = (): Batch => readJson("batch", BatchSchema, { items: [], options: DEFAULT_OPTIONS });

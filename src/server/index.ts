@@ -8,13 +8,13 @@ import { API_PORT, ROOT } from "../core/paths.js";
 import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
   MAX_ID, dataProblems, deleteBrand, deleteSavedBatch, getBrand, listBrands, listPresets, listSavedBatches, logoInfo,
-  readBackground, saveBackground, readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
+  readBackground, saveBackground, readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, upsertPreset, PresetInputSchema, writeBatch,
   readRules, writeRules,
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
 import { seedSamples } from "../core/node.js";
 import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
-import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
+import { BatchSchema, OptionsSchema, PaperSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
 const app = new Hono();
 
@@ -180,10 +180,8 @@ app.get("/api/backgrounds/:id", (c) => {
 });
 
 app.post("/api/presets", async (c) => {
-  const p = PresetSchema.parse(await c.req.json());
-  const all = listPresets().filter((x) => x.id !== p.id);
-  savePresets([...all, p]);
-  return c.json(p);
+  const { name, sign } = PresetInputSchema.parse(await c.req.json());
+  return c.json(upsertPreset(name, sign));
 });
 app.delete("/api/presets/:id", (c) => { savePresets(listPresets().filter((x) => x.id !== c.req.param("id"))); return c.json({ ok: true }); });
 

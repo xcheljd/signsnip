@@ -6,7 +6,7 @@ import { setImageOps } from "../../../src/core/images";
 import { checkSigns, expandCopies, renderCalibration, renderPdf, setFontSource } from "../../../src/core/pdf";
 import { repo, setRepo } from "../../../src/core/repo";
 import * as store from "../../../src/core/store";
-import { BatchSchema, PresetSchema, RulesSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
+import { BatchSchema, RulesSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
 import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
 import { toast } from "sonner";
 import type { Backend, State } from "../api";
@@ -86,7 +86,7 @@ export async function createBrowserBackend(): Promise<Backend> {
       urls.set(`bg:${image}`, { stamp: 0, url });
       return url;
     },
-    savePreset: (p) => run(() => { const x = PresetSchema.parse(p); store.savePresets([...store.listPresets().filter((o) => o.id !== x.id), x]); return x; }),
+    savePreset: (p) => run(() => { const { name, sign } = store.PresetInputSchema.parse(p); return store.upsertPreset(name, sign); }),
     removePreset: (id) => run(() => store.savePresets(store.listPresets().filter((x) => x.id !== id))),
     check: (items) => checkSigns(items),
     saveBatchAs: (name, batch) => run(() => store.saveNamedBatch(name, BatchSchema.parse(batch))),

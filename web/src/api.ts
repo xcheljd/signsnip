@@ -33,7 +33,7 @@ export interface Backend {
   /** store a picture for a template background */
   uploadBackground(file: File): Promise<{ image: string; aspect: number }>;
   backgroundUrl(image: string): string;
-  savePreset(p: Preset): Promise<Preset>;
+  savePreset(p: { name: string; sign: Preset["sign"] }): Promise<Preset>;
   removePreset(id: string): Promise<unknown>;
   check(items: Sign[]): Promise<Warning[]>;
   saveBatchAs(name: string, batch: Batch): Promise<SavedBatch>;
@@ -145,7 +145,7 @@ export const restoreLogo = (id: string) => be().restoreLogo(id);
 export const logoUrl = (id: string, version: string) => be().logoUrl(id, version);
 export const uploadBackground = (file: File) => be().uploadBackground(file);
 export const backgroundUrl = (image: string) => be().backgroundUrl(image);
-export const savePreset = (p: Preset) => be().savePreset(p);
+export const savePreset = (p: { name: string; sign: Preset["sign"] }) => be().savePreset(p);
 export const removePreset = (id: string) => be().removePreset(id);
 export const check = (items: Sign[]) => be().check(items);
 export const saveBatchAs = (name: string, batch: Batch) => be().saveBatchAs(name, batch);
