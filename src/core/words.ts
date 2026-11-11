@@ -1,5 +1,5 @@
 /**
- * Counts in words, for the UI and the CLI alike: "1 sign", "2 signs", "0 saved batches".
+ * Counts in words, for the UI and its messages: "1 sign", "2 signs", "0 saved batches".
  * The one place that pluralises, so a noun like "batch" can't come out as "batchs".
  */
 export function pluralOf(noun: string): string {

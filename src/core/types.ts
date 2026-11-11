@@ -125,7 +125,7 @@ export const TemplateSetSchema = z.object({
 });
 export type TemplateSet = z.infer<typeof TemplateSetSchema>;
 
-export const GridSchema = z.enum(["landscape-5x2", "portrait-4x3"]);
+const GridSchema = z.enum(["landscape-5x2", "portrait-4x3"]);
 export const PaperSchema = z.enum(["letter", "a4"]);
 export type Grid = z.infer<typeof GridSchema>;
 export type Paper = z.infer<typeof PaperSchema>;

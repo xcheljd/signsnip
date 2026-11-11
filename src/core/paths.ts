@@ -5,5 +5,4 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 /** Working data (brands, logos, batch). Gitignored; seeded from ./seed on first run. */
 export const DATA_DIR = process.env.SIGNSNIP_DATA ? path.resolve(process.env.SIGNSNIP_DATA) : path.join(ROOT, "data");
 export const SEED_DIR = path.join(ROOT, "seed");
-export const OUT_DIR = path.join(ROOT, "out");
 export const API_PORT = Number(process.env.SIGNSNIP_PORT ?? 7047);

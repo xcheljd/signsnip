@@ -26,8 +26,8 @@ const app = new Hono();
  *    Vite dev page (port DEV_PORT, see vite.config.ts), on 127.0.0.1, localhost or [::1]; any
  *    other local page (another app on another port) is refused too.
  *  - A write with no Origin and no Sec-Fetch-Site but a form-style body is what an old browser's
- *    cross-site form post looks like, so it is refused. The app always sends Origin; the CLI,
- *    curl and tests either send no body type or send application/json and are unaffected.
+ *    cross-site form post looks like, so it is refused. The app always sends Origin; curl
+ *    and tests either send no body type or send application/json and are unaffected.
  */
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const DEV_PORT = 7048;

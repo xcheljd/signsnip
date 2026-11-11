@@ -145,7 +145,7 @@ export function BatchPanel({
           <Empty className="border border-dashed">
             <EmptyHeader>
               <EmptyTitle>Nothing in the batch yet</EmptyTitle>
-              <EmptyDescription>Build a sign above and press Enter, load a saved batch, or run <code>signsnip add</code> from the terminal.</EmptyDescription>
+              <EmptyDescription>Build a sign above and press Enter, or load a saved batch.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (

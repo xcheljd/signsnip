@@ -110,7 +110,7 @@ function SignoApp() {
   }, [checkKey]);
 
   const brand = brands.find((b) => b.id === draft?.brandId);
-  // a sign whose brand was deleted still previews, as it prints: without a logo (like the sheet and `signsnip check`)
+  // a sign whose brand was deleted still previews, as it prints: without a logo (like the sheet and the print check)
   const single = useMemo(() => (draft?.brandId ? [draft] : []), [draft]);
   const logoKey = brands.map((b) => `${b.id}:${b.logoScale}:${b.logo?.width}:${b.logo?.background}`).join("|")
     + templates.map((t) => `${t.id}@${t.updatedAt ?? ""}`).join("|") + JSON.stringify(rules);

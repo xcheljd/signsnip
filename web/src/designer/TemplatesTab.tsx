@@ -114,7 +114,7 @@ export function TemplatesTab({
   useEffect(() => { if (!brandId && brands[0]) setBrandId(brands[0].id); }, [brands, brandId]);
 
   const dirty = !!draft && strip(draft) !== strip(saved);
-  // follow the saved copy (after save / CLI edits) when nothing local is pending
+  // follow the saved copy (after save / edits in another window) when nothing local is pending
   useEffect(() => {
     // "nothing pending" = not dirty, or no edits made yet (the first render starts from the built-in
     // layouts before the saved ones arrive, which would otherwise look like unsaved changes)

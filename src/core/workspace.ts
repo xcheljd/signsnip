@@ -14,7 +14,7 @@ import {
 
 /**
  * A workspace backup: everything you made, in one file (logos embedded as base64 PNG).
- * Used by "Back up" / "Restore" in the app, the start page, and `signsnip backup` / `signsnip restore`.
+ * Used by "Back up" / "Restore" in the app and by the start page.
  */
 export const WORKSPACE_FORMAT = "signsnip/workspace";
 /** backups made before the rename */

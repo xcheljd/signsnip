@@ -10,12 +10,12 @@ export interface AddInput {
   template?: string;
 }
 
-/** Build a validated Sign from loose input (CLI flags, CSV rows). Throws friendly errors. */
+/** Build a validated Sign from loose input (CSV rows). Throws friendly errors. */
 export function buildSign(input: AddInput): Sign {
   let base: Partial<Sign> = {};
   if (input.preset) {
     const p = listPresets().find((x) => x.id === input.preset || x.name.toLowerCase() === input.preset!.toLowerCase());
-    if (!p) throw new Error(`No preset "${input.preset}". Try: signsnip presets`);
+    if (!p) throw new Error(`No preset "${input.preset}"`);
     base = { ...p.sign };
   }
   const brandRef = input.brand ?? base.brandId;
@@ -23,11 +23,11 @@ export function buildSign(input: AddInput): Sign {
   const matches = brandMatches(brandRef);
   if (matches.length > 1) throw new Error(`"${brandRef}" matches several brands (${matches.map((b) => b.name).join(", ")}). Be more specific.`);
   const brand = matches[0];
-  if (!brand) throw new Error(`No brand matching "${brandRef}". Try: signsnip brands`);
+  if (!brand) throw new Error(`No brand matching "${brandRef}"`);
   const tpls = input.template ? templateMatches(input.template) : [];
   if (tpls.length > 1) throw new Error(`"${input.template}" matches several templates (${tpls.map((t) => t.name).join(", ")}). Be more specific.`);
   const tpl = tpls[0];
-  if (input.template && !tpl) throw new Error(`No template matching "${input.template}". Try: signsnip templates`);
+  if (input.template && !tpl) throw new Error(`No template matching "${input.template}"`);
   const kind = tpl?.kind ?? (input.price !== undefined ? "price" : input.percent !== undefined ? "percent" : (base.kind ?? "percent"));
   if (kind === "price" && input.price === undefined && base.price === undefined) throw new Error("Need --price for a price template");
   if (kind === "percent" && input.percent === undefined && base.percent === undefined) throw new Error("Need --percent (or --price for a price sign)");
@@ -106,8 +106,7 @@ export function csvToSigns(text: string): Sign[] {
       const msg = (e as Error).message
         .replace("Need --percent (or --price for a price sign)", "needs a percent or price value")
         .replace("Need a brand (--brand <id|name>) or a --preset", "needs a brand (add a \"brand\" column)")
-        .replace("Need --price for a price template", "needs a price for that template")
-        .replace(". Try: signsnip brands", "");
+        .replace("Need --price for a price template", "needs a price for that template");
       throw new Error(`CSV row ${i + 2}: ${msg}`);
     }
   });

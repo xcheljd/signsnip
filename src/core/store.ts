@@ -18,7 +18,7 @@ function readJson<T>(key: string, schema: z.ZodType<T>, fallback: T): T {
 }
 const writeJson = (key: string, data: unknown) => repo().setJson(key, data);
 
-export const slugify = (s: string, fallback = "brand") =>
+const slugify = (s: string, fallback = "brand") =>
   s.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
 
 /** Longest id the local server accepts for a brand ("&" -> "and" can make a slug longer than its name). */
@@ -41,7 +41,7 @@ function idForName(name: string, taken: { id: string; name: string }[], fallback
 }
 
 /**
- * Look something up by what a person typed (CLI args, CSV cells): an exact id wins, then an exact
+ * Look something up by what a person typed (CSV cells): an exact id wins, then an exact
  * name; otherwise every name that contains it. Nothing typed matches nothing. Callers act only on a
  * single match, so a vague name can never pick (or delete) the wrong thing.
  */
@@ -195,7 +195,7 @@ function writeImages(images: Record<string, string>, ids: Set<string>): void {
 export const listPresets = (): Preset[] => readJson("presets", z.array(PresetSchema), []);
 export function savePresets(p: Preset[]): void { writeJson("presets", p); }
 
-// ---------- batch (shared between web UI and CLI)
+// ---------- batch (shared by every window on the local server)
 export const readBatch = (): Batch => readJson("batch", BatchSchema, { items: [], options: DEFAULT_OPTIONS });
 export function writeBatch(b: Batch): Batch {
   const parsed = BatchSchema.parse(b);

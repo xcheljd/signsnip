@@ -4,7 +4,7 @@ import type { Repo } from "./repo.js";
 
 /**
  * Files on disk: JSON keys -> <dir>/<key>.json, blobs -> <dir>/<key>.png.
- * Writes are atomic (write tmp + rename) so the CLI and the server can both write safely.
+ * Writes are atomic (write tmp + rename), so a crash never leaves a half-written file.
  * On first use the seed folder is copied in (fake sample brands + logos).
  */
 export class FsRepo implements Repo {

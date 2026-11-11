@@ -10,7 +10,7 @@ const UNSAVED_TOAST = "signsnip-unsaved";
 const MAX_HISTORY = 100;
 
 /**
- * The batch, with undo history and two-way sync to data/batch.json (shared with the CLI).
+ * The batch, with undo history and two-way sync to data/batch.json (shared by every window on the local server).
  * `update(fn, { undo: "Removed 3 signs" })` shows a toast with an Undo button.
  * `coalesce` merges rapid edits of one field (typing a quantity) into one undo step.
  */
@@ -78,7 +78,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
     // a save finished while this read was on its way: the read may predate it, so skip this round
     if (!initial && gen !== saves.current) return s;
     seenJson.current = theirs;
-    // adopt CLI-side changes only when nothing local is waiting to be saved
+    // adopt changes from another window only when nothing local is waiting to be saved
     if (initial || (theirs !== serverJson.current && JSON.stringify(ref.current) === serverJson.current)) {
       serverJson.current = theirs;
       commit(s.batch);
@@ -96,7 +96,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
   /**
    * Write the batch now if it has unsaved edits. Resolves true when it saved something.
    * Conflict rule (unchanged): this tab's unsaved edit wins over a change made elsewhere
-   * (the CLI shares batch.json) - but never silently: a warning says the other change was replaced.
+   * (another window shares batch.json) - but never silently: a warning says the other change was replaced.
    */
   const save = useCallback((closing = false, retry = false): Promise<boolean> => {
     // never after unmount: a poll still on its way when the hosted app's "changed in another tab"
@@ -144,7 +144,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
     return () => { document.removeEventListener("visibilitychange", flush); window.removeEventListener("pagehide", leave); };
   }, [save]);
 
-  // poll for CLI changes; say so when the local server stops answering (edits can't be saved then)
+  // poll for changes from another window; say so when the local server stops answering (edits can't be saved then)
   useEffect(() => {
     let misses = 0;
     const tick = () => refresh().then(
@@ -157,7 +157,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
         if (JSON.stringify(ref.current) === serverJson.current) toast.dismiss(UNSAVED_TOAST);
         if (saved && wasOffline) toast.success("SignSnip is back - your edits are saved");
       },
-      () => { if (++misses === 3) toast.error("SignSnip isn't answering", { id: OFFLINE_TOAST, duration: Infinity, description: "Keep this tab open: edits you make now are saved when it's back. If you closed it, start it again (signsnip serve)." }); },
+      () => { if (++misses === 3) toast.error("SignSnip isn't answering", { id: OFFLINE_TOAST, duration: Infinity, description: "Keep this tab open: edits you make now are saved when it's back. If you closed it, start it again (pnpm start)." }); },
     );
     const t = setInterval(tick, 2500);
     window.addEventListener("focus", tick);

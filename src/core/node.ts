@@ -10,8 +10,8 @@ import { FsRepo } from "./repo-fs.js";
 import type { SampleData } from "./workspace.js";
 
 /**
- * Node backends: data/ on disk (shared by the local server and the CLI), sharp for images,
- * Carlito from node_modules. Imported first by the CLI, the server and tests.
+ * Node backends: data/ on disk (used by the local server), sharp for images,
+ * Carlito from node_modules. Imported first by the server and the tests.
  */
 const raw = (r: Raster) => sharp(Buffer.from(r.data.buffer, r.data.byteOffset, r.data.byteLength), { raw: { width: r.width, height: r.height, channels: 4 } });
 const out = ({ data, info }: { data: Buffer; info: OutputInfo }): Raster =>
@@ -30,7 +30,7 @@ setFontSource(async (weight) => {
 
 setRepo(new FsRepo(DATA_DIR, SEED_DIR));
 
-/** The seed folder as sample data (the CLI's "start with samples"). */
+/** The seed folder as sample data (the server's "start with samples"). */
 export function seedSamples(): SampleData {
   const brands = JSON.parse(fs.readFileSync(path.join(SEED_DIR, "brands.json"), "utf8"));
   const presets = JSON.parse(fs.readFileSync(path.join(SEED_DIR, "presets.json"), "utf8"));

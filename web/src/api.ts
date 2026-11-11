@@ -11,7 +11,7 @@ export interface BackupSummary { exportedAt: string; brands: number; logos: numb
 
 /**
  * Everything the UI can ask for. Two implementations:
- *  - "server" (default): the local hono server, data/ on disk, shared with the CLI
+ *  - "server" (default): the local hono server, data/ on disk, shared by every window
  *  - "browser": no server; data in this browser's IndexedDB (the hosted, static build)
  */
 export interface Backend {
