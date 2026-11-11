@@ -20,6 +20,16 @@ export interface Repo {
   list(prefix: string): string[];
   /** changes whenever the key is rewritten (mtime on disk, a counter in memory) */
   stamp(key: string): number;
+  /** keep a copy of a value that can't be read, out of the way of later writes; returns where */
+  setAside?(key: string): string | undefined;
+}
+
+/** A stored value that exists but can't be read (a truncated or hand-broken file). */
+export class DamagedData extends Error {
+  constructor(public key: string, why: string) {
+    super(`${key} ${why}`);
+    this.name = "DamagedData";
+  }
 }
 
 let current: Repo | null = null;

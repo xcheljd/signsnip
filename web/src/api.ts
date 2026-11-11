@@ -4,7 +4,11 @@ import type { ImportResult, LogoInfo, SetPreview } from "../../src/core/store";
 export type { ImportResult, LogoInfo, SetPreview };
 export type BrandWithLogo = Brand & { logo: LogoInfo | null };
 export interface SavedSummary { id: string; name: string; savedAt: string; signs: number }
-export interface State { brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[]; templates: Template[]; rules: Rules }
+export interface State {
+  brands: BrandWithLogo[]; presets: Preset[]; batch: Batch; saved: SavedSummary[]; templates: Template[]; rules: Rules;
+  /** stored parts that couldn't be read; the app started without them (keptAt = where a copy was kept) */
+  problems?: { key: string; message: string; keptAt?: string }[];
+}
 export interface Pdf { bytes: Uint8Array; pages: number; signs: number }
 export interface Download { blob: Blob; filename: string }
 export interface BackupSummary { exportedAt: string; brands: number; logos: number; presets: number; templates: number; saved: number; signs: number; abbreviations: number; backgrounds?: number }

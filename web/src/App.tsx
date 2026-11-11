@@ -36,6 +36,18 @@ import {
 
 const uid = () => crypto.randomUUID();
 const fail = (e: unknown) => toast.error((e as Error).message);
+
+/** What a stored part is called in the damaged-data notice. */
+const PART_NAMES: Record<string, string> = { brands: "brands", batch: "the current batch", templates: "templates", presets: "presets", rules: "text rules" };
+const partName = (key: string) => (key.startsWith("batches/") ? `the saved batch “${key.slice("batches/".length)}”` : PART_NAMES[key] ?? key);
+/** One notice for every part that couldn't be read, or "" when all of it could. */
+function problemNotice(problems: NonNullable<api.State["problems"]> = []): string {
+  if (!problems.length) return "";
+  const many = problems.length > 1;
+  // the hosted build can't keep a copy (keptAt is unset there), so it doesn't claim one
+  const kept = problems.every((p) => p.keptAt) ? ` and kept ${many ? "copies of the damaged files" : "a copy of the damaged file"}` : "";
+  return `Part of your saved data couldn't be read (${problems.map((p) => partName(p.key)).join(", ")}). SignSnip started without it${kept}. Restore a backup to get it back.`;
+}
 const blank = (brandId: string): Sign => ({
   id: uid(), brandId, kind: "percent", templateId: "percent", prefix: "SELECT", collection: "MODELS", percent: 50, offLabel: "OFF*",
   priceLabel: "", footer: "*MSRP", copies: 1,
@@ -86,7 +98,14 @@ function SignoApp() {
   const [calibrated, setCalibratedState] = useState(() => (localStorage.getItem("signsnip.calibrated") ?? localStorage.getItem("signo.calibrated")) === "1");
   const setCalibrated = (v: boolean) => { localStorage.setItem("signsnip.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
+  const shownProblems = useRef("");
   const onRemote = useCallback((s: api.State) => {
+    // one fixed toast id, and only when the text changes: polling every 2.5 s must not stack notices
+    const notice = problemNotice(s.problems);
+    if (notice !== shownProblems.current) {
+      shownProblems.current = notice;
+      if (notice) toast.error(notice, { id: "data-problems", duration: Infinity }); else toast.dismiss("data-problems");
+    }
     setBrands(s.brands); setPresets(s.presets); setSaved(s.saved); setTemplates(s.templates); setRules(s.rules);
     setDraft((d) => d ?? blank(s.brands[0]?.id ?? ""));
   }, []);

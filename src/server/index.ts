@@ -7,7 +7,7 @@ import { z } from "zod";
 import { API_PORT, ROOT } from "../core/paths.js";
 import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/pdf.js";
 import {
-  MAX_ID, deleteBrand, deleteSavedBatch, getBrand, listBrands, listPresets, listSavedBatches, logoInfo,
+  MAX_ID, dataProblems, deleteBrand, deleteSavedBatch, getBrand, listBrands, listPresets, listSavedBatches, logoInfo,
   readBackground, saveBackground, readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, writeBatch,
   readRules, writeRules,
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
@@ -52,12 +52,24 @@ app.use("*", async (c, next) => {
   return next();
 });
 
-app.onError((err, c) => c.json({ error: err instanceof z.ZodError ? err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : err.message }, 400));
+/**
+ * Bad input (a schema error, or a plain Error the store throws as a message for the user) is 400.
+ * A fault on this computer (disk full, no permission, a bug) is 500 with a plain message; the
+ * details go to the terminal the server runs in.
+ */
+app.onError((err, c) => {
+  if (err instanceof z.ZodError) return c.json({ error: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, 400);
+  const sys = typeof (err as NodeJS.ErrnoException).code === "string" || err instanceof SyntaxError || err instanceof TypeError || err instanceof RangeError;
+  if (sys) { console.error(err); return c.json({ error: "SignSnip couldn't read or save its data. Check the terminal it runs in for details." }, 500); }
+  return c.json({ error: err.message }, 400);
+});
 
 app.get("/api/state", async (c) => {
   const brands = await Promise.all(listBrands().map(async (b) => ({ ...b, logo: await logoInfo(b.id) })));
   const saved = listSavedBatches().map((s) => ({ id: s.id, name: s.name, savedAt: s.savedAt, signs: s.batch.items.reduce((a, i) => a + i.copies, 0) }));
-  return c.json({ brands, presets: listPresets(), batch: readBatch(), saved, templates: listTemplates(), rules: readRules() });
+  const state = { brands, presets: listPresets(), batch: readBatch(), saved, templates: listTemplates(), rules: readRules() };
+  // last, after every read: a damaged file is reported by the read that found it
+  return c.json({ ...state, problems: dataProblems() });
 });
 app.put("/api/rules", async (c) => c.json(writeRules(RulesSchema.parse(await c.req.json()))));
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Repo } from "./repo.js";
+import { DamagedData, type Repo } from "./repo.js";
 
 /**
  * Files on disk: JSON keys -> <dir>/<key>.json, blobs -> <dir>/<key>.png.
@@ -34,7 +34,21 @@ export class FsRepo implements Repo {
   getJson(key: string) {
     this.ensure();
     const f = this.jsonFile(key);
-    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : undefined;
+    if (!fs.existsSync(f)) return undefined;
+    const text = fs.readFileSync(f, "utf8");
+    try { return JSON.parse(text); } catch (e) {
+      if (e instanceof SyntaxError) throw new DamagedData(key, "isn't valid JSON");
+      throw e;
+    }
+  }
+  /** Copy a file that can't be read to <dir>/damaged/, so a later save can't destroy it. */
+  setAside(key: string) {
+    const f = this.jsonFile(key);
+    if (!fs.existsSync(f)) return undefined;
+    const to = path.join(this.dir, "damaged", `${key.replace(/\//g, "-")}-${Date.now()}.json`);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(f, to);
+    return to;
   }
   setJson(key: string, value: unknown) { this.ensure(); this.write(this.jsonFile(key), JSON.stringify(value, null, 2) + "\n"); }
   getBlob(key: string) {

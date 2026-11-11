@@ -54,7 +54,8 @@ export async function createBrowserBackend(): Promise<Backend> {
   const getState = async (): Promise<State> => {
     const brands = await Promise.all(store.listBrands().map(async (b) => ({ ...b, logo: await store.logoInfo(b.id) })));
     const saved = store.listSavedBatches().map((s) => ({ id: s.id, name: s.name, savedAt: s.savedAt, signs: s.batch.items.reduce((a, i) => a + i.copies, 0) }));
-    return { brands, presets: store.listPresets(), batch: store.readBatch(), saved, templates: store.listTemplates(), rules: store.readRules() };
+    const state = { brands, presets: store.listPresets(), batch: store.readBatch(), saved, templates: store.listTemplates(), rules: store.readRules() };
+    return { ...state, problems: store.dataProblems() };
   };
   const json = (data: unknown, name: string) => ({ blob: new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), filename: name });
   const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

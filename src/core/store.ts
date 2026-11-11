@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { batchPages, pageLimitError } from "./geometry.js";
 import { fromBase64, hashBytes, imageKind, imageOps, prepareBackground, prepareLogo, rasterInfo, removeBackground, toBase64, type LogoInfo } from "./images.js";
-import { repo } from "./repo.js";
+import { DamagedData, repo } from "./repo.js";
 import {
   BatchSchema, BrandSchema, DEFAULT_OPTIONS, DEFAULT_RULES, PresetSchema, RulesSchema, SavedBatchSchema, TemplateSchema, TemplateSetSchema,
   type Batch, type Brand, type Preset, type Rules, type SavedBatch, type Template, type TemplateSet,
@@ -12,9 +12,33 @@ export type { LogoBackground, LogoInfo } from "./images.js";
 
 /** Business logic over the storage interface (repo.ts). Runs on Node (files) and in the browser (IndexedDB). */
 
+/**
+ * A stored value that couldn't be read. The app carries on with the default for that part
+ * (no brands, an empty batch...), so one damaged file never stops it; the damaged value is
+ * copied aside first (FsRepo: data/damaged/), before anything can save the default over it.
+ */
+export interface DataProblem { key: string; message: string; keptAt?: string }
+const problems = new Map<string, DataProblem>();
+export const dataProblems = (): DataProblem[] => [...problems.values()];
+
+const unreadable = (e: unknown) => e instanceof z.ZodError || e instanceof DamagedData;
+/** Record a problem once per key per process, so polling doesn't make a copy every time. */
+function noteProblem(key: string, e: unknown) {
+  if (!problems.has(key)) problems.set(key, { key, message: (e as Error).message.slice(0, 200), keptAt: repo().setAside?.(key) });
+}
+
 function readJson<T>(key: string, schema: z.ZodType<T>, fallback: T): T {
-  const v = repo().getJson(key);
-  return v === undefined ? fallback : schema.parse(v);
+  try {
+    const v = repo().getJson(key);
+    if (v === undefined) { problems.delete(key); return fallback; }
+    const parsed = schema.parse(v);
+    problems.delete(key);
+    return parsed;
+  } catch (e) {
+    if (!unreadable(e)) throw e; // disk errors stay errors
+    noteProblem(key, e);
+    return fallback;
+  }
 }
 const writeJson = (key: string, data: unknown) => repo().setJson(key, data);
 
@@ -201,21 +225,34 @@ export function writeBatch(b: Batch): Batch {
   const parsed = BatchSchema.parse(b);
   // can't grow past the page limit (an older, bigger batch may still shrink)
   const over = pageLimitError(parsed);
-  if (over && batchPages(parsed) > batchPages(readBatch())) throw new Error(over);
+  // read first even when not needed: a damaged batch.json is copied aside before this write replaces it
+  const before = readBatch();
+  if (over && batchPages(parsed) > batchPages(before)) throw new Error(over);
   writeJson("batch", parsed);
   return parsed;
 }
 
 // ---------- saved batches ("Holiday sale", "Spring clearance")
+/** Saved batches that can be read; a damaged one is skipped and reported (see dataProblems). */
 export function listSavedBatches(): SavedBatch[] {
-  return repo().list("batches/")
-    .map((id) => SavedBatchSchema.parse(repo().getJson(`batches/${id}`)))
-    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  const bad = new Set<string>();
+  const out = repo().list("batches/").flatMap((id) => {
+    const key = `batches/${id}`;
+    try { return [SavedBatchSchema.parse(repo().getJson(key))]; } catch (e) {
+      if (!unreadable(e)) throw e;
+      bad.add(key); noteProblem(key, e);
+      return [];
+    }
+  });
+  // a saved batch that was fixed or deleted stops being reported
+  for (const key of [...problems.keys()]) if (key.startsWith("batches/") && !bad.has(key)) problems.delete(key);
+  return out.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 export const savedBatchMatches = (ref: string): SavedBatch[] => matchRef(listSavedBatches(), ref);
 export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedBatch & { replaced: boolean } {
   const saved = SavedBatchSchema.parse({ id: idForName(name, listSavedBatches(), "batch"), name: name.trim(), savedAt: new Date().toISOString(), batch });
-  const replaced = repo().getJson(`batches/${saved.id}`) !== undefined;
+  // list, not getJson: a damaged file under this id (already set aside by listSavedBatches) must not throw
+  const replaced = repo().list("batches/").includes(saved.id);
   writeJson(`batches/${saved.id}`, saved);
   return { ...saved, replaced };
 }
@@ -359,6 +396,7 @@ export function importTemplateSet(set: TemplateSet, mode: "keep-both" | "replace
 export const readRules = (): Rules => readJson("rules", RulesSchema, DEFAULT_RULES);
 export function writeRules(r: Rules): Rules {
   const parsed = RulesSchema.parse(r);
+  readRules(); // a damaged rules.json is copied aside before this write replaces it
   // one entry per word (case-insensitive); last one wins
   const seen = new Map<string, (typeof parsed.abbreviations)[number]>();
   for (const a of parsed.abbreviations) seen.set(a.from.toLowerCase(), a);
