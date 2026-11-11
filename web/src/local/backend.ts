@@ -7,7 +7,7 @@ import { checkSigns, expandCopies, renderCalibration, renderPdf, setFontSource }
 import { repo, setRepo } from "../../../src/core/repo";
 import * as store from "../../../src/core/store";
 import { BatchSchema, PresetSchema, RulesSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
-import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
+import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
 import { toast } from "sonner";
 import type { Backend, State } from "../api";
 import { canvasImages } from "./canvas-images";
@@ -118,6 +118,7 @@ export async function createBrowserBackend(): Promise<Backend> {
     },
     inspectBackup: (raw) => run(() => summarizeWorkspace(parseWorkspace(raw))),
     restoreBackup: (raw) => quietly(async () => {
+      await checkWorkspacePictures(raw); // a damaged picture is refused before anything is replaced
       await r.clearFailure(); // report only this restore's own writes
       const s = restoreWorkspace(raw);
       await r.flush();

@@ -13,7 +13,7 @@ import {
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
 import { seedSamples } from "../core/node.js";
-import { exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
+import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
 import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
 const app = new Hono();
@@ -118,7 +118,11 @@ app.get("/api/workspace", () => new Response(JSON.stringify(exportWorkspace()), 
   headers: { "content-type": "application/json", "content-disposition": `attachment; filename="signsnip-backup-${new Date().toISOString().slice(0, 10)}.signsnip-backup.json"` },
 }));
 app.post("/api/workspace/inspect", async (c) => c.json(summarizeWorkspace(parseWorkspace(await c.req.json()))));
-app.post("/api/workspace/restore", async (c) => c.json(restoreWorkspace(await c.req.json())));
+app.post("/api/workspace/restore", async (c) => {
+  const raw = await c.req.json();
+  await checkWorkspacePictures(raw); // a damaged picture is refused before anything is replaced
+  return c.json(restoreWorkspace(raw));
+});
 app.post("/api/workspace/start", async (c) => {
   const { from } = z.object({ from: z.enum(["scratch", "samples"]) }).parse(await c.req.json());
   if (from === "scratch") startFromScratch(); else startWithSamples(seedSamples());

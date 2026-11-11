@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { csvToSigns } from "./batch.js";
-import { fromBase64, imageKind, toBase64 } from "./images.js";
-import { repo } from "./repo.js";
+import { fromBase64, imageKind, imageOps, toBase64 } from "./images.js";
+import { DamagedData, repo } from "./repo.js";
 import { count } from "./words.js";
 import {
   listBrands, listPresets, listSavedBatches, listTemplates, readBatch, readLogo, readRules,
@@ -107,12 +107,84 @@ function wipe(): void {
   for (const k of ["brands", "presets", "batch", "templates", "rules", "meta"]) r.remove(k);
 }
 
-/** Replace the whole workspace with a backup. Validates everything before touching anything. */
+/** Decode every picture in a backup, so a damaged one is refused before a restore starts. */
+export async function checkWorkspacePictures(raw: unknown): Promise<void> {
+  const w = parseWorkspace(raw);
+  const all = [
+    ...Object.entries(w.logos).map(([id, b]) => [`the logo for ${id}`, b] as const),
+    ...Object.entries(w.originals).map(([id, b]) => [`the original logo for ${id}`, b] as const),
+    ...Object.entries(w.backgrounds).map(([id, b]) => [`background ${id.slice(0, 8)}`, b] as const),
+  ];
+  for (const [what, b64] of all) {
+    try { await imageOps().decode(fromBase64(b64)); }
+    catch { throw new Error(`The backup is damaged: ${what} can't be opened as a picture`); }
+  }
+}
+
+/** The first id that appears twice, if any. */
+function firstDuplicate(ids: string[]): string | undefined {
+  const seen = new Set<string>();
+  for (const id of ids) { if (seen.has(id)) return id; seen.add(id); }
+  return undefined;
+}
+
+/** Everything wipe() removes, exactly as stored (raw values, no parsing), so a failed restore can put it back. */
+interface Snapshot { json: [string, unknown][]; blobs: [string, Uint8Array][]; complete: boolean }
+function snapshot(): Snapshot {
+  const r = repo();
+  const s: Snapshot = { json: [], blobs: [], complete: true };
+  const json = (key: string) => {
+    try { const v = r.getJson(key); if (v !== undefined) s.json.push([key, v]); }
+    // a value that can't be read (a broken file) can't be put back: keep a copy aside, and say so if the restore fails
+    catch (e) { if (!(e instanceof DamagedData)) throw e; r.setAside?.(key); s.complete = false; }
+  };
+  const blob = (key: string) => { const b = r.getBlob(key); if (b) s.blobs.push([key, b]); };
+  for (const k of ["brands", "presets", "batch", "templates", "rules", "meta"]) json(k);
+  for (const id of r.list("batches/")) json(`batches/${id}`);
+  for (const id of r.list("logos/")) blob(`logos/${id}`);
+  for (const id of r.list("logos/originals/")) blob(`logos/originals/${id}`);
+  for (const id of r.list("backgrounds/")) blob(`backgrounds/${id}`);
+  return s;
+}
+function putBack(s: Snapshot): void {
+  wipe();
+  const r = repo();
+  for (const [k, v] of s.json) r.setJson(k, v);
+  for (const [k, b] of s.blobs) r.setBlob(k, b);
+}
+
+/**
+ * Replace the whole workspace with a backup. Every check that needs no pictures runs before
+ * anything is touched (callers decode the pictures first with checkWorkspacePictures). If a
+ * write fails part-way, what was stored before is written back and the error says
+ * "nothing was changed"; if that rollback fails too, the error says the restore stopped part-way.
+ */
 export function restoreWorkspace(raw: unknown): ReturnType<typeof summarizeWorkspace> {
   const w = parseWorkspace(raw);
   const known = new Set(w.brands.map((b) => b.id));
   const stray = Object.keys({ ...w.logos, ...w.originals }).filter((id) => !known.has(id) || !/^[a-z0-9-]+$/.test(id));
   if (stray.length) throw new Error(`The backup is damaged: logos for unknown brands (${stray.slice(0, 3).join(", ")})`);
+  for (const [what, ids] of [
+    ["brands", w.brands.map((b) => b.id)], ["templates", w.templates.map((t) => t.id)],
+    ["presets", w.presets.map((p) => p.id)], ["saved batches", w.saved.map((s) => s.id)],
+  ] as const) {
+    const dup = firstDuplicate(ids);
+    if (dup !== undefined) throw new Error(`The backup is damaged: two ${what} share the id ${dup}`);
+  }
+  const before = snapshot();
+  try {
+    writeAll(w);
+  } catch (e) {
+    const why = (e as Error).message;
+    let back = before.complete;
+    try { putBack(before); } catch { back = false; }
+    if (!back) throw new Error(`Restore failed part-way: ${why}. Restore your last backup file again once the problem is fixed.`);
+    throw new Error(`Restore failed and nothing was changed: ${why}`);
+  }
+  return summarizeWorkspace(w);
+}
+
+function writeAll(w: Workspace): void {
   wipe();
   const r = repo();
   saveBrands(w.brands);
@@ -126,7 +198,6 @@ export function restoreWorkspace(raw: unknown): ReturnType<typeof summarizeWorks
   for (const s of w.saved) r.setJson(`batches/${s.id}`, s);
   r.setJson("batch", w.batch); // straight write: an old backup may predate the page cap
   markStarted("backup");
-  return summarizeWorkspace(w);
 }
 
 /** Empty workspace: no brands, built-in + example templates, default text rules. */
