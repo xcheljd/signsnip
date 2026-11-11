@@ -144,8 +144,11 @@ export function useBatch(onRemote: (s: api.State) => void) {
     return () => { document.removeEventListener("visibilitychange", flush); window.removeEventListener("pagehide", leave); };
   }, [save]);
 
-  // poll for changes from another window; say so when the local server stops answering (edits can't be saved then)
+  // poll for changes from another window; say so when the local server stops answering (edits can't be saved then).
+  // Not on the hosted site: each tab has its own copy that only it changes (and refreshes after each of its own
+  // actions), and another tab saving shows the "changed in another tab" notice instead.
   useEffect(() => {
+    if (api.MODE === "browser") return;
     let misses = 0;
     const tick = () => refresh().then(
       async () => {

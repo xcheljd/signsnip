@@ -37,6 +37,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const uid = () => crypto.randomUUID();
+/**
+ * Keep the previous object when the new one says the same thing, so React skips the redraw.
+ * Safe for brands: each logo carries `version` (a hash of its bytes), so a replaced logo changes the JSON.
+ */
+const keep = <T,>(next: T) => (prev: T): T => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
 const fail = (e: unknown) => toast.error((e as Error).message);
 
 /** What a stored part is called in the damaged-data notice. */
@@ -109,7 +114,7 @@ function SignoApp() {
       shownProblems.current = notice;
       if (notice) toast.error(notice, { id: "data-problems", duration: Infinity }); else toast.dismiss("data-problems");
     }
-    setBrands(s.brands); setPresets(s.presets); setSaved(s.saved); setTemplates(s.templates); setRules(s.rules);
+    setBrands(keep(s.brands)); setPresets(keep(s.presets)); setSaved(keep(s.saved)); setTemplates(keep(s.templates)); setRules(keep(s.rules));
     setDraft((d) => d ?? blank(s.brands[0]?.id ?? ""));
   }, []);
   const { batch, update, undo, canUndo, refresh } = useBatch(onRemote);
