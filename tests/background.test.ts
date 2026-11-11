@@ -7,8 +7,9 @@ import { addToBatch, buildSign } from "../src/core/batch";
 import { checkSigns, expandCopies, renderPdf } from "../src/core/pdf";
 import {
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, listBrands, listTemplates, parseTemplateSet,
-  readBatch, saveBackground, saveTemplate, writeBatch,
+  readBackground, readBatch, saveBackground, saveTemplate, writeBatch,
 } from "../src/core/store";
+import { MemoryRepo, repo, setRepo } from "../src/core/repo";
 import { backgroundRect } from "../src/core/template";
 import { SIGN_H_MM, SIGN_W_MM, type Template } from "../src/core/types";
 import { exportWorkspace, restoreWorkspace } from "../src/core/workspace";
@@ -123,5 +124,36 @@ describe("template background pictures (core end-to-end)", () => {
     deleteTemplate("holiday");
     expect(bgFiles(ws)).toHaveLength(0);
     expect(tpl("percent").background).toBeUndefined();
+  });
+});
+
+describe("a draft's background picture survives other templates being saved", () => {
+  // a different made-up picture from the stripes above, so the two never share an id
+  const checks = () => {
+    const w = 600, h = 400, raw = Buffer.alloc(w * h * 3);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 3, on = ((x >> 5) ^ (y >> 5)) & 1; raw[i] = on ? 30 : 230; raw[i + 1] = on ? 160 : 90; raw[i + 2] = 110; }
+    return sharp(raw, { raw: { width: w, height: h, channels: 3 } }).png().toBuffer();
+  };
+  const tpl = (id: string) => listTemplates().find((t) => t.id === id)!;
+
+  it("a picture picked for an unsaved draft is kept when another template is saved, and the draft then saves", async () => {
+    await useNodeWorkspace(tmpWorkspace("signsnip-bg-draft-"));
+    const { image, aspect } = await saveBackground(await checks()); // picked in the designer; "percent" not saved yet
+    saveTemplate({ ...tpl("price"), name: "Price (edited elsewhere)" }); // another tab saves another template
+    expect(readBackground(image)).not.toBeNull();
+    const saved = saveTemplate({ ...tpl("percent"), background: { image, aspect, fit: "cover", opacity: 0.3 } });
+    expect(saved.background?.image).toBe(image);
+    expect(readBackground(image)).not.toBeNull();
+  });
+  it("a stored picture nothing uses and nobody just picked is still deleted", () => {
+    const prev = repo();
+    try {
+      setRepo(new MemoryRepo());
+      const orphan = "ab".repeat(32);
+      repo().setBlob(`backgrounds/${orphan}`, new Uint8Array([0xff, 0xd8, 0xff, 0xd9])); // bypasses saveBackground
+      expect(readBackground(orphan)).not.toBeNull();
+      saveTemplate({ ...tpl("price"), name: "Price again" });
+      expect(readBackground(orphan)).toBeNull();
+    } finally { setRepo(prev); }
   });
 });

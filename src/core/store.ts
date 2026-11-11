@@ -199,11 +199,24 @@ export async function saveBackground(input: Uint8Array): Promise<{ image: string
   const { bytes, aspect } = await prepareBackground(input);
   const image = hashBytes(bytes);
   if (!repo().getBlob(BG(image))) repo().setBlob(BG(image), bytes);
+  recentUploads.set(image, Date.now()); // also when it was already stored: the user just picked it again
   return { image, aspect };
 }
-/** Delete stored pictures no template uses any more. */
+/**
+ * Pictures picked in the designer in this process (the local server, or the hosted tab), by time.
+ * A picture is stored as soon as it's picked but its template only when the user presses Save,
+ * so saving some other template in between must not delete it. Once a saved template uses the
+ * picture it's no longer a draft's, and the usual rule applies again (unused = deleted).
+ */
+const RECENT_MS = 24 * 60 * 60 * 1000;
+const recentUploads = new Map<string, number>();
+/** Delete stored pictures no template uses any more (a draft's picture picked in the last 24 hours counts as used). */
 export function pruneBackgrounds(keep: Iterable<string> = []): void {
-  const used = new Set([...listTemplates().flatMap((t) => (t.background ? [t.background.image] : [])), ...keep]);
+  const templateImages = listTemplates().flatMap((t) => (t.background ? [t.background.image] : []));
+  const now = Date.now();
+  for (const id of templateImages) recentUploads.delete(id);
+  for (const [id, at] of recentUploads) if (now - at > RECENT_MS) recentUploads.delete(id);
+  const used = new Set([...templateImages, ...keep, ...recentUploads.keys()]);
   for (const id of repo().list("backgrounds/")) if (!used.has(id)) repo().remove(BG(id));
 }
 function writeImages(images: Record<string, string>, ids: Set<string>): void {
