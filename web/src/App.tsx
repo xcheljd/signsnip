@@ -1,6 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { count } from "../../src/core/words";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { sheetGeometry } from "../../src/core/geometry";
 import { DEFAULT_RULES, type Preset, type Rules, type Sign, type Template, type Warning } from "../../src/core/types";
@@ -9,6 +9,7 @@ import { SavingStatusBar, StartPage, WorkspaceButtons } from "./Workspace";
 import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
+import { latestOnly } from "./latest";
 import { BatchPanel, PrintSettings, moveItem } from "./BatchPanel";
 import { BrandsTab } from "./BrandsTab";
 import { PdfView } from "./PdfView";
@@ -44,12 +45,14 @@ export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1
   const [pdf, setPdf] = useState<api.Pdf | null>(null);
   const [err, setErr] = useState("");
   const key = JSON.stringify([items, options, mode, version]);
+  // Only the newest request may set the PDF: an older render that finishes late is dropped.
+  const latest = useRef(latestOnly<api.Pdf>()).current;
   useEffect(() => {
-    if (!items.length) { setPdf(null); return; }
+    if (!items.length) { latest.cancel(); setPdf(null); setErr(""); return; }
     const t = setTimeout(() => {
-      api.fetchPdf(items, options, mode, templates).then((p) => { setPdf(p); setErr(""); }).catch((e) => setErr(e.message));
+      latest.run(() => api.fetchPdf(items, options, mode, templates), (p) => { setPdf(p); setErr(""); }, (e) => setErr(e.message));
     }, 150);
-    return () => clearTimeout(t);
+    return () => { latest.cancel(); clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return { pdf, err };
