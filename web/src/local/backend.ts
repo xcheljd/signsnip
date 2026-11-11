@@ -8,6 +8,7 @@ import { repo, setRepo } from "../../../src/core/repo";
 import * as store from "../../../src/core/store";
 import { BatchSchema, RulesSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
 import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
+import { exportBatchFile, importBatchFile, inspectBatchFile, parseBatchFile } from "../../../src/core/batch-file";
 import { toast } from "sonner";
 import type { Backend, State } from "../api";
 import { canvasImages } from "./canvas-images";
@@ -139,6 +140,14 @@ export async function createBrowserBackend(): Promise<Backend> {
       localStorage.removeItem(BACKUP_KEYS.backup);
       localStorage.removeItem(BACKUP_KEYS.changed);
     }),
+    shareBatch: (batch, name) => run(() => json(exportBatchFile(BatchSchema.parse(batch), name), `${slug(name) || "batch"}.signsnip-batch.json`)),
+    inspectBatchFile: (raw) => run(() => inspectBatchFile(parseBatchFile(raw))),
+    importBatchFile: async (raw) => {
+      await r.clearFailure(); // report only this import's own writes
+      const res = await importBatchFile(raw);
+      await r.flush(); // like a restore: say so now if this browser couldn't store it
+      return res;
+    },
     needsStart: () => workspaceMeta() === undefined,
   };
 }

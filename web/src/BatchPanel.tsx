@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { count } from "../../src/core/words";
 import {
-  ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, GripVerticalIcon, InfoIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
+  ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, InfoIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { money } from "../../src/core/layout";
 import { resolveTemplate, withKind } from "../../src/core/template";
 import type { Batch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
+import { OpenBatchFile, ShareBatchDialog } from "./BatchFile";
 import { NumField } from "./NumField";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -347,18 +348,26 @@ function BulkNumber({ label, onApply, ...num }: { label: string; onApply: (n: nu
 function SavedBatches({ batch, saved, update, refresh }: { batch: Batch; saved: api.SavedSummary[]; update: Update; refresh: () => Promise<unknown> }) {
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  /** the saved batch last loaded or saved here: the default name when sharing */
+  const [current, setCurrent] = useState("");
+  const sharedFile = useRef<HTMLInputElement>(null);
   const save = async () => {
     if (!name.trim()) return;
-    try { await api.saveBatchAs(name.trim(), batch); await refresh(); toast(`Saved “${name.trim()}”`); setName(""); } catch (e) { toast.error((e as Error).message); }
+    try { await api.saveBatchAs(name.trim(), batch); await refresh(); toast(`Saved “${name.trim()}”`); setCurrent(name.trim()); setName(""); } catch (e) { toast.error((e as Error).message); }
   };
   const load = async (s: api.SavedSummary) => {
     try {
       const full = await api.loadSaved(s.id);
       update(() => full.batch, { undo: `Loaded “${s.name}”` });
+      setCurrent(s.name);
       setOpen(false);
     } catch (e) { toast.error((e as Error).message); }
   };
   return (
+    <>
+    <ShareBatchDialog open={sharing} onClose={() => setSharing(false)} batch={batch} defaultName={current || `Batch ${new Date().toLocaleDateString()}`} />
+    <OpenBatchFile fileRef={sharedFile} update={update} refresh={refresh} />
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<Button type="button" variant="outline" size="sm" />}><ArchiveIcon data-icon="inline-start" />Saved batches</PopoverTrigger>
       <PopoverContent align="end" className="w-80" aria-label="Saved batches">
@@ -385,8 +394,21 @@ function SavedBatches({ batch, saved, update, refresh }: { batch: Batch; saved: 
             </div>
           )}
           <p className="text-xs text-muted-foreground">Loading replaces the current batch. You can undo it.</p>
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">Send to another device or store</p>
+            <div className="flex flex-col gap-2 *:justify-start">
+              <Button type="button" variant="outline" size="sm" disabled={!batch.items.length} onClick={() => { setOpen(false); setSharing(true); }}>
+                <FileDownIcon data-icon="inline-start" />Share as a file…
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => { setOpen(false); sharedFile.current?.click(); }}>
+                <FileUpIcon data-icon="inline-start" />Open a shared file…
+              </Button>
+            </div>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
+    </>
   );
 }

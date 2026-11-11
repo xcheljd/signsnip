@@ -54,7 +54,7 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
  * "Tom and Co", or two names with no latin letters) gets -2, -3 ... instead of overwriting.
  * New ids are cut to fit MAX_ID with room for the suffix; ids already on disk are never changed.
  */
-function idForName(name: string, taken: { id: string; name: string }[], fallback: string): string {
+export function idForName(name: string, taken: { id: string; name: string }[], fallback: string): string {
   const same = taken.find((t) => sameName(t.name, name));
   if (same) return same.id;
   const root = slugify(name, fallback).slice(0, MAX_ID - 8).replace(/-+$/, "") || fallback;
@@ -348,13 +348,25 @@ export function exportTemplateSet(ids?: string[], name?: string): TemplateSet {
   return TemplateSetSchema.parse({ format: "signsnip/template-set", version: 1, name, exportedAt: new Date().toISOString(), templates: pick, images });
 }
 
-const sameLayout = (a: Template, b: Template) =>
-  JSON.stringify({ ...a, updatedAt: undefined }) === JSON.stringify({ ...b, updatedAt: undefined });
+/**
+ * JSON with object keys sorted. A template that was never saved is the raw DEFAULT_TEMPLATES
+ * object, one read back from storage or a file has the schema's key order: same content,
+ * different plain JSON.stringify.
+ */
+const canon = (v: unknown) => JSON.stringify(v, (_k, x: unknown) =>
+  x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x);
+/** same template apart from when it was saved */
+export const sameLayout = (a: Template, b: Template) =>
+  canon({ ...a, updatedAt: undefined }) === canon({ ...b, updatedAt: undefined });
 /** same design regardless of id/name (catches re-importing something already imported as a copy) */
 const sameDesign = (a: Template, b: Template) =>
-  JSON.stringify([a.kind, a.safeMargin, a.objects, a.background ?? null]) === JSON.stringify([b.kind, b.safeMargin, b.objects, b.background ?? null]);
+  canon([a.kind, a.safeMargin, a.objects, a.background ?? null]) === canon([b.kind, b.safeMargin, b.objects, b.background ?? null]);
 
-export interface ImportResult { added: string[]; replaced: string[]; renamed: { from: string; to: string }[]; unchanged: string[] }
+export interface ImportResult {
+  added: string[]; replaced: string[]; renamed: { from: string; to: string }[]; unchanged: string[];
+  /** every imported template id -> the id it has here now (itself, its renamed copy, or the copy already here) */
+  idMap: Record<string, string>;
+}
 export interface SetPreview {
   name?: string; exportedAt: string;
   templates: { id: string; name: string; kind: "percent" | "price"; objects: number; status: "new" | "same" | "conflict"; mine?: string }[];
@@ -389,20 +401,21 @@ export function inspectTemplateSet(set: TemplateSet): SetPreview {
  * "keep-both" (imported as a copy, renamed) or "replace" (overwrite yours).
  */
 export function importTemplateSet(set: TemplateSet, mode: "keep-both" | "replace" = "keep-both", only?: string[]): ImportResult {
-  const res: ImportResult = { added: [], replaced: [], renamed: [], unchanged: [] };
+  const res: ImportResult = { added: [], replaced: [], renamed: [], unchanged: [], idMap: {} };
   const all = listTemplates();
   for (const t of set.templates) {
     if (only && !only.includes(t.id)) continue;
     const mine = all.find((x) => x.id === t.id);
-    if (!mine) { all.push(t); res.added.push(t.id); continue; }
-    if (sameLayout(mine, t)) { res.unchanged.push(t.id); continue; }
-    if (mode === "replace") { all[all.indexOf(mine)] = t; res.replaced.push(t.id); continue; }
+    if (!mine) { all.push(t); res.added.push(t.id); res.idMap[t.id] = t.id; continue; }
+    if (sameLayout(mine, t)) { res.unchanged.push(t.id); res.idMap[t.id] = t.id; continue; }
+    if (mode === "replace") { all[all.indexOf(mine)] = t; res.replaced.push(t.id); res.idMap[t.id] = t.id; continue; }
     const copy = all.find((x) => x.id !== t.id && sameDesign(x, t));
-    if (copy) { res.unchanged.push(`${t.id} (as ${copy.id})`); continue; }
+    if (copy) { res.unchanged.push(`${t.id} (as ${copy.id})`); res.idMap[t.id] = copy.id; continue; }
     const name = `${t.name} (imported)`.slice(0, 60);
     const id = uniqueTemplateId(name, all);
     all.push({ ...t, id, name });
     res.renamed.push({ from: t.id, to: id });
+    res.idMap[t.id] = id;
   }
   // a fallback pointing at a template that got imported under a new id follows it
   const imported = new Set([...res.added, ...res.replaced, ...res.renamed.map((r) => r.to)]);

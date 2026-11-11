@@ -168,6 +168,27 @@ export const SavedBatchSchema = z.object({
 });
 export type SavedBatch = z.infer<typeof SavedBatchSchema>;
 
+/**
+ * A shared batch ("Share as a file"): one batch plus what it needs to print the same elsewhere:
+ * the brands its signs use with their logos, and the templates they use (with fallbacks and
+ * background pictures). Opening one adds to what is there and never replaces anything.
+ */
+export const BATCH_FILE_FORMAT = "signsnip/batch";
+export const BatchFileSchema = z.object({
+  format: z.literal(BATCH_FILE_FORMAT),
+  version: z.literal(1),
+  name: z.string().trim().min(1).max(80),
+  exportedAt: z.string(),
+  batch: BatchSchema,
+  brands: z.array(BrandSchema).max(200),
+  /** brand id -> PNG (base64) */
+  logos: z.record(z.string(), z.string().max(8_000_000)).default({}),
+  templates: z.array(TemplateSchema).max(200),
+  /** background pictures the templates use: image id -> PNG/JPEG (base64) */
+  images: z.record(z.string().regex(/^[a-f0-9]{8,64}$/), z.string().max(12_000_000)).default({}),
+});
+export type BatchFile = z.infer<typeof BatchFileSchema>;
+
 // ---------- text-fitting rules (store-wide)
 export const AbbreviationSchema = z.object({
   /** word or phrase as it appears in names, matched case-insensitively as whole words */

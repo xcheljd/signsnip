@@ -1,7 +1,8 @@
 import type { Batch, Brand, Options, Preset, Rules, SavedBatch, Sign, Template, Warning } from "../../src/core/types";
 import type { ImportResult, LogoInfo, SetPreview } from "../../src/core/store";
+import type { BatchFilePreview, BatchFileResult } from "../../src/core/batch-file";
 
-export type { ImportResult, LogoInfo, SetPreview };
+export type { BatchFilePreview, BatchFileResult, ImportResult, LogoInfo, SetPreview };
 export type BrandWithLogo = Brand & { logo: LogoInfo | null };
 export interface SavedSummary { id: string; name: string; savedAt: string; signs: number }
 export interface State {
@@ -53,6 +54,12 @@ export interface Backend {
   inspectBackup(raw: unknown): Promise<BackupSummary>;
   restoreBackup(raw: unknown): Promise<BackupSummary>;
   start(from: "scratch" | "samples"): Promise<unknown>;
+  /** one batch plus the brands, logos and templates it uses, as a file to send to someone */
+  shareBatch(batch: Batch, name: string): Promise<Download>;
+  /** what opening a shared batch file would add (nothing is stored) */
+  inspectBatchFile(raw: unknown): Promise<BatchFilePreview>;
+  /** add a shared batch file as a new saved batch (never replaces anything) */
+  importBatchFile(raw: unknown): Promise<BatchFileResult>;
   /** true until the user has picked how to start (browser build only) */
   needsStart(): boolean;
 }
@@ -125,6 +132,13 @@ const server: Backend = {
   inspectBackup: (raw) => send("/api/workspace/inspect", raw).then((r) => j<BackupSummary>(r)),
   restoreBackup: (raw) => send("/api/workspace/restore", raw).then((r) => j<BackupSummary>(r)),
   start: (from) => send("/api/workspace/start", { from }).then((r) => j(r)),
+  async shareBatch(batch, name) {
+    const res = await send("/api/batch-file/export", { batch, name });
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't make the file");
+    return { blob: await res.blob(), filename: filename(res, "batch.signsnip-batch.json") };
+  },
+  inspectBatchFile: (raw) => send("/api/batch-file/inspect", raw).then((r) => j<BatchFilePreview>(r)),
+  importBatchFile: (raw) => send("/api/batch-file/import", raw).then((r) => j<BatchFileResult>(r)),
   needsStart: () => false,
 };
 
@@ -166,6 +180,9 @@ export const inspectBackup = (raw: unknown) => be().inspectBackup(raw);
 export const restoreBackup = (raw: unknown) => be().restoreBackup(raw);
 export const start = (from: "scratch" | "samples") => be().start(from);
 export const needsStart = () => be().needsStart();
+export const shareBatch = (batch: Batch, name: string) => be().shareBatch(batch, name);
+export const inspectBatchFile = (raw: unknown) => be().inspectBatchFile(raw);
+export const importBatchFile = (raw: unknown) => be().importBatchFile(raw);
 
 /** Save a Download to the user's computer. */
 export function saveDownload({ blob, filename }: Download): void {

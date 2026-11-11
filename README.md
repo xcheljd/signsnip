@@ -34,6 +34,13 @@ First run copies `seed/` into `data/` (your working copy). Reset by deleting `da
 - **Warnings** before you print: low-resolution logos, logos on a coloured box (one-click *Remove background*),
   collection names that had to shrink too far, brands without a logo.
 - **Saved batches**: name the batch ("Holiday sale"), load it next time (undoable).
+- **Share one batch as a file** (Saved batches → *Share as a file…*): one `*.signsnip-batch.json` with the
+  signs plus the brands, logos and templates they use, to send to another computer, phone or store.
+  *Open a shared file…* shows what it would add, then adds it to your saved batches; it never replaces
+  anything you have. Brands with the same name keep your logo, a template that differs from yours is
+  added as a copy (*… (imported)*), and the current batch only changes when you press *Open it now*.
+  Text rules aren't in the file. The file contains logos: share it only with people who may have them.
+  Works between the local and the hosted app.
 - **Print** opens the print dialog directly; **Download PDF** saves it. Print at 100% / Actual size.
 - **Printer calibration**: press **Print check page** (the first-time notice above the batch) or
   **Printer check** (in Print settings). It prints a 47 × 70 mm box and rulers. Measure the box to

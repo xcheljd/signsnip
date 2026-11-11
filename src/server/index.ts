@@ -13,6 +13,7 @@ import {
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
 import { seedSamples } from "../core/node.js";
+import { exportBatchFile, importBatchFile, inspectBatchFile, parseBatchFile } from "../core/batch-file.js";
 import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
 import { BatchSchema, OptionsSchema, PaperSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
@@ -128,6 +129,17 @@ app.post("/api/workspace/start", async (c) => {
   if (from === "scratch") startFromScratch(); else startWithSamples(seedSamples());
   return c.json({ ok: true });
 });
+
+// one batch as a file, to open on another device or in another store (adds, never replaces)
+app.post("/api/batch-file/export", async (c) => {
+  const { name, batch } = z.object({ name: z.string().trim().min(1).max(80), batch: BatchSchema }).parse(await c.req.json());
+  const file = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "batch";
+  return new Response(JSON.stringify(exportBatchFile(batch, name)), {
+    headers: { "content-type": "application/json", "content-disposition": `attachment; filename="${file}.signsnip-batch.json"` },
+  });
+});
+app.post("/api/batch-file/inspect", async (c) => c.json(inspectBatchFile(parseBatchFile(await c.req.json()))));
+app.post("/api/batch-file/import", async (c) => c.json(await importBatchFile(await c.req.json())));
 
 // saved batches
 app.post("/api/batches", async (c) => {
