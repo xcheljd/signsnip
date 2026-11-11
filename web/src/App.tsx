@@ -10,6 +10,7 @@ import { DEFAULT_TEMPLATES } from "../../src/core/template";
 import { TemplatesTab } from "./designer/TemplatesTab";
 import * as api from "./api";
 import { latestOnly } from "./latest";
+import { pdfKey, reusablePdf } from "./pdfKey";
 import { BatchPanel, PrintSettings, moveItem } from "./BatchPanel";
 import { BrandsTab } from "./BrandsTab";
 import { PdfView } from "./PdfView";
@@ -54,20 +55,21 @@ const blank = (brandId: string): Sign => ({
 });
 
 export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1], mode: "sheet" | "single", version = "", templates?: Template[]) {
-  const [pdf, setPdf] = useState<api.Pdf | null>(null);
+  // the PDF and the key it was made for are set together, so Print can tell a stale preview
+  const [shown, setShown] = useState<{ pdf: api.Pdf | null; madeFor: string | null }>({ pdf: null, madeFor: null });
   const [err, setErr] = useState("");
-  const key = JSON.stringify([items, options, mode, version]);
+  const key = pdfKey(items, options, mode, version);
   // Only the newest request may set the PDF: an older render that finishes late is dropped.
   const latest = useRef(latestOnly<api.Pdf>()).current;
   useEffect(() => {
-    if (!items.length) { latest.cancel(); setPdf(null); setErr(""); return; }
+    if (!items.length) { latest.cancel(); setShown({ pdf: null, madeFor: null }); setErr(""); return; }
     const t = setTimeout(() => {
-      latest.run(() => api.fetchPdf(items, options, mode, templates), (p) => { setPdf(p); setErr(""); }, (e) => setErr(e.message));
+      latest.run(() => api.fetchPdf(items, options, mode, templates), (p) => { setShown({ pdf: p, madeFor: key }); setErr(""); }, (e) => setErr(e.message));
     }, 150);
     return () => { latest.cancel(); clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  return { pdf, err };
+  return { pdf: shown.pdf, madeFor: shown.madeFor, err };
 }
 
 /** The hosted build shows a start page on the first visit (blank / samples / restore a backup). */
@@ -169,11 +171,12 @@ function SignoApp() {
   const print = useCallback(async (force = false) => {
     if (!(await gated("print", force))) return;
     try {
-      const p = sheetPdf.pdf ?? await api.fetchPdf(batch.items, batch.options, "sheet");
+      // reuse the preview only when it was made for exactly this batch; a pending or older render is never printed
+      const p = reusablePdf(sheetPdf, pdfKey(batch.items, batch.options, "sheet", logoKey)) ?? await api.fetchPdf(batch.items, batch.options, "sheet");
       printPdf(p.bytes);
       toast(`Printing ${count(p.signs, "sign")}. Set scale to 100% / Actual size.`);
     } catch (e) { fail(e); }
-  }, [batch, sheetPdf.pdf]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [batch, sheetPdf, logoKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const exportPdf = async (force = false) => {
     if (!(await gated("download", force))) return;
     try {
