@@ -173,7 +173,7 @@ describe("local server only answers this computer's own pages", () => {
     data = tmpWorkspace("signsnip-hard-srv-");
     server = await startServer(data);
     port = server.port;
-  });
+  }, 60_000);
   // Wait until the server has really exited (SIGKILL after 5s) before the temp data dir is removed.
   afterAll(async () => { await server?.stop(); });
 

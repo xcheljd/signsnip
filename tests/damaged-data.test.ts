@@ -28,7 +28,7 @@ describe("a damaged brands file (local server)", () => {
     data = tmpWorkspace("signsnip-damaged-");
     fs.writeFileSync(path.join(data, "brands.json"), BROKEN);
     server = await startServer(data);
-  });
+  }, 60_000);
   afterAll(async () => { await server?.stop(); });
 
   it("the app still starts: no brands, one problem, and a copy of the damaged file", async () => {
@@ -60,7 +60,7 @@ describe("a damaged saved batch and a damaged current batch (local server)", () 
     fs.writeFileSync(path.join(data, "batches", "spring-clearance.json"), JSON.stringify(savedBatch("spring-clearance", "Spring clearance")));
     fs.writeFileSync(path.join(data, "batch.json"), BROKEN_BATCH);
     server = await startServer(data);
-  });
+  }, 60_000);
   afterAll(async () => { await server?.stop(); });
 
   it("lists only the saved batch that can be read and names the other one", async () => {
@@ -88,7 +88,7 @@ describe("server faults are not blamed on the request", () => {
     data = tmpWorkspace("signsnip-damaged-");
     fs.writeFileSync(path.join(data, "brands.json"), "[]");
     server = await startServer(data);
-  });
+  }, 60_000);
   afterAll(async () => { await server?.stop(); });
 
   it("a file the server can't read at all answers 500 with a plain message", async () => {

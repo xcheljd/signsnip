@@ -162,7 +162,7 @@ describe("the local server checks the pictures before it restores", () => {
   beforeAll(async () => {
     data = tmpWorkspace("signsnip-restore-srv-");
     server = await startServer(data); // starts with the seeded fake brands
-  });
+  }, 60_000);
   afterAll(async () => { await server?.stop(); });
   it("a damaged picture answers 400 with a plain message and leaves the workspace as it was", async () => {
     const before = JSON.parse((await server!.call("GET", "/api/state")).body);

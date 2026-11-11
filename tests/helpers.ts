@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -78,17 +79,49 @@ export async function seedSamples() {
 
 export type Call = (method: string, url: string, headers?: Record<string, string>, body?: string | Uint8Array) => Promise<{ status: number; body: string }>;
 
+/** A port nobody is listening on right now: the OS picks it (bind port 0 on 127.0.0.1, then close). */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const s = net.createServer();
+    s.unref();
+    s.once("error", reject);
+    s.listen(0, "127.0.0.1", () => {
+      const { port } = s.address() as net.AddressInfo;
+      s.close(() => resolve(port));
+    });
+  });
+}
+
+type Server = { port: number; call: Call; stop: () => Promise<void> };
+
 /**
- * The local server, started the way `pnpm start` does (tsx + src/server/index.ts), without the CLI.
+ * The local server, started the way `pnpm start` does (tsx + src/server/index.ts), without the CLI,
+ * on a port the OS hands out. It counts as started only when ITS OWN child has said it is listening
+ * on that port (the server prints "SignSnip API on http://127.0.0.1:<port>" once bound) and the API
+ * answers: another file's server on the same port can't pass for this one. If the child exits first
+ * (the port was taken in between), it retries on a new port, up to 3 tries.
  * `stop` waits until it has really exited (SIGKILL after 5 s).
  */
-export async function startServer(dir: string): Promise<{ port: number; call: Call; stop: () => Promise<void> }> {
+export async function startServer(dir: string): Promise<Server> {
   assertTempDir(dir);
-  const port = 7900 + Math.floor(Math.random() * 90);
+  let last: Error | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await startOnce(dir, await freePort()); } catch (e) { last = e as Error; if (!/exited early/.test(last.message)) throw last; }
+  }
+  throw last!;
+}
+
+/** startServer on a given port, no retry (for tests of the helper itself). */
+export async function startOnce(dir: string, port: number): Promise<Server> {
   const tsx = pathToFileURL(createRequire(path.join(root, "package.json")).resolve("tsx/esm")).href;
   const server = spawn(process.execPath, ["--import", tsx, path.join(root, "src/server/index.ts")], {
-    env: { ...process.env, SIGNSNIP_DATA: dir, SIGNSNIP_PORT: String(port) }, stdio: "ignore",
+    env: { ...process.env, SIGNSNIP_DATA: dir, SIGNSNIP_PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"],
   });
+  let out = "", errText = "";
+  const listening = `on http://127.0.0.1:${port}`;
+  // keep reading both pipes for the server's whole life, so a chatty server never blocks on a full pipe
+  server.stdout!.on("data", (d) => { if (out.length < 4096) out += d; });
+  server.stderr!.on("data", (d) => { if (errText.length < 4096) errText += d; });
   const call: Call = (method, url, headers = {}, body) =>
     new Promise((resolve, reject) => {
       const req = http.request({ host: "127.0.0.1", port, path: url, method, headers }, (res) => {
@@ -104,8 +137,13 @@ export async function startServer(dir: string): Promise<{ port: number; call: Ca
     await gone; clearTimeout(t);
   };
   for (let i = 0; i < 200; i++) {
-    if (server.exitCode !== null) throw new Error(`server exited early (code ${server.exitCode})`);
-    if (await call("GET", "/api/state").then((r) => r.status === 200, () => false)) return { port, call, stop };
+    if (server.exitCode !== null || server.signalCode !== null) {
+      throw new Error(`server exited early on port ${port} (code ${server.exitCode}): ${errText.split("\n").find((l) => /Error|EADDRINUSE/.test(l)) ?? ""}`);
+    }
+    // only our own child's "listening" line proves the port is ours; then the API must answer too
+    if (out.includes(listening) && await call("GET", "/api/state").then((r) => r.status === 200, () => false)) {
+      if (server.exitCode === null) return { port, call, stop };
+    }
     await new Promise((r) => setTimeout(r, 150));
   }
   await stop();
