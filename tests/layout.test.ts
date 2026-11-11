@@ -3,7 +3,7 @@ import { fitLogo, growArea, LOGO_BOX, maxLogoScale, money, wrapWords, type Measu
 import { cellRect, pageFill, sheetGeometry, slotOwners } from "../src/core/geometry";
 import type { Sign, Template } from "../src/core/types";
 import { tmpWorkspace, useNodeWorkspace } from "./helpers";
-import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, defaultTemplate, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields, withKind } from "../src/core/template";
+import { applyAbbreviation, balanceLines, belowMin, DEFAULT_TEMPLATES, defaultTemplate, describeOverflow, fitSign, layoutTemplate, overflowDetails, resolveTemplate, templateIssues, usedFields, withKind, withTemplate } from "../src/core/template";
 
 // fake metric: 0.5 em per char, em = size pt -> mm
 const measure = (t: string, s: number) => t.length * 0.45 * s * 0.3528;
@@ -281,6 +281,35 @@ describe("withKind (bulk Percent/Price keeps the template in step)", () => {
     expect(s).toMatchObject({ kind: "percent", templateId: "percent", footer: "*MSRP" });
     const stale = withKind(sign({ kind: "percent", templateId: "harbor-price" }), "percent", templates);
     expect(stale.templateId).toBe("percent");
+  });
+});
+
+describe("withTemplate (editor and bulk Template select: the default footer follows the kind)", () => {
+  const harborPrice: Template = { ...defaultTemplate("price"), id: "harbor-price", name: "Harbor price" };
+  const harborPercent: Template = { ...defaultTemplate("percent"), id: "harbor-percent", name: "Harbor percent" };
+  const priceTpl = defaultTemplate("price");
+  const percentTpl = defaultTemplate("percent");
+
+  it("a percent sign with *MSRP going to a price template loses the default footer", () => {
+    const s = withTemplate(sign({ templateId: "percent", footer: "*MSRP" }), priceTpl);
+    expect(s).toMatchObject({ kind: "price", templateId: "price", footer: "" });
+  });
+  it("a price sign with no footer going to a percent template gets *MSRP", () => {
+    const s = withTemplate(sign({ kind: "price", price: 120, templateId: "price", footer: "" }), percentTpl);
+    expect(s).toMatchObject({ kind: "percent", templateId: "percent", footer: "*MSRP", price: 120 });
+  });
+  it("keeps a footer the user typed, both ways", () => {
+    expect(withTemplate(sign({ templateId: "percent", footer: "Harbor only" }), priceTpl).footer).toBe("Harbor only");
+    expect(withTemplate(sign({ kind: "price", price: 120, templateId: "price", footer: "Harbor only" }), percentTpl).footer).toBe("Harbor only");
+  });
+  it("a template of the same kind changes only the template id", () => {
+    const before = sign({ templateId: "percent", footer: "" });
+    expect(withTemplate(before, harborPercent)).toEqual({ ...before, templateId: "harbor-percent" });
+    expect(withTemplate(sign({ kind: "price", price: 120, templateId: "price", footer: "*MSRP" }), harborPrice).footer).toBe("*MSRP");
+  });
+  it("sets a custom price template's id, not the built-in one", () => {
+    const s = withTemplate(sign({ templateId: "percent", footer: "*MSRP" }), harborPrice);
+    expect(s).toMatchObject({ kind: "price", templateId: "harbor-price", footer: "" });
   });
 });
 

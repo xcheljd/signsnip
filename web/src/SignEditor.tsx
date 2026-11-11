@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { PencilRulerIcon, PlusIcon, SaveIcon, XIcon } from "lucide-react";
-import { resolveTemplate, usedFields } from "../../src/core/template";
+import { resolveTemplate, usedFields, withTemplate } from "../../src/core/template";
 import type { Preset, Sign, Template } from "../../src/core/types";
 import type { BrandWithLogo } from "./api";
 import { ChoiceOrOwn } from "./ChoiceOrOwn";
@@ -44,9 +44,9 @@ export function SignEditor({
   const switchTemplate = (id: string) => {
     const t = templates.find((x) => x.id === id);
     if (!t) return;
-    if (t.kind === draft.kind) { set({ templateId: id }); return; }
-    if (t.kind === "price") set({ templateId: id, kind: "price", price: draft.price ?? 199, footer: draft.footer === "*MSRP" ? "" : draft.footer });
-    else set({ templateId: id, kind: "percent", footer: draft.footer === "" ? "*MSRP" : draft.footer });
+    const next = withTemplate(draft, t);
+    const toPrice = t.kind === "price" && draft.kind !== "price";
+    set({ templateId: next.templateId, kind: next.kind, footer: next.footer, ...(toPrice ? { price: draft.price ?? 199 } : {}) });
   };
 
   const submit = () => {

@@ -7,7 +7,7 @@ import {
 import { toast } from "sonner";
 import { MAX_PAGES, pageFill, sheetGeometry } from "../../src/core/geometry";
 import { money } from "../../src/core/layout";
-import { resolveTemplate, withKind } from "../../src/core/template";
+import { resolveTemplate, withKind, withTemplate } from "../../src/core/template";
 import type { Batch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
 import { OpenBatchFile, ShareBatchDialog } from "./BatchFile";
@@ -175,7 +175,7 @@ export function BatchPanel({
                     onValueChange={(v) => {
                       const t = templates.find((x) => x.id === v);
                       if (!t) return;
-                      update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, templateId: t.id, kind: t.kind, price: t.kind === "price" ? (s.price ?? 199) : s.price } : s)) }),
+                      update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withTemplate(s, t), price: t.kind === "price" ? (s.price ?? 199) : s.price } : s)) }),
                         { undo: `Template → ${t.name} on ${count(sel.length, "row")}` });
                     }}>
                     <SelectTrigger id="bulk-template" className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>

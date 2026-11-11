@@ -86,10 +86,26 @@ export function resolveTemplate(sign: Pick<Sign, "templateId" | "kind">, templat
  */
 export function withKind<S extends Sign>(sign: S, kind: Sign["kind"], templates: Template[]): S {
   const same = resolveTemplate(sign, templates).kind === kind;
-  const footer = sign.kind === kind ? sign.footer
-    : kind === "price" ? (sign.footer === "*MSRP" ? "" : sign.footer)
-    : (sign.footer === "" ? "*MSRP" : sign.footer);
-  return { ...sign, kind, templateId: same ? sign.templateId : kind, footer };
+  return { ...sign, kind, templateId: same ? sign.templateId : kind, footer: footerForKind(sign, kind) };
+}
+
+/**
+ * Put a sign on a template (sign editor and bulk Template select): templateId and kind become
+ * the template's, the default footer follows a change of kind, everything else is kept.
+ */
+export function withTemplate<S extends Sign>(sign: S, template: Template): S {
+  return { ...sign, templateId: template.id, kind: template.kind, footer: footerForKind(sign, template.kind) };
+}
+
+/**
+ * The footer a sign gets when it changes kind: the default footer follows the kind (percent
+ * "*MSRP", price empty); any other footer the user typed is kept, and a sign that keeps its
+ * kind keeps its footer untouched. The only copy of this rule.
+ */
+function footerForKind(sign: Sign, kind: Sign["kind"]): string {
+  if (sign.kind === kind) return sign.footer;
+  if (kind === "price") return sign.footer === "*MSRP" ? "" : sign.footer;
+  return sign.footer === "" ? "*MSRP" : sign.footer;
 }
 
 /** Which sign fields a template actually prints (drives which inputs the editor shows). */
