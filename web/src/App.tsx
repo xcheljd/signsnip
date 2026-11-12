@@ -25,7 +25,8 @@ import { useBatch } from "./useBatch";
 import { useTheme } from "./theme";
 import { DownloadIcon, MonitorIcon, MoonIcon, PrinterIcon, ScissorsIcon, SunIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Toaster } from "@/components/ui/sonner";
+import { DataNotice } from "./DataNotice";
+import { Toasts } from "./Toasts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +75,7 @@ export function usePdf(items: Sign[], options: Parameters<typeof api.fetchPdf>[1
 export function App() {
   const [needStart, setNeedStart] = useState(() => api.needsStart());
   const { resolved } = useTheme();
-  if (needStart) return (<><StartPage onDone={() => setNeedStart(false)} /><Toaster position="bottom-right" theme={resolved} /></>);
+  if (needStart) return (<><StartPage onDone={() => setNeedStart(false)} /><Toasts theme={resolved} aboveBar={false} /></>);
   return <SignoApp />;
 }
 
@@ -99,25 +100,18 @@ function SignoApp() {
   const setCalibrated = (v: boolean) => { localStorage.setItem("signsnip.calibrated", v ? "1" : "0"); setCalibratedState(v); };
 
   // The damaged-data notice stays until someone presses Close, also across reloads (remembered in localStorage).
+  // It is an inline alert at the top of every tab (DataNotice), never a toast, so it can't cover a control.
   const notice = useRef<NoticeMemory | null>(null);
-  const shownProblems = useRef("");
-  const setNotice = useCallback(function setNotice(mem: NoticeMemory) {
+  // a string, so the 2.5 s polls re-render nothing while the text stays the same; a reload shows the
+  // remembered notice at once (polls only add to it), so the page doesn't jump when the first poll lands
+  const [problemText, setProblemText] = useState(() => noticeText(parseNoticeMemory(localStorage.getItem("signsnip.dataProblems")).open));
+  const setNotice = useCallback((mem: NoticeMemory) => {
     notice.current = mem;
     try {
       if (mem.open.length || mem.closed.length) localStorage.setItem("signsnip.dataProblems", JSON.stringify(mem));
       else localStorage.removeItem("signsnip.dataProblems");
     } catch { /* storage blocked or full: the notice still shows for this visit */ }
-    // one fixed toast id, and only when the text changes: polling every 2.5 s must not stack notices.
-    // Nothing dismisses it automatically: only Close takes it away (sonner removes the toast on its action).
-    const text = noticeText(mem.open);
-    if (text === shownProblems.current) return;
-    shownProblems.current = text;
-    if (text) {
-      toast.error(text, {
-        id: "data-problems", duration: Infinity, dismissible: false,
-        action: { label: "Close", onClick: () => setNotice(closeNotice(notice.current ?? mem)) },
-      });
-    }
+    setProblemText(noticeText(mem.open));
   }, []);
   const onRemote = useCallback((s: api.State) => {
     notice.current ??= parseNoticeMemory(localStorage.getItem("signsnip.dataProblems"));
@@ -263,6 +257,12 @@ function SignoApp() {
       </div>
 
       <main>
+      {/* in the page flow above every tab (same width and padding as the tab below it), so it never covers a control */}
+      {problemText && (
+        <div className={cn("mx-auto w-full px-3 pt-3 sm:px-6 sm:pt-6", tab === "templates" ? "max-w-[96rem]" : "max-w-7xl")}>
+          <DataNotice text={problemText} onClose={() => setNotice(closeNotice(notice.current ?? parseNoticeMemory(localStorage.getItem("signsnip.dataProblems"))))} />
+        </div>
+      )}
       <TabsContent value="templates" className="mx-auto w-full max-w-[96rem] p-3 sm:p-6" keepMounted>
         <TemplatesTab active={tab === "templates"} templates={templates} brands={brands} items={batch.items} refresh={refresh} rules={rules} focus={focusTemplate} />
       </TabsContent>
@@ -370,8 +370,8 @@ function SignoApp() {
         <div id="overlays" />
       </main>
 
-      {/* only the bottom clears the sticky print bar; a plain number would set all four sides and squeeze toasts on a phone */}
-      <Toaster position="bottom-right" theme={resolved} offset={tab === "make" ? { bottom: 88 } : 24} mobileOffset={tab === "make" ? { bottom: 120 } : 16} />
+      {/* bottom-centre, just above the sticky print bar on Make signs (Toasts.tsx) */}
+      <Toasts theme={resolved} aboveBar={tab === "make"} />
 
       <AlertDialog open={!!gate} onOpenChange={(o) => !o && setGate(null)}>
         <AlertDialogContent size="lg">

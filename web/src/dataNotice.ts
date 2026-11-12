@@ -30,17 +30,31 @@ export function closeNotice(mem: NoticeMemory): NoticeMemory {
   return { open: [], closed: [...new Set([...mem.closed, ...mem.open.map((p) => p.key)])] };
 }
 
-/** What a stored part is called in the notice. */
-const PART_NAMES: Record<string, string> = { brands: "brands", batch: "the current batch", templates: "templates", presets: "presets", rules: "text rules" };
-const partName = (key: string) => (key.startsWith("batches/") ? `the saved batch “${key.slice("batches/".length)}”` : PART_NAMES[key] ?? key);
+/** What a stored part is called in the notice, and whether it reads as "they" (brands) or "it" (the current batch). */
+type PartName = { name: string; plural: boolean };
+const PART_NAMES: Record<string, PartName> = {
+  brands: { name: "brands", plural: true },
+  batch: { name: "the current batch", plural: false },
+  templates: { name: "templates", plural: true },
+  presets: { name: "presets", plural: true },
+  rules: { name: "text rules", plural: true },
+};
+const partName = (key: string): PartName =>
+  key.startsWith("batches/") ? { name: `the saved batch “${key.slice("batches/".length)}”`, plural: false } : PART_NAMES[key] ?? { name: key, plural: false };
+/** "a", "a and b", "a, b and c" */
+const joinParts = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 /** One notice for every open part, or "" when there is nothing to show. */
 export function noticeText(open: NoticePart[]): string {
   if (!open.length) return "";
-  const many = open.length > 1;
+  const parts = open.map((p) => partName(p.key));
+  // "Your" replaces the first part's "the": "Your current batch", "Your saved batch “x”"
+  const names = parts.map((p, i) => (i === 0 ? p.name.replace(/^the /, "") : p.name));
+  const they = parts.length > 1 || parts[0]!.plural;
   // the hosted build can't keep a copy (keptAt is unset there), so it doesn't claim one
-  const kept = open.every((p) => p.kept) ? ` and kept ${many ? "copies of the damaged files" : "a copy of the damaged file"}` : "";
-  return `Part of your saved data couldn't be read (${open.map((p) => partName(p.key)).join(", ")}). SignSnip started without it${kept}. Restore a backup to get it back.`;
+  const kept = !open.every((p) => p.kept) ? "" : open.length > 1 ? " Copies of the damaged files were kept." : " A copy of the damaged file was kept.";
+  return `Your ${joinParts(names)} couldn't be opened, so ${they ? "they're" : "it's"} missing for now. Everything else is fine.${kept}`
+    + ` If you have a backup from before this happened, Restore backup brings ${they ? "them" : "it"} back, but it replaces everything you have now.`;
 }
 
 /** Read the remembered notice; anything unreadable counts as nothing remembered. */
