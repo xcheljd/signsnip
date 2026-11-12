@@ -21,7 +21,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import { ACTION_LABEL, warningsByRow, type RowWarning, type WarningAction } from "./rowWarnings";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -66,8 +67,13 @@ export function BatchPanel({
   const g = sheetGeometry(batch.options);
   const total = items.reduce((a, s) => a + s.copies, 0);
   const fill = pageFill(total, g.perPage);
-  const warnRows = new Map<number, string[]>();
-  for (const w of warnings) if (w.level === "warn") for (const i of w.items) warnRows.set(i, [...(warnRows.get(i) ?? []), w.message]);
+  const warnRows = warningsByRow(warnings, brands.map((b) => b.id));
+  const act = (a: WarningAction, row: number, brandId: string) => {
+    if (a === "remove-background") onFixBg(brandId);
+    else if (a === "open-brand") onGoToBrand(brandId);
+    else if (a === "open-designer") onOpenTemplate(row);
+    else onEdit(row);
+  };
   const allSelected = items.length > 0 && items.every((s) => selected.has(s.id));
   const sel = items.filter((s) => selected.has(s.id));
   const [drag, setDrag] = useState<number | null>(null);
@@ -160,7 +166,7 @@ export function BatchPanel({
                 </div>
                 <Separator orientation="vertical" className="h-8" />
                 <BulkNumber label="Percent" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
-                <BulkNumber label="Price" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
+                <BulkNumber label="Price" className="w-40 pointer-coarse:w-48" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
                 <BulkNumber label="Copies" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
                 <Field className="w-56">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
@@ -251,16 +257,12 @@ export function BatchPanel({
                         <Badge variant={s.kind === "price" ? "outline" : "secondary"}>{offerText(s)}</Badge>
                         {s.kind === "price" && s.wasPrice && <span className="text-xs text-muted-foreground line-through">{money(s.wasPrice)}</span>}
                         {s.templateId && s.templateId !== s.kind && <Badge variant="outline" className="text-muted-foreground">{resolveTemplate(s, templates).name}</Badge>}
-                        {warnRows.has(i) && (
-                          <Tooltip>
-                            <TooltipTrigger render={<span className="text-destructive" />}><TriangleAlertIcon className="size-4" /></TooltipTrigger>
-                            <TooltipContent className="max-w-xs">{warnRows.get(i)!.join(" ")}</TooltipContent>
-                          </Tooltip>
-                        )}
+                        {warnRows.has(i) && <RowWarningButton row={i} list={warnRows.get(i)!} act={act} />}
                       </div>
                     </TableCell>
                     <TableCell className="max-md:col-span-3 max-md:row-start-3 max-md:p-0 max-md:pl-1">
-                      <NumField className="h-7 w-24 max-md:w-40" stepper={`copies of row ${i + 1}`} stepWords={["Fewer", "More"]} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
+                      {/* touch screens from md up: 44 px − / + buttons need a wider box to leave room for 3 digits (max 200) */}
+                      <NumField className="h-7 w-24 max-md:w-40 md:pointer-coarse:w-32" stepper={`copies of row ${i + 1}`} stepWords={["Fewer", "More"]} aria-label={`Copies for row ${i + 1}`} value={s.copies} min={1} max={200}
                         onChange={(n) => n && update((b) => ({ ...b, items: b.items.map((x) => (x.id === s.id ? { ...x, copies: n } : x)) }), { coalesce: `qty-${s.id}` })} />
                     </TableCell>
                     <TableCell className="max-md:col-start-3 max-md:row-start-1 max-md:p-0">
@@ -303,6 +305,46 @@ export function BatchPanel({
   );
 }
 
+/**
+ * The red triangle on a batch row: a button, so a finger can open it too. It opens a popover with
+ * the row's warnings and the same fix-it buttons as the warning list above the batch. Mouse users
+ * still get the text as a tooltip on hover; the tooltip stays off while the popover is open.
+ */
+function RowWarningButton({ row, list, act }: { row: number; list: RowWarning[]; act: (a: WarningAction, row: number, brandId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip disabled={open}>
+        <TooltipTrigger render={
+          <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-xs" className="text-destructive hover:text-destructive aria-expanded:text-destructive" aria-label={`Warning for row ${row + 1}`} />} />
+        }>
+          <TriangleAlertIcon />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">{list.map((w) => w.message).join(" ")}</TooltipContent>
+      </Tooltip>
+      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)]">
+        <PopoverHeader><PopoverTitle>Row {row + 1} has {count(list.length, "warning")}</PopoverTitle></PopoverHeader>
+        <ul className="flex flex-col gap-3">
+          {list.map((w, k) => (
+            <li key={k} className="flex flex-col gap-2">
+              <p>{w.message}</p>
+              {w.actions.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {w.actions.map((a) => (
+                    <Button key={a} type="button" size="sm" variant="outline" onClick={() => { setOpen(false); act(a, row, w.brandId); }}>
+                      {a === "remove-background" && <WandSparklesIcon data-icon="inline-start" />}{ACTION_LABEL[a]}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Paper, layout, cut lines and the printer check: they describe the print sheet, so they sit on it. */
 export function PrintSettings({ options, update, onCalibrate }: { options: Batch["options"]; update: Update; onCalibrate: () => void }) {
   const setOptions = (patch: Partial<Batch["options"]>) => update((b) => ({ ...b, options: { ...b.options, ...patch } }));
@@ -332,13 +374,13 @@ export function PrintSettings({ options, update, onCalibrate }: { options: Batch
   );
 }
 
-function BulkNumber({ label, onApply, ...num }: { label: string; onApply: (n: number) => void } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after" | "emptyStart">) {
+function BulkNumber({ label, onApply, className = "w-40", ...num }: { label: string; onApply: (n: number) => void; className?: string } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after" | "emptyStart">) {
   const [v, setV] = useState<number | undefined>(undefined);
   return (
     <Field className="w-auto">
       <FieldLabel htmlFor={`bulk-${label.toLowerCase()}`}>{label}</FieldLabel>
       <div className="flex gap-2">
-        <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className="w-40" value={v} onChange={setV}
+        <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className={className} value={v} onChange={setV}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter" && v) { e.preventDefault(); onApply(v); } }} />
         <Button type="button" variant="outline" disabled={!v} onClick={() => v && onApply(v)}>Set</Button>
       </div>

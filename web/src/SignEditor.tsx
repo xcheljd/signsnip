@@ -22,10 +22,31 @@ const PERCENTS = [10, 20, 25, 30, 40, 50, 60, 70, 75, 80];
 const PRICES = [49, 99, 149, 199, 249, 299, 399];
 const PRICE_LABELS = ["NOW", "ONLY", "STARTING AT", "UNDER"];
 
+/**
+ * The form's main action (Add to batch, or Update sign while a row is being edited) and Cancel.
+ * Rendered in the sign card and in the sticky print bar: both submit the same form, so Enter,
+ * the card and the bar all go through the form's one submit handler.
+ */
+export function SignFormButtons({ editing, canSubmit, onCancel }: { editing: boolean; canSubmit: boolean; onCancel: () => void }) {
+  return (
+    <>
+      <Button type="submit" form="sign-form" disabled={!canSubmit}>
+        {editing ? <SaveIcon data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
+        {editing ? "Update sign" : "Add to batch"}
+      </Button>
+      {editing && <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>}
+    </>
+  );
+}
+
 export function SignEditor({
-  draft, set, brands, presets, templates, editing, onSubmit, onCancel, onSavePreset, onPickPreset, onDeletePreset, onEditTemplate,
+  draft, set, brands, presets, templates, editing, editTitle, canSubmit, onSubmit, onCancel, onSavePreset, onPickPreset, onDeletePreset, onEditTemplate,
 }: {
   draft: Sign; set: (patch: Partial<Sign>) => void; brands: BrandWithLogo[]; presets: Preset[]; templates: Template[]; editing: boolean;
+  /** names the row being edited ("Editing row 3 · …"), see editLabel.ts */
+  editTitle: string | null;
+  /** whether Add / Update may run (the sign has a brand); App decides it once for the card and the print bar */
+  canSubmit: boolean;
   onEditTemplate: () => void;
   onSubmit: () => void; onCancel: () => void; onSavePreset: () => void;
   onPickPreset: (p: Preset) => void; onDeletePreset: (p: Preset) => void;
@@ -58,7 +79,9 @@ export function SignEditor({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{editing ? "Editing a sign" : "New sign"}</CardTitle>
+        {editing
+          ? <CardTitle className="min-w-0 truncate" title={editTitle ?? undefined}>{editTitle ?? "Editing a sign"}</CardTitle>
+          : <CardTitle>New sign</CardTitle>}
         {presets.length > 0 && (
           <CardDescription className="flex flex-wrap items-center gap-2">
             <span>Presets</span>
@@ -74,7 +97,7 @@ export function SignEditor({
       <CardContent>
         <form
           id="sign-form"
-          onSubmit={(e) => { e.preventDefault(); if (brand) submit(); }}
+          onSubmit={(e) => { e.preventDefault(); if (canSubmit) submit(); }}
           onKeyDown={(e) => { if (e.key === "Escape" && editing && !e.defaultPrevented) onCancel(); }}
         >
           <FieldGroup>
@@ -142,11 +165,12 @@ export function SignEditor({
               </Field>
             ) : (
               <>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem]">
+                {/* touch: the − / + buttons are bigger, so price boxes widen to keep room for 999998.99 */}
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem] md:pointer-coarse:grid-cols-[minmax(0,1fr)_12rem]">
                   <Field>
                     <FieldLabel htmlFor="price">Price</FieldLabel>
                     <div className="flex flex-wrap items-center gap-2">
-                      <NumField id="price" stepper="price" className="w-40" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
+                      <NumField id="price" stepper="price" className="w-40 pointer-coarse:w-48" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
                       <ToggleGroup variant="outline" spacing={1} className="flex-wrap" aria-label="Common prices" value={[String(draft.price ?? "")]}
                         onValueChange={(v) => { if (v[0]) set({ price: Number(v[0]) }); }}>
                         {PRICES.map((p) => <ToggleGroupItem key={p} value={String(p)} type="button">${p}</ToggleGroupItem>)}
@@ -185,11 +209,7 @@ export function SignEditor({
           <Label htmlFor="copies">Copies</Label>
           <NumField id="copies" form="sign-form" stepper="copies" stepWords={["Fewer", "More"]} className="w-40" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
         </div>
-        <Button type="submit" form="sign-form" disabled={!brand}>
-          {editing ? <SaveIcon data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
-          {editing ? "Update sign" : "Add to batch"}
-        </Button>
-        {editing && <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>}
+        <SignFormButtons editing={editing} canSubmit={canSubmit} onCancel={onCancel} />
         <Button type="button" variant="outline" onClick={onSavePreset}>Save as preset</Button>
         <span className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
           <Kbd>Enter</Kbd> {editing ? "update" : "add"}

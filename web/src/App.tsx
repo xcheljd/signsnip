@@ -18,10 +18,12 @@ import { BrandsTab } from "./BrandsTab";
 import { PdfView } from "./PdfView";
 import { downloadPdf, printPdf } from "./print";
 import { SheetView } from "./SheetView";
-import { SignEditor } from "./SignEditor";
+import { SignEditor, SignFormButtons } from "./SignEditor";
+import { editLabel } from "./editLabel";
+import { cn } from "@/lib/utils";
 import { useBatch } from "./useBatch";
 import { useTheme } from "./theme";
-import { DownloadIcon, MonitorIcon, MoonIcon, PlusIcon, PrinterIcon, ScissorsIcon, SunIcon } from "lucide-react";
+import { DownloadIcon, MonitorIcon, MoonIcon, PrinterIcon, ScissorsIcon, SunIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +145,9 @@ function SignoApp() {
   }, [checkKey]);
 
   const brand = brands.find((b) => b.id === draft?.brandId);
+  /** Add / Update need a brand that exists: one rule for the card's buttons, the print bar's and Enter */
+  const canSubmit = !!brand;
+  const editTitle = editLabel(batch.items, editing, brands);
   // a sign whose brand was deleted still previews, as it prints: without a logo (like the sheet and the print check)
   const single = useMemo(() => (draft?.brandId ? [draft] : []), [draft]);
   const logoKey = logosKey(brands) + "#"
@@ -274,7 +279,7 @@ function SignoApp() {
         <div className="grid grid-cols-1 items-start gap-4 lg:col-span-2 lg:grid-cols-[1fr_20rem]">
         {draft && (
           <SignEditor
-            draft={draft} set={set} brands={brands} presets={presets} templates={templates} editing={!!editing}
+            draft={draft} set={set} brands={brands} presets={presets} templates={templates} editing={!!editing} editTitle={editTitle} canSubmit={canSubmit}
             onEditTemplate={() => setTab("templates")}
             onSubmit={submit} onCancel={cancelEdit}
             onSavePreset={() => { setPresetName(`${draft.collection} ${draft.kind === "price" ? `$${draft.price}` : `${draft.percent}%`}`); setPresetDialog(true); }}
@@ -332,16 +337,31 @@ function SignoApp() {
         {/* always-reachable finish line: what you're about to print, and the buttons to do it */}
         <div className="sticky bottom-0 z-10 -mx-3 lg:col-span-2 sm:-mx-6" data-slot="print-bar">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-card px-4 py-2 shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.15)] sm:px-6">
-            <div className="flex min-w-0 flex-col">
-              <span className="text-sm font-medium tabular-nums">{signCount ? `${count(signCount, "sign")} · ${count(pageCount, "page")}` : "Nothing to print yet"}</span>
-              <span className="text-xs text-muted-foreground">Print at 100% (“Actual size”) · {g.perPage} per page</span>
+            {/* left: what you'd print; while editing, which row the form is changing. From md up it shrinks
+                (truncating the label) so the buttons never wrap; on a phone it gets its own line as before. */}
+            <div className="flex min-w-0 flex-1 flex-col max-md:basis-full md:basis-0">
+              {editTitle ? (
+                <>
+                  <span data-slot="edit-label" className="truncate text-sm font-medium" title={editTitle}>{editTitle}</span>
+                  <span className="truncate text-xs text-muted-foreground tabular-nums">{signCount ? `${count(signCount, "sign")} · ${count(pageCount, "page")}` : "Nothing to print yet"}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-medium tabular-nums">{signCount ? `${count(signCount, "sign")} · ${count(pageCount, "page")}` : "Nothing to print yet"}</span>
+                  <span className="text-xs text-muted-foreground">Print at 100% (“Actual size”) · {g.perPage} per page</span>
+                </>
+              )}
             </div>
+            {/* the form's action is the bar's primary button at every width (same buttons and rules as the sign card) */}
             <div className="ml-auto flex flex-wrap gap-2">
-              <Button type="submit" form="sign-form" variant="outline" className="md:hidden" disabled={!brand}>
-                <PlusIcon data-icon="inline-start" />{editing ? "Update sign" : "Add to batch"}
+              {draft && <SignFormButtons editing={!!editing} canSubmit={canSubmit} onCancel={cancelEdit} />}
+              {/* phone, while editing: icon-only, so Update + Cancel + both still fit on one line (the name stays for screen readers) */}
+              <Button type="button" variant="outline" disabled={!signCount} onClick={() => exportPdf()}>
+                <DownloadIcon data-icon="inline-start" /><span className={cn(editing && "max-md:sr-only")}>Download PDF</span>
               </Button>
-              <Button type="button" variant="outline" disabled={!signCount} onClick={() => exportPdf()}><DownloadIcon data-icon="inline-start" />Download PDF</Button>
-              <Button type="button" disabled={!signCount} onClick={() => print()}><PrinterIcon data-icon="inline-start" />Print</Button>
+              <Button type="button" variant="secondary" disabled={!signCount} onClick={() => print()}>
+                <PrinterIcon data-icon="inline-start" /><span className={cn(editing && "max-md:sr-only")}>Print</span>
+              </Button>
             </div>
           </div>
         </div>
