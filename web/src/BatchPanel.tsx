@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { count } from "../../src/core/words";
 import {
-  ArchiveIcon, CheckIcon, CopyIcon, DownloadIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, InfoIcon, PencilIcon, PrinterIcon, RulerIcon, Trash2Icon,
+  ArchiveIcon, CopyIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, ImageOffIcon, InfoIcon, PencilIcon, RulerIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +10,9 @@ import { money } from "../../src/core/layout";
 import { resolveTemplate, withKind, withTemplate } from "../../src/core/template";
 import type { Batch, SavedBatch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
-import { logoVersion } from "./logoVersion";
+import { logoThumb } from "./logoThumb";
+import { pageMeter } from "./pageMeter";
+import { PANEL_LIMIT, lineCount, panelGroups, panelTitle, visibleGroups, type PanelGroup } from "./warningPanel";
 import { OpenBatchFile, ShareBatchDialog } from "./BatchFile";
 import { NumField } from "./NumField";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,7 +25,6 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ACTION_LABEL, warningsByRow, type RowWarning, type WarningAction } from "./rowWarnings";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -68,6 +69,8 @@ export function BatchPanel({
   const g = sheetGeometry(batch.options);
   const total = items.reduce((a, s) => a + s.copies, 0);
   const fill = pageFill(total, g.perPage);
+  const meter = pageMeter(total, g.perPage, items.length);
+  const headerHeight = useHeaderHeight();
   const warnRows = warningsByRow(warnings, brands.map((b) => b.id));
   const act = (a: WarningAction, row: number, brandId: string) => {
     if (a === "remove-background") onFixBg(brandId);
@@ -85,7 +88,8 @@ export function BatchPanel({
   const setOptions = (patch: Partial<Batch["options"]>) => update((b) => ({ ...b, options: { ...b.options, ...patch } }));
 
   return (
-    <Card className="lg:col-span-2">
+    // overflow-visible: the card's default overflow-hidden would make it the bulk bar's scroll box, and the bar would never stick
+    <Card className="overflow-visible lg:col-span-2">
       <CardHeader>
         <CardTitle>Batch</CardTitle>
         <CardDescription>
@@ -112,43 +116,7 @@ export function BatchPanel({
           </Alert>
         )}
 
-        {warnings.some((w) => w.code === "auto-abbrev" || w.code === "auto-template") && (
-          <Alert>
-            <CheckIcon />
-            <AlertTitle>Auto-fit kept the text readable</AlertTitle>
-            <AlertDescription>
-              <ul className="flex flex-col gap-0.5">
-                {warnings.filter((w) => w.code === "auto-abbrev" || w.code === "auto-template").slice(0, 6).map((w, i) => <li key={i}>{w.message}</li>)}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {warnings.some((w) => w.code === "spill") && (
-          <Alert>
-            <InfoIcon />
-            <AlertTitle>Tight fits that still print fine</AlertTitle>
-            <AlertDescription>
-              <ul className="flex flex-col gap-0.5">
-                {warnings.filter((w) => w.code === "spill").slice(0, 6).map((w, i) => <li key={i}>{w.message}</li>)}
-              </ul>
-            </AlertDescription>
-            <AlertAction><Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(warnings.find((w) => w.code === "spill")!.items[0]!)}>See it in the designer</Button></AlertAction>
-          </Alert>
-        )}
-
-        {warnings.filter((w) => w.level === "warn").map((w, i) => (
-          <Alert key={i} variant="destructive">
-            <TriangleAlertIcon />
-            <AlertDescription>{w.message}</AlertDescription>
-            <AlertAction>
-              {w.code === "logo-background" && <Button type="button" size="sm" variant="outline" onClick={() => onFixBg(w.brandId)}><WandSparklesIcon data-icon="inline-start" />Remove background</Button>}
-              {(w.code === "low-res-logo" || w.code === "no-logo") && brands.some((b) => b.id === w.brandId) && <Button type="button" size="sm" variant="outline" onClick={() => onGoToBrand(w.brandId)}>Open brand</Button>}
-              {w.code === "small-text" && /too big for its box/.test(w.message) && <Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(w.items[0]!)}>See it in the designer</Button>}
-              {(w.code === "small-text" || w.code === "was-price" || w.code === "kind-mismatch") && <Button type="button" size="sm" variant="outline" onClick={() => onEdit(w.items[0]!)}>Edit sign</Button>}
-            </AlertAction>
-          </Alert>
-        ))}
+        <WarningsPanel groups={panelGroups(warnings, brands.map((b) => b.id))} act={act} />
 
         {items.length === 0 ? (
           <Empty className="border border-dashed">
@@ -160,24 +128,29 @@ export function BatchPanel({
         ) : (
           <>
             {sel.length > 0 && (
-              <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/50 p-3">
-                <div className="flex h-8 items-center gap-2 text-sm font-medium">
+              // From md up the bar sticks just under the app header while the batch card is on screen, so rows
+              // picked far down can be changed without scrolling back. The bg-card wrapper is its opaque base
+              // (the tinted bar alone would let rows show through); -mt-2/pt-2 keep a strip of it above the bar
+              // without moving anything. Phones keep the bar in the flow: there it is several rows tall.
+              <div data-slot="bulk-bar-sticky" className="z-[5] bg-card md:sticky md:-mt-2 md:pt-2" style={{ top: headerHeight }}>
+              {/* labels sit beside their controls and every control is one height (32 px, 44 px on touch) */}
+              <div data-slot="bulk-bar" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-muted/50 px-3 py-2">
+                <div className="flex items-center gap-1 text-sm font-medium">
                   {count(sel.length, "row")} selected
-                  <IconButton label="Clear selection" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
+                  <IconButton label="Clear selection" size="icon" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
                 </div>
-                <Separator orientation="vertical" className="h-8" />
-                <BulkNumber label="Percent" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
+                <BulkNumber label="Percent" className="w-32 pointer-coarse:w-36" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
                 <BulkNumber label="Price" className="w-40 pointer-coarse:w-48" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
-                <BulkNumber label="Copies" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
-                <Field className="w-56">
+                <BulkNumber label="Copies" className="w-32 pointer-coarse:w-36" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
+                <Field orientation="horizontal" className="w-auto">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
                   <Select items={brands.map((b) => ({ value: b.id, label: b.name }))} value={null as unknown as string}
                     onValueChange={(v) => v && patchSelected({ brandId: v }, `Brand → ${brands.find((b) => b.id === v)?.name}`)}>
-                    <SelectTrigger id="bulk-brand" className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
+                    <SelectTrigger id="bulk-brand" className="w-44"><SelectValue placeholder="Change to…" /></SelectTrigger>
                     <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
-                <Field className="w-56">
+                <Field orientation="horizontal" className="w-auto">
                   <FieldLabel htmlFor="bulk-template">Template</FieldLabel>
                   <Select items={templates.map((t) => ({ value: t.id, label: t.name }))} value={null as unknown as string}
                     onValueChange={(v) => {
@@ -186,7 +159,7 @@ export function BatchPanel({
                       update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withTemplate(s, t), price: t.kind === "price" ? (s.price ?? 199) : s.price } : s)) }),
                         { undo: `Template → ${t.name} on ${count(sel.length, "row")}` });
                     }}>
-                    <SelectTrigger id="bulk-template" className="w-full"><SelectValue placeholder="Change to…" /></SelectTrigger>
+                    <SelectTrigger id="bulk-template" className="w-44"><SelectValue placeholder="Change to…" /></SelectTrigger>
                     <SelectContent><SelectGroup>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
@@ -199,22 +172,28 @@ export function BatchPanel({
                   </Button>
                 </div>
               </div>
+              </div>
             )}
 
             {/* phones: each row reflows into a small card (checkbox · brand · actions / full sign text / qty) */}
-            <Table className="max-md:block max-md:[&_tbody]:block max-md:[&_thead]:hidden">
+            {/* From md up the table has a fixed layout, so long names can't push Qty and Actions off the card:
+                the narrow columns get set widths (the same as their content needed before; wider on touch, where
+                buttons are 44 px), the brand gets 47% of what is left and the sign text the rest (the split
+                ordinary names got before). 100cqw = this wrapper's width, i.e. the table's. */}
+            <div className="@container">
+            <Table className="md:table-fixed max-md:block max-md:[&_tbody]:block max-md:[&_thead]:hidden">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8"><span className="sr-only">Reorder</span></TableHead>
+                  <TableHead className="w-8 pointer-coarse:w-15"><span className="sr-only">Reorder</span></TableHead>
                   <TableHead className="w-8">
                     <Checkbox aria-label="Select all rows" checked={allSelected} indeterminate={!allSelected && sel.length > 0}
                       onCheckedChange={(c) => setSelected(c ? new Set(items.map((s) => s.id)) : new Set())} />
                   </TableHead>
                   <TableHead className="w-8">#</TableHead>
-                  <TableHead>Brand</TableHead>
+                  <TableHead className="md:w-[calc((100cqw-20rem)*0.47)] md:pointer-coarse:w-[calc((100cqw-26rem)*0.47)]">Brand</TableHead>
                   <TableHead>Sign</TableHead>
-                  <TableHead className="w-24">Qty</TableHead>
-                  <TableHead className="w-28 text-right">Actions</TableHead>
+                  <TableHead className="w-28 pointer-coarse:w-36">Qty</TableHead>
+                  <TableHead className="w-28 pointer-coarse:w-37 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -252,15 +231,18 @@ export function BatchPanel({
                     </TableCell>
                     <TableCell className="text-muted-foreground max-md:hidden">{i + 1}</TableCell>
                     <TableCell className="max-md:min-w-0 max-md:p-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <span className="text-xs text-muted-foreground tabular-nums md:hidden">{i + 1}</span>
-                        <img className="h-5 w-12 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(s.brandId, logoVersion(brands.find((b) => b.id === s.brandId)))} alt="" />
-                        <span className="truncate">{brands.find((b) => b.id === s.brandId)?.name ?? s.brandId}</span>
+                        <RowLogo brand={brands.find((b) => b.id === s.brandId)} />
+                        <span className="truncate" title={brands.find((b) => b.id === s.brandId)?.name ?? s.brandId}>{brands.find((b) => b.id === s.brandId)?.name ?? s.brandId}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="max-md:col-span-3 max-md:row-start-2 max-md:p-0 max-md:pl-1 max-md:whitespace-normal">
-                      <div className="flex items-center gap-2 max-md:flex-wrap">
-                        <span className="uppercase max-md:font-medium">{[s.prefix, s.collection].filter(Boolean).join(" ")}</span>
+                    <TableCell className="max-md:col-span-3 max-md:row-start-2 max-md:p-0 max-md:pl-1 max-md:whitespace-normal md:whitespace-normal">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* from md up: at most 2 lines (the title holds the whole text). A long text leaves 8rem beside it for the
+                            badges, but is never held under 9rem: in a narrower cell the badges move to the next line instead of
+                            squeezing it (flex-wrap moves them before anything shrinks). Short texts keep their own width. */}
+                        <span className="uppercase max-md:font-medium md:line-clamp-2 md:max-w-[max(calc(100%-8rem),min(100%,9rem))] md:wrap-break-word" title={[s.prefix, s.collection].filter(Boolean).join(" ")}>{[s.prefix, s.collection].filter(Boolean).join(" ")}</span>
                         <Badge variant={s.kind === "price" ? "outline" : "secondary"}>{offerText(s)}</Badge>
                         {s.kind === "price" && s.wasPrice && <span className="text-xs text-muted-foreground line-through">{money(s.wasPrice)}</span>}
                         {s.templateId && s.templateId !== s.kind && <Badge variant="outline" className="text-muted-foreground">{resolveTemplate(s, templates).name}</Badge>}
@@ -283,32 +265,113 @@ export function BatchPanel({
                 ))}
               </TableBody>
             </Table>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: fill.pages }, (_, p) => {
-                const used = p === fill.pages - 1 ? fill.lastUsed : g.perPage;
-                return (
-                  <div key={p} className="flex flex-col gap-2 rounded-lg border p-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">Page {p + 1}</span>
-                      <span className={cn("tabular-nums", used < g.perPage ? "text-foreground" : "text-muted-foreground")}>{used}/{g.perPage} slots{used < g.perPage ? ` · ${g.perPage - used} empty` : ""}</span>
-                    </div>
-                    <Progress value={(used / g.perPage) * 100} aria-label={`Page ${p + 1} fill`} />
-                    {used < g.perPage && (
-                      <Button type="button" size="sm" variant="outline" className="self-start"
-                        onClick={() => update((b) => ({ ...b, items: b.items.map((x, j) => (j === b.items.length - 1 ? { ...x, copies: x.copies + (g.perPage - used) } : x)) }), { undo: `Filled page ${p + 1} with ${g.perPage - used} more of row ${items.length}` })}>
-                        Fill page {p + 1}: {g.perPage - used} more of row {items.length}
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
             </div>
+
+            {meter && (
+              <div data-slot="page-meter" className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground tabular-nums">
+                <span>{meter.text}</span>
+                {meter.fill && (
+                  <Button type="button" size="sm" variant="outline"
+                    onClick={() => { const f = meter.fill!; update((b) => ({ ...b, items: b.items.map((x, j) => (j === b.items.length - 1 ? { ...x, copies: x.copies + f.more } : x)) }), { undo: f.undo }); }}>
+                    {meter.fill.label}
+                  </Button>
+                )}
+              </div>
+            )}
           </>
         )}
 
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * How tall the sticky app header is ([data-app-chrome]: it wraps on narrow screens, and the hosted
+ * build adds its status bar), so the bulk bar sticks just under it. Re-measured when it changes size.
+ */
+function useHeaderHeight() {
+  const [h, setH] = useState(0);
+  useLayoutEffect(() => {
+    const el = document.querySelector<HTMLElement>("[data-app-chrome]");
+    if (!el) return;
+    const measure = () => setH(Math.ceil(el.getBoundingClientRect().height));
+    measure();
+    const sizes = new ResizeObserver(measure);
+    sizes.observe(el);
+    return () => sizes.disconnect();
+  }, []);
+  return h;
+}
+
+/** A batch row's logo thumbnail, or a same-size "no logo" box when the brand has none or was deleted (nothing is requested then). */
+function RowLogo({ brand }: { brand: api.BrandWithLogo | undefined }) {
+  const t = logoThumb(brand);
+  if (t) return <img className="h-5 w-12 shrink-0 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(t.id, t.version)} alt="" />;
+  return (
+    <span data-slot="logo-placeholder" title="No logo" aria-hidden
+      className="flex h-5 w-12 shrink-0 items-center justify-center rounded-sm border border-dashed text-muted-foreground">
+      <ImageOffIcon className="size-3.5" />
+    </span>
+  );
+}
+
+/**
+ * Everything to check before printing, in one panel above the batch: warnings grouped under short
+ * headings (Logos, Text too small, ...), then the quieter notes (auto-fit, tight fits). Each line keeps
+ * its message and its buttons; the buttons wrap below the text when the line is too narrow, so the
+ * text never runs under them. More than PANEL_LIMIT lines: the first ones and "Show all N"
+ * (closed again on every visit, like the preset chips). warningPanel.ts decides what goes where.
+ */
+function WarningsPanel({ groups, act }: { groups: PanelGroup[]; act: (a: WarningAction, row: number, brandId: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const titleId = useId();
+  const total = lineCount(groups);
+  if (!total) return null;
+  const shown = visibleGroups(groups, expanded);
+  const capped = total > PANEL_LIMIT;
+  const anyWarn = groups.some((g) => g.lines.some((l) => l.level === "warn"));
+  return (
+    <section data-slot="batch-warnings" aria-labelledby={titleId} className="flex flex-col gap-2 rounded-lg border px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {anyWarn ? <TriangleAlertIcon aria-hidden className="size-4 shrink-0 text-destructive" /> : <InfoIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
+        <p id={titleId} data-slot="warning-title" className="text-sm font-medium">{panelTitle(total)}</p>
+        {capped && (
+          // -my-1: the link takes no more height than the title line beside it
+          <Button type="button" variant="link" size="sm" className="-my-1 ml-auto" aria-expanded={expanded} onClick={() => setExpanded((x) => !x)}>
+            {expanded ? "Show fewer" : `Show all ${total}`}
+          </Button>
+        )}
+      </div>
+      {/* headings in a narrow column beside their lines from md up; above them on a phone */}
+      <div className="grid gap-x-4 gap-y-2 md:grid-cols-[8rem_minmax(0,1fr)]">
+        {shown.map((g) => {
+          const note = g.lines.every((l) => l.level === "info");
+          return (
+            <div key={g.id} className="contents">
+              <p data-slot="warning-group-title" className={cn("text-xs font-medium md:pt-1.5", note ? "text-muted-foreground" : "text-destructive")}>{g.title}</p>
+              <ul className="flex min-w-0 flex-col gap-1" aria-label={g.title}>
+                {g.lines.map((l, k) => (
+                  <li key={k} data-slot="warning-line" className="flex min-h-7 flex-wrap items-start gap-x-3 gap-y-1">
+                    {/* pt-1: the first line of text sits level with the button beside it (28 px; 44 px on touch) */}
+                    <p className={cn("min-w-[min(100%,16rem)] flex-1 pt-1 text-sm pointer-coarse:pt-3", l.level === "info" ? "text-muted-foreground" : "text-foreground")}>{l.message}</p>
+                    {l.actions.length > 0 && (
+                      <div className="ml-auto flex shrink-0 flex-wrap gap-2">
+                        {l.actions.map((a) => (
+                          <Button key={a} type="button" size="sm" variant="outline" onClick={() => act(a, l.row, l.brandId)}>
+                            {a === "remove-background" && <WandSparklesIcon data-icon="inline-start" />}{ACTION_LABEL[a]}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -384,7 +447,7 @@ export function PrintSettings({ options, update, onCalibrate }: { options: Batch
 function BulkNumber({ label, onApply, className = "w-40", ...num }: { label: string; onApply: (n: number) => void; className?: string } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after" | "emptyStart">) {
   const [v, setV] = useState<number | undefined>(undefined);
   return (
-    <Field className="w-auto">
+    <Field orientation="horizontal" className="w-auto">
       <FieldLabel htmlFor={`bulk-${label.toLowerCase()}`}>{label}</FieldLabel>
       <div className="flex gap-2">
         <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className={className} value={v} onChange={setV}
