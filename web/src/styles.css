@@ -181,6 +181,11 @@
     content: ""; position: absolute; inset: 50% auto auto 50%; width: 2.75rem; height: 2.75rem; transform: translate(-50%, -50%);
   }
   .text-xs { font-size: 0.8125rem; line-height: 1.125rem; }
+  /* slider: a 44px-tall row and a 44px hit area round the small thumb (the row's height keeps it off the fields above and below) */
+  [data-slot="slider-control"] { min-height: 2.75rem; }
+  [data-slot="slider-thumb"]::after { inset: auto; left: 50%; top: 50%; width: 2.75rem; height: 2.75rem; transform: translate(-50%, -50%); }
+  /* colour picker (designer text colour): same 44px as the swatch buttons beside it */
+  input[type="color"] { width: 2.75rem; height: 2.75rem; }
 }
 
 /* Teal (accent) means "this one is selected" (a chosen option, the open template).

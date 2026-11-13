@@ -284,7 +284,7 @@ function SignoApp() {
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
-      <div className="sticky top-0 z-10">
+      <div className="sticky top-0 z-10" data-app-chrome>
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-5 text-primary" /> SignSnip</h1>
         <TabsList className="order-last w-full overflow-x-auto md:order-none md:w-fit">

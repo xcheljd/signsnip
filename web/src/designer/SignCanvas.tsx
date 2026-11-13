@@ -4,9 +4,11 @@ import { fitLogo } from "../../../src/core/layout";
 import { backgroundRect, fitSign, layoutTemplate } from "../../../src/core/template";
 import { DEFAULT_RULES, SIGN_H_MM, SIGN_W_MM, type Rules, type Sign, type Template, type TemplateObject } from "../../../src/core/types";
 import { browserMeasure } from "./measure";
+import { CANVAS_PAD_MM, handleSizes } from "./canvasFit";
+import { useMedia } from "./useMedia";
 
 const PT = 0.3528; // mm per point
-const PAD = 4; // mm of canvas around the paper (room for handles)
+const PAD = CANVAS_PAD_MM; // mm of canvas around the paper (room for handles)
 type Rect = { x: number; y: number; w: number; h: number };
 type Handle = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 export interface Guide { axis: "x" | "y"; at: number }
@@ -50,6 +52,7 @@ export function SignCanvas({
   const drag = useRef<{ handle: Handle; id: string; start: { x: number; y: number }; orig: Rect; before: TemplateObject[]; moved: boolean } | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
   const [hover, setHover] = useState<string | null>(null);
+  const coarse = useMedia("(pointer: coarse)");
   const vbW = SIGN_W_MM + PAD * 2, vbH = SIGN_H_MM + PAD * 2;
   const pxPerMm = width / vbW;
   const height = vbH * pxPerMm;
@@ -139,8 +142,9 @@ export function SignCanvas({
   };
 
   const logoPlaced = placed.logo && logo ? fitLogo(logo.aspect, placed.logo.box, logo.scale) : null;
-  const hs = 7 / pxPerMm; // handle size: 7px
   const sel = template.objects.find((o) => o.id === selectedId);
+  // handle size in px: small on desktop; on touch a bigger handle with an invisible ~44px hit area (canvasFit.ts)
+  const hsz = sel ? handleSizes(sel.w * pxPerMm, sel.h * pxPerMm, coarse) : null;
   const tone = (id: string) => {
     const lvl = issues?.get(id);
     return lvl === "error" ? "var(--destructive)" : lvl === "warn" ? "var(--warning)" : "var(--nord10)";
@@ -220,14 +224,18 @@ export function SignCanvas({
           onPointerDown={(e) => onDown(e, o.id, "move")} onPointerEnter={() => setHover(o.id)} />
       ))}
 
-      {!readOnly && sel && (["nw", "n", "ne", "e", "se", "s", "sw", "w"] as Handle[]).map((hd) => {
+      {!readOnly && sel && hsz && (["nw", "n", "ne", "e", "se", "s", "sw", "w"] as Handle[]).map((hd) => {
         const cx = hd.includes("w") ? sel.x : hd.includes("e") ? sel.x + sel.w : sel.x + sel.w / 2;
         const cy = hd.includes("n") ? sel.y : hd.includes("s") ? sel.y + sel.h : sel.y + sel.h / 2;
         const cursor = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize", move: "move" }[hd];
+        const vs = hsz.visual / pxPerMm, hit = hsz.hit / pxPerMm;
         return (
-          <rect key={hd} data-handle={hd} x={cx - hs / 2} y={cy - hs / 2} width={hs} height={hs} rx={hs * 0.2}
-            fill="white" stroke="var(--nord10)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor }}
-            onPointerDown={(e) => onDown(e, sel.id, hd)} />
+          <g key={hd}>
+            <rect data-handle-visual={hd} x={cx - vs / 2} y={cy - vs / 2} width={vs} height={vs} rx={vs * 0.2} pointerEvents="none"
+              fill="white" stroke="var(--nord10)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+            <rect data-handle={hd} x={cx - hit / 2} y={cy - hit / 2} width={hit} height={hit} fill="transparent" style={{ cursor }}
+              onPointerDown={(e) => onDown(e, sel.id, hd)} />
+          </g>
         );
       })}
 

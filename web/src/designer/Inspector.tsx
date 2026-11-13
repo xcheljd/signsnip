@@ -186,7 +186,7 @@ function TextInspector({ o, set }: { o: TextObject; set: (p: Partial<TextObject>
         </div>
         <Field>
           <FieldLabel htmlFor="obj-color">Colour</FieldLabel>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 pointer-coarse:gap-1">
             {SWATCHES.map((c) => (
               <button key={c} type="button" aria-label={`Colour ${c}`} onClick={() => set({ color: c })}
                 className={cn("size-6 rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50", o.color.toLowerCase() === c ? "border-primary" : "border-transparent ring-1 ring-border")}

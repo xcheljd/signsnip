@@ -21,13 +21,14 @@ export function destructiveAllowed(t: KeyTarget): boolean {
   return !controlHasKey(t) && t.tag !== "BUTTON" && t.tag !== "A";
 }
 
-// Base UI removes a closed popup from the DOM (checked in a browser), so these roles only match open ones.
+// Base UI removes most closed popups from the DOM, but a Select keeps its closed list mounted inside a
+// [data-closed] element (Base UI 1.9, checked in a browser): only popups outside one count as open.
 const POPUPS = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
 
 export function describeTarget(el: HTMLElement): KeyTarget {
   return {
     tag: el.tagName.toUpperCase(), role: el.getAttribute("role"), editable: el.isContentEditable,
     inOverlay: !!el.closest(`#overlays, ${POPUPS}`),
-    overlayOpen: !!document.querySelector(POPUPS),
+    overlayOpen: [...document.querySelectorAll(POPUPS)].some((p) => !p.closest("[data-closed]")),
   };
 }

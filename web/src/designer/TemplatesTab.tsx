@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { controlHasKey, describeTarget, destructiveAllowed } from "./keys";
+import { canvasFit } from "./canvasFit";
+import { useMedia } from "./useMedia";
 
 /** key-order-independent fingerprint (server JSON and local objects list keys in different orders) */
 const canon = (v: unknown): unknown =>
@@ -104,15 +106,46 @@ export function TemplatesTab({
   const [importPreview, setImportPreview] = useState<{ raw: unknown; preview: api.SetPreview } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const holder = useRef<HTMLDivElement>(null);
-  const [holderW, setHolderW] = useState(420);
+  const column = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [canvasW, setCanvasW] = useState(420);
+  const [chromeH, setChromeH] = useState(0);
+  // three columns (list | canvas | inspector) from 1280 px; below that the list becomes a compact picker
+  const wide = useMedia("(min-width: 80rem)");
 
+  // canvas size from the space it has: the column's width and (from tablets up) the window's height (canvasFit.ts)
   useEffect(() => {
-    if (!holder.current) return;
-    const el = holder.current;
-    const ro = new ResizeObserver(() => setHolderW(el.clientWidth));
-    ro.observe(el); setHolderW(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
+    const chrome = document.querySelector<HTMLElement>("[data-app-chrome]");
+    const measure = () => {
+      if (chrome) setChromeH(Math.round(chrome.getBoundingClientRect().height));
+      const el = holder.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (!r.width) return; // tab hidden
+      const cs = getComputedStyle(el);
+      const root = document.documentElement; // clientHeight: the window without the browser's sliding toolbars, so scrolling doesn't resize it
+      setCanvasW(canvasFit({
+        viewportW: root.clientWidth, viewportH: root.clientHeight,
+        holderW: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+        above: r.top + window.scrollY + parseFloat(cs.paddingTop), below: parseFloat(cs.paddingBottom) + 8,
+      }).width);
+    };
+    const ro = new ResizeObserver(measure);
+    for (const el of [holder.current, column.current, chrome]) if (el) ro.observe(el);
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    measure();
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); window.removeEventListener("orientationchange", measure); };
+  }, [active, wide, !!draft]);
+  // keep the open template in view inside the list's own scroll (never scrolls the page)
+  useEffect(() => {
+    const box = listRef.current;
+    const el = box?.querySelector<HTMLElement>(`[data-template="${CSS.escape(currentId)}"]`);
+    if (!box || !el) return;
+    const b = box.getBoundingClientRect(), r = el.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop += r.top - b.top - 4;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 4;
+  }, [currentId, wide, active, templates.length]);
   useEffect(() => { if (!brandId && brands[0]) setBrandId(brands[0].id); }, [brands, brandId]);
 
   const dirty = !!draft && strip(draft) !== strip(saved);
@@ -283,7 +316,6 @@ export function TemplatesTab({
   }
   const printPdf = usePdf(view === "print" && sample ? [sample] : [], OPTIONS, "single", `${strip(draft)}:${logosKey(brands)}:${JSON.stringify(rules)}`, draft ? [draft] : undefined);
   const usage = (id: string) => items.filter((s) => resolveTemplate(s, templates).id === id).reduce((a, s) => a + s.copies, 0);
-  const canvasW = Math.max(240, Math.min(holderW, 560));
   const sel = draft?.objects.find((o) => o.id === selected) ?? null;
   const resettable = !!draft && DEFAULT_TEMPLATES.some((d) => d.id === draft.id);
 
@@ -299,67 +331,100 @@ export function TemplatesTab({
 
   if (!draft || !saved) return null;
 
+  const nameOf = (t: Template) => (t.id === currentId ? draft.name || "Untitled" : t.name);
+  const kindLine = (t: Template) => { const n = usage(t.id); return `${t.kind === "price" ? "Price" : "Percent off"} · ${n ? `${n} in batch` : "not in batch"}`; };
+  const listActions = (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button type="button" size="sm" variant="outline" />}><PlusIcon data-icon="inline-start" />New</DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Start from</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => createFrom(draft, `${draft.name} copy`)}><CopyIcon />Copy of “{draft.name}”</DropdownMenuItem>
+            {DEFAULT_TEMPLATES.filter((d) => isBuiltin(d.id)).map((d) => (
+              <DropdownMenuItem key={d.id} onClick={() => createFrom(d, `My ${d.name.toLowerCase()}`)}><FilePlus2Icon />{d.name} layout</DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()}><UploadIcon data-icon="inline-start" />Import</Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => setExportOpen(true)}><DownloadIcon data-icon="inline-start" />Export</Button>
+    </>
+  );
+
   return (
-    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[15rem_1fr_21rem]">
-      {/* ------- template list */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Templates</CardTitle>
-          <CardDescription>The layout every sign is printed with.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-1">
-          {templates.map((t) => {
-            const n = usage(t.id);
-            return (
-              <button key={t.id} type="button" onClick={() => requestOpen(t.id)} data-template={t.id}
-                className={cn("flex items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50", t.id === currentId && "bg-accent text-accent-foreground hover:bg-accent")}>
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_20rem] lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[15rem_minmax(0,1fr)_21rem]"
+      style={{ "--chrome": `${chromeH}px` } as React.CSSProperties}>
+      <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      {/* ------- template list (wide screens): as tall as the window at most, scrolls on its own */}
+      {wide && (
+        <Card className="sticky top-[calc(var(--chrome)+0.75rem)] max-h-[calc(100svh-var(--chrome)-1.5rem)]">
+          <CardHeader>
+            <CardTitle>Templates</CardTitle>
+            <CardDescription>The layout every sign is printed with.</CardDescription>
+          </CardHeader>
+          <CardContent ref={listRef} className="flex min-h-0 flex-col gap-1 overflow-y-auto py-0.5">
+            {templates.map((t) => (
+              <button key={t.id} type="button" onClick={() => requestOpen(t.id)} data-template={t.id} title={nameOf(t)}
+                className={cn("flex shrink-0 items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50", t.id === currentId && "bg-accent text-accent-foreground hover:bg-accent")}>
                 {fontsReady ? <TemplateThumb template={t.id === currentId ? draft : t} sign={sampleSign(t, brand, false)} logo={logoSource(brand)} width={38} /> : <Skeleton className="h-14 w-[38px]" />}
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium">{t.id === currentId ? draft.name || "Untitled" : t.name}</span>
-                  <span className={cn("text-xs", t.id === currentId ? "text-accent-foreground" : "text-muted-foreground")}>{t.kind === "price" ? "Price" : "Percent off"} · {n ? `${n} in batch` : "not in batch"}</span>
+                  <span data-template-name className="line-clamp-2 text-sm font-medium break-words">{nameOf(t)}</span>
+                  <span className={cn("text-xs", t.id === currentId ? "text-accent-foreground" : "text-muted-foreground")}>{kindLine(t)}</span>
                 </span>
-                {t.id === currentId && dirty && <span className="size-2 rounded-full bg-primary" aria-label="unsaved changes" />}
+                {t.id === currentId && dirty && <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="unsaved changes" />}
               </button>
-            );
-          })}
-        </CardContent>
-        <CardFooter className="flex flex-wrap gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button type="button" size="sm" variant="outline" />}><PlusIcon data-icon="inline-start" />New</DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Start from</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => createFrom(draft, `${draft.name} copy`)}><CopyIcon />Copy of “{draft.name}”</DropdownMenuItem>
-                {DEFAULT_TEMPLATES.filter((d) => isBuiltin(d.id)).map((d) => (
-                  <DropdownMenuItem key={d.id} onClick={() => createFrom(d, `My ${d.name.toLowerCase()}`)}><FilePlus2Icon />{d.name} layout</DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()}><UploadIcon data-icon="inline-start" />Import</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setExportOpen(true)}><DownloadIcon data-icon="inline-start" />Export</Button>
-          <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-        </CardFooter>
-      </Card>
+            ))}
+          </CardContent>
+          <CardFooter className="flex flex-wrap gap-2">{listActions}</CardFooter>
+        </Card>
+      )}
 
-      {/* ------- canvas */}
-      <Card>
+      {/* ------- canvas column (with the compact template picker above it below 1280 px) */}
+      <div ref={column} className="flex min-w-0 flex-col gap-4">
+      {!wide && (
+        <div className="flex flex-wrap items-center gap-2" data-template-bar>
+          <Label htmlFor="template-picker" className="text-sm text-muted-foreground">Template</Label>
+          <Select value={currentId} items={templates.map((t) => ({ value: t.id, label: nameOf(t) }))} onValueChange={(v) => v && requestOpen(v as string)}>
+            <SelectTrigger id="template-picker" data-template-picker title={draft.name || "Untitled"} className="min-w-0 flex-1 basis-56 bg-card"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id} title={nameOf(t)} data-template-option={t.id}>
+                    <span className="flex min-w-0 flex-1 items-center gap-2 py-0.5 whitespace-normal">
+                      {fontsReady ? <TemplateThumb template={t.id === currentId ? draft : t} sign={sampleSign(t, brand, false)} logo={logoSource(brand)} width={24} /> : <Skeleton className="h-9 w-6" />}
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span data-template-name className="line-clamp-2 font-medium break-words">{nameOf(t)}</span>
+                        <span className="text-xs text-muted-foreground">{kindLine(t)}</span>
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <div className="flex flex-wrap gap-2">{listActions}</div>
+        </div>
+      )}
+      <Card className="gap-0 overflow-visible pt-0">
+        {/* title, Save / Discard and the toolbar stay in view under the app header while the page scrolls */}
+        <div data-canvas-head className="z-[2] flex flex-col gap-3 rounded-t-xl bg-card pt-4 pb-3 md:sticky md:top-(--chrome)">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex min-w-0 items-center gap-2 @max-md/card-header:col-span-2">
             <span className="truncate">{draft.name || "Untitled"}</span>
             {isBuiltin(draft.id) && <Badge variant="secondary">built in</Badge>}
             {dirty && <Badge variant="outline">unsaved</Badge>}
           </CardTitle>
-          <CardDescription>{usage(draft.id) ? `${count(usage(draft.id), "sign")} in the batch use this. Saving updates them all.` : "Not used in the current batch."}</CardDescription>
-          <CardAction className="flex flex-wrap items-center justify-end gap-2">
+          <CardDescription className="@max-md/card-header:col-span-2">{usage(draft.id) ? `${count(usage(draft.id), "sign")} in the batch use this. Saving updates them all.` : "Not used in the current batch."}</CardDescription>
+          {/* a narrow card (iPad portrait, phone) puts the buttons under the title instead of squeezing the text beside them */}
+          <CardAction className="flex flex-wrap items-center justify-end gap-2 @max-md/card-header:col-span-2 @max-md/card-header:col-start-1 @max-md/card-header:row-span-1 @max-md/card-header:row-start-3 @max-md/card-header:justify-self-start @max-md/card-header:justify-start">
             <Button type="button" variant="outline" size="sm" disabled={!dirty} onClick={revert}>Discard changes</Button>
             <Button type="button" size="sm" disabled={!dirty} onClick={save}><SaveIcon data-icon="inline-start" />Save template</Button>
             {resettable && <IconTip label="Reset to the original layout" onClick={() => setConfirmReset(true)}><RotateCcwIcon /></IconTip>}
             {!isBuiltin(draft.id) && <IconTip label="Delete template" className="text-destructive" onClick={() => setConfirmDelete(true)}><Trash2Icon /></IconTip>}
           </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1 px-(--card-spacing)">
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button type="button" size="sm" variant="outline" />}><TypeIcon data-icon="inline-start" />Add text</DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -379,10 +444,10 @@ export function TemplatesTab({
               </TooltipTrigger>
               <TooltipContent>{draft.objects.some((o) => o.type === "logo") ? "This template already has a logo box. Select it to move or resize it." : "Add a box for the brand's logo"}</TooltipContent>
             </Tooltip>
-            <span className="mx-1 h-5 w-px bg-border" />
+            <span className="mx-0.5 h-5 w-px bg-border" />
             <IconTip label="Undo (Ctrl+Z)" disabled={!past.current.length} onClick={undo}><Undo2Icon /></IconTip>
             <IconTip label="Redo (Ctrl+Shift+Z)" disabled={!future.current.length} onClick={redo}><Redo2Icon /></IconTip>
-            <span className="mx-1 h-5 w-px bg-border" />
+            <span className="mx-0.5 h-5 w-px bg-border" />
             <Tooltip>
               <TooltipTrigger render={<Toggle size="sm" variant="outline" pressed={snap} onPressedChange={setSnap} aria-label="Snap" />}><GridIcon />Snap</TooltipTrigger>
               <TooltipContent>Snap to 0.5 mm, the centre and other objects. Hold Alt to drag freely.</TooltipContent>
@@ -393,23 +458,10 @@ export function TemplatesTab({
               <ToggleGroupItem value="print"><ScanEyeIcon />Print preview</ToggleGroupItem>
             </ToggleGroup>
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2">
-            <Label htmlFor="sample-brand" className="text-sm text-muted-foreground">Preview with</Label>
-            <Select value={brand?.id ?? ""} items={brands.map((b) => ({ value: b.id, label: b.name }))} onValueChange={(v) => v && setBrandId(v)}>
-              <SelectTrigger id="sample-brand" className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
-            </Select>
-            <Toggle variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
-            {row && (
-              <span className="flex items-center gap-2 text-sm">
-                <Badge variant="secondary">Showing row {previewRow! + 1}</Badge>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setPreviewRow(null)}>Back to sample</Button>
-              </span>
-            )}
-          </div>
-
-          <div ref={holder} className="flex justify-center rounded-lg bg-muted py-4">
+        <CardContent className="flex flex-col gap-3">
+          <div ref={holder} className="flex justify-center rounded-lg bg-muted py-2">
             {view === "design" ? (
               fontsReady && sample ? (
                 <SignCanvas
@@ -423,6 +475,22 @@ export function TemplatesTab({
               <div style={{ width: canvasW * 47 / 55 }}>
                 <PdfView bytes={printPdf.pdf?.bytes ?? null} width={Math.round(canvasW * 47 / 55)} label="print preview" aspect={47 / 70} />
               </div>
+            )}
+          </div>
+
+          {/* under the canvas, so the whole sign fits on short screens */}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2">
+            <Label htmlFor="sample-brand" className="text-sm text-muted-foreground">Preview with</Label>
+            <Select value={brand?.id ?? ""} items={brands.map((b) => ({ value: b.id, label: b.name }))} onValueChange={(v) => v && setBrandId(v)}>
+              <SelectTrigger id="sample-brand" className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
+            </Select>
+            <Toggle variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
+            {row && (
+              <span className="flex items-center gap-2 text-sm">
+                <Badge variant="secondary">Showing row {previewRow! + 1}</Badge>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setPreviewRow(null)}>Back to sample</Button>
+              </span>
             )}
           </div>
 
@@ -470,14 +538,15 @@ export function TemplatesTab({
         </CardContent>
 
       </Card>
+      </div>
 
-      {/* ------- inspector */}
-      <Card className="xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+      {/* ------- inspector: beside the canvas from 768 px; scrolls on its own when taller than the window */}
+      <Card className="md:sticky md:top-[calc(var(--chrome)+0.75rem)] md:max-h-[calc(100svh-var(--chrome)-1.5rem)] md:overflow-y-auto">
         <CardHeader>
           <CardTitle>{sel ? "Object" : "Template"}</CardTitle>
           {sel && <CardAction><Button type="button" size="sm" variant="ghost" onClick={() => setSelected(null)}>Done</Button></CardAction>}
         </CardHeader>
-        <CardContent>
+        <CardContent className="w-full max-w-sm">
           <Inspector
             template={draft} selected={sel}
             onTemplate={(p) => change((t) => ({ ...t, ...p }), `tpl:${Object.keys(p).join(",")}`)}
