@@ -53,26 +53,53 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
   const dirtyRef = useRef(false);
   useEffect(() => { if (!dirtyRef.current) setDraft(rules); }, [rules]);
 
-  // autosave (debounced) so the preview, the batch warnings and the PDFs follow immediately
-  useEffect(() => {
-    if (!dirtyRef.current) return;
-    const t = setTimeout(async () => {
-      try { await api.saveRules(draft); dirtyRef.current = false; await refresh(); } catch (e) { toast.error((e as Error).message); }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [draft, refresh]);
-  const change = (fn: (r: Rules) => Rules) => { dirtyRef.current = true; setDraft(fn); };
-
-  // leaving the tab within the 400 ms above would drop the last change: save it on the way out
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
+  /** the rules last sent (or on their way), so a hide, a close and the timer never send the same edit twice */
+  const sent = useRef<{ rules: Rules; closing: boolean } | null>(null);
+  /**
+   * Save the newest draft if it has an unsaved change. `closing`: the page is being hidden or closed,
+   * so the request must outlive it (an ordinary save of the same draft still on its way is sent again that way).
+   */
+  const flush = (closing = false) => {
+    const d = draftRef.current;
+    const s = sent.current;
+    if (!dirtyRef.current || (s && s.rules === d && (s.closing || !closing))) return;
+    const mark = { rules: d, closing };
+    sent.current = mark;
+    api.saveRules(d, closing).then(
+      // only the newest draft counts as saved: an edit made while this one was on its way still is not
+      () => { if (draftRef.current === d) dirtyRef.current = false; return refreshRef.current(); },
+      (e: Error) => { if (sent.current === mark) sent.current = null; toast.error(e.message); },
+    );
+  };
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  // autosave (debounced) so the preview, the batch warnings and the PDFs follow immediately
+  useEffect(() => {
+    if (!dirtyRef.current) return;
+    const t = setTimeout(() => flushRef.current(), 400);
+    return () => clearTimeout(t);
+  }, [draft]);
+  // the ref follows at once (not on the next render), so a page closed right after a keystroke saves that keystroke
+  const change = (fn: (r: Rules) => Rules) => { dirtyRef.current = true; const next = fn(draftRef.current); draftRef.current = next; setDraft(next); };
+
+  // an edit within the 400 ms above is saved at once when the tab is left (unmount), the page is
+  // hidden (another app, the iPad's home screen) or the page is closed, like the batch and brand fields
   useEffect(() => {
     live = { draft: () => draftRef.current, change };
+    const hide = () => { if (document.visibilityState === "hidden") flushRef.current(true); };
+    const leave = () => flushRef.current(true);
+    document.addEventListener("visibilitychange", hide);
+    window.addEventListener("pagehide", leave);
     return () => {
       live = null;
-      if (dirtyRef.current) api.saveRules(draftRef.current).then(() => refreshRef.current(), (e: Error) => toast.error(e.message));
+      document.removeEventListener("visibilitychange", hide);
+      window.removeEventListener("pagehide", leave);
+      flushRef.current();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

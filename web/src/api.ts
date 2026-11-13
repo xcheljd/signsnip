@@ -44,7 +44,8 @@ export interface Backend {
   deleteSaved(id: string): Promise<unknown>;
   /** undo a delete: the saved batch as it was; one saved under its name since is kept and this one comes back renamed */
   restoreSaved(s: SavedBatch): Promise<SavedBatch & { renamed: boolean }>;
-  saveRules(r: Rules): Promise<Rules>;
+  /** closing: the page is being hidden or closed, so the save must outlive it (keepalive, like putBatch) */
+  saveRules(r: Rules, closing?: boolean): Promise<Rules>;
   saveTemplate(t: Template): Promise<Template>;
   duplicateTemplate(id: string, name?: string): Promise<Template>;
   resetTemplate(id: string): Promise<Template>;
@@ -108,7 +109,7 @@ const server: Backend = {
   loadSaved: (id) => fetch(`/api/batches/${id}`).then((r) => j<SavedBatch>(r)),
   deleteSaved: (id) => send(`/api/batches/${id}`, undefined, "DELETE").then((r) => j(r)),
   restoreSaved: (s) => send("/api/batches/restore", s).then((r) => j<SavedBatch & { renamed: boolean }>(r)),
-  saveRules: (r) => send("/api/rules", r, "PUT").then((res) => j<Rules>(res)),
+  saveRules: (r, closing) => send("/api/rules", r, "PUT", closing).then((res) => j<Rules>(res)),
   saveTemplate: (t) => send(`/api/templates/${t.id}`, t, "PUT").then((r) => j<Template>(r)),
   duplicateTemplate: (id, name) => send(`/api/templates/${id}/duplicate`, { name }).then((r) => j<Template>(r)),
   resetTemplate: (id) => send(`/api/templates/${id}/reset`).then((r) => j<Template>(r)),
@@ -173,7 +174,7 @@ export const saveBatchAs = (name: string, batch: Batch) => be().saveBatchAs(name
 export const loadSaved = (id: string) => be().loadSaved(id);
 export const deleteSaved = (id: string) => be().deleteSaved(id);
 export const restoreSaved = (s: SavedBatch) => be().restoreSaved(s);
-export const saveRules = (r: Rules) => be().saveRules(r);
+export const saveRules = (r: Rules, closing?: boolean) => be().saveRules(r, closing);
 export const saveTemplate = (t: Template) => be().saveTemplate(t);
 export const duplicateTemplate = (id: string, name?: string) => be().duplicateTemplate(id, name);
 export const resetTemplate = (id: string) => be().resetTemplate(id);

@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { count } from "../../src/core/words";
 import {
-  ArchiveIcon, CopyIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, ImageOffIcon, InfoIcon, PencilIcon, RulerIcon, Trash2Icon,
+  ArchiveIcon, ChevronDownIcon, CopyIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, ImageOffIcon, InfoIcon, PencilIcon, RulerIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -82,6 +82,9 @@ export function BatchPanel({
   const sel = items.filter((s) => selected.has(s.id));
   const [drag, setDrag] = useState<number | null>(null);
   const [overRow, setOverRow] = useState<number | null>(null);
+  /** the bulk bar's "More" (Brand, Template): stays as it was left while this tab is open */
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreId = useId();
 
   const patchSelected = (patch: Partial<Sign>, label: string) =>
     update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, ...patch } : s)) }), { undo: `${label} on ${count(sel.length, "row")}` });
@@ -105,14 +108,19 @@ export function BatchPanel({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!calibrated && items.length > 0 && (
-          <Alert>
+          // the buttons sit beside the text while it has room (16rem) and wrap below it otherwise, so the text never runs under them
+          <Alert className="has-data-[slot=alert-action]:pr-2.5">
             <RulerIcon />
-            <AlertTitle>First time printing on this printer?</AlertTitle>
-            <AlertDescription>Print the one-page printer check and measure the box. If it isn't 47 × 70 mm, your print dialog is shrinking the page.</AlertDescription>
-            <AlertAction className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={onCalibrate}>Print check page</Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setCalibrated(true)}>My printer is fine</Button>
-            </AlertAction>
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+              <div className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-0.5">
+                <AlertTitle>First time printing on this printer?</AlertTitle>
+                <AlertDescription>Print the one-page printer check and measure the box. If it isn't 47 × 70 mm, your print dialog is shrinking the page.</AlertDescription>
+              </div>
+              <AlertAction className="static ml-auto flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={onCalibrate}>Print check page</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setCalibrated(true)}>My printer is fine</Button>
+              </AlertAction>
+            </div>
           </Alert>
         )}
 
@@ -133,16 +141,22 @@ export function BatchPanel({
               // (the tinted bar alone would let rows show through); -mt-2/pt-2 keep a strip of it above the bar
               // without moving anything. Phones keep the bar in the flow: there it is several rows tall.
               <div data-slot="bulk-bar-sticky" className="z-[5] bg-card md:sticky md:-mt-2 md:pt-2" style={{ top: headerHeight }}>
-              {/* labels sit beside their controls and every control is one height (32 px, 44 px on touch) */}
-              <div data-slot="bulk-bar" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-muted/50 px-3 py-2">
-                <div className="flex items-center gap-1 text-sm font-medium">
+              {/* labels sit beside their controls and every control is one height (32 px, 44 px on touch).
+                  Brand and Template are used less: they sit behind "More", which opens them in place in the same bar,
+                  so the bar takes one row on a wide screen and two on an iPad instead of three or four. */}
+              <div data-slot="bulk-bar" className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border bg-muted/50 px-2.5 py-1.5">
+                <div className="flex items-center gap-0.5 text-sm font-medium">
                   {count(sel.length, "row")} selected
                   <IconButton label="Clear selection" size="icon" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
                 </div>
-                <BulkNumber label="Percent" className="w-32 pointer-coarse:w-36" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
-                <BulkNumber label="Price" className="w-40 pointer-coarse:w-48" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
-                <BulkNumber label="Copies" className="w-32 pointer-coarse:w-36" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
-                <Field orientation="horizontal" className="w-auto">
+                <BulkNumber label="Percent" className="w-28 pointer-coarse:w-36" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
+                <BulkNumber label="Price" className="w-44 pointer-coarse:w-48" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
+                <BulkNumber label="Copies" className="w-28 pointer-coarse:w-36" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
+                <Button type="button" variant="ghost" aria-expanded={moreOpen} aria-controls={moreId} onClick={() => setMoreOpen((o) => !o)}>
+                  More<ChevronDownIcon data-icon="inline-end" className={cn("transition-transform", moreOpen && "rotate-180")} />
+                </Button>
+                <div id={moreId} className={cn("contents", !moreOpen && "hidden")}>
+                <Field orientation="horizontal" className="w-auto gap-1">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
                   <Select items={brands.map((b) => ({ value: b.id, label: b.name }))} value={null as unknown as string}
                     onValueChange={(v) => v && patchSelected({ brandId: v }, `Brand → ${brands.find((b) => b.id === v)?.name}`)}>
@@ -150,7 +164,7 @@ export function BatchPanel({
                     <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
-                <Field orientation="horizontal" className="w-auto">
+                <Field orientation="horizontal" className="w-auto gap-1">
                   <FieldLabel htmlFor="bulk-template">Template</FieldLabel>
                   <Select items={templates.map((t) => ({ value: t.id, label: t.name }))} value={null as unknown as string}
                     onValueChange={(v) => {
@@ -163,7 +177,8 @@ export function BatchPanel({
                     <SelectContent><SelectGroup>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
-                <div className="ml-auto flex gap-2">
+                </div>
+                <div className="ml-auto flex gap-1.5">
                   <Button type="button" variant="outline" onClick={() => update((b) => ({ ...b, items: b.items.flatMap((s) => (selected.has(s.id) ? [s, { ...s, id: uid() }] : [s])) }), { undo: `Duplicated ${count(sel.length, "row")}` })}>
                     <CopyIcon data-icon="inline-start" />Duplicate
                   </Button>
@@ -290,7 +305,7 @@ export function BatchPanel({
  * How tall the sticky app header is ([data-app-chrome]: it wraps on narrow screens, and the hosted
  * build adds its status bar), so the bulk bar sticks just under it. Re-measured when it changes size.
  */
-function useHeaderHeight() {
+export function useHeaderHeight() {
   const [h, setH] = useState(0);
   useLayoutEffect(() => {
     const el = document.querySelector<HTMLElement>("[data-app-chrome]");
@@ -447,9 +462,9 @@ export function PrintSettings({ options, update, onCalibrate }: { options: Batch
 function BulkNumber({ label, onApply, className = "w-40", ...num }: { label: string; onApply: (n: number) => void; className?: string } & Pick<React.ComponentProps<typeof NumField>, "min" | "max" | "decimals" | "before" | "after" | "emptyStart">) {
   const [v, setV] = useState<number | undefined>(undefined);
   return (
-    <Field orientation="horizontal" className="w-auto">
+    <Field orientation="horizontal" className="w-auto gap-1">
       <FieldLabel htmlFor={`bulk-${label.toLowerCase()}`}>{label}</FieldLabel>
-      <div className="flex gap-2">
+      <div className="flex gap-1">
         <NumField {...num} id={`bulk-${label.toLowerCase()}`} stepper={`bulk ${label.toLowerCase()}`} allowEmpty className={className} value={v} onChange={setV}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter" && v) { e.preventDefault(); onApply(v); } }} />
         <Button type="button" variant="outline" disabled={!v} onClick={() => v && onApply(v)}>Set</Button>

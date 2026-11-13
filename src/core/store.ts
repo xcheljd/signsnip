@@ -112,6 +112,9 @@ export const getBrand = (id: string): Brand | undefined => listBrands().find((b)
 /**
  * Save a brand: by `id`, or else by name (see idForName). This is the one place that decides
  * whether a brand is new; `created` says which it was, so callers never have to guess.
+ * Saving by id may rename, but never to a name another brand already has (any case/spacing):
+ * that is refused and nothing is written. Brands that already share a name (from before this
+ * rule) still save under that same name, so their other fields stay editable.
  */
 export function upsertBrand(input: { id?: string; name: string; collections?: string[]; logoScale?: number }): Brand & { created: boolean } {
   const brands = listBrands();
@@ -120,6 +123,10 @@ export function upsertBrand(input: { id?: string; name: string; collections?: st
   const id = input.id ?? idForName(typed, brands, "brand");
   const idx = brands.findIndex((b) => b.id === id);
   const prev = idx >= 0 ? brands[idx] : undefined;
+  if (input.id && !(prev && sameName(prev.name, typed))) {
+    const other = brands.find((b) => b.id !== id && sameName(b.name, typed));
+    if (other) throw new Error(`Another brand is already called “${other.name}”.`);
+  }
   // Saving by id is an edit, so the name may change. Adding a name that already exists
   // ("tom & co " for "Tom & Co") updates that brand but keeps the name it already has.
   const name = input.id || !prev ? typed : prev.name;

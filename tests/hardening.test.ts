@@ -6,7 +6,7 @@ import { checkSigns } from "../src/core/pdf";
 import { MemoryRepo, setRepo } from "../src/core/repo";
 import { FsRepo } from "../src/core/repo-fs";
 import {
-  MAX_ID, addBrand, brandMatches, deleteBrand, getBrand, listBrands, listSavedBatches, readBatch, readLogo, saveNamedBatch,
+  MAX_ID, addBrand, brandMatches, deleteBrand, getBrand, listBrands, listSavedBatches, readBatch, readLogo, saveBrands, saveNamedBatch,
   savedBatchMatches, templateMatches, upsertBrand, writeBatch,
 } from "../src/core/store";
 import { DEFAULT_OPTIONS } from "../src/core/types";
@@ -45,6 +45,37 @@ describe("names never overwrite each other", () => {
     // saving by id is an edit: that may rename (trimmed)
     expect(upsertBrand({ id: "tom-and-co", name: " TOM & CO " }).name).toBe("TOM & CO");
     expect(() => upsertBrand({ name: "   " })).toThrow("A brand needs a name");
+  });
+  it("renaming a brand to a name another brand has is refused (any case/spacing); nothing is written", () => {
+    upsertBrand({ name: "Kestrel & Vale", collections: ["Falcon"] });
+    const b = upsertBrand({ name: "Ferngate" });
+    for (const name of ["Kestrel & Vale", "kestrel & vale", "  KESTREL & VALE  "]) {
+      expect(() => upsertBrand({ id: b.id, name }), name).toThrow("Another brand is already called “Kestrel & Vale”.");
+      expect(() => upsertBrand({ id: b.id, name, collections: ["New"] }), name).toThrow("Another brand is already called");
+    }
+    expect(listBrands().map((x) => [x.id, x.name, x.collections])).toEqual([["kestrel-and-vale", "Kestrel & Vale", ["Falcon"]], ["ferngate", "Ferngate", []]]);
+    // its own name in other capitals is a rename, not a clash
+    expect(upsertBrand({ id: b.id, name: "FERNGATE" }).name).toBe("FERNGATE");
+    expect(upsertBrand({ id: "kestrel-and-vale", name: "kestrel & vale" }).name).toBe("kestrel & vale");
+    // adding (no id) an existing name still updates that brand, as before
+    expect(upsertBrand({ name: "Ferngate", collections: ["Moss"] })).toMatchObject({ id: "ferngate", name: "FERNGATE", created: false, collections: ["Moss"] });
+    // a free name works
+    expect(upsertBrand({ id: b.id, name: "Ferngate Watch Co" }).name).toBe("Ferngate Watch Co");
+  });
+  it("brands that already share a name (from before the rule) load and stay editable", () => {
+    saveBrands([
+      { id: "northwind", name: "Northwind", collections: ["Harbor Line"], logoScale: 1, hasLogo: false },
+      { id: "northwind-2", name: "northwind ", collections: [], logoScale: 1, hasLogo: false },
+    ]);
+    expect(listBrands().map((x) => x.name)).toEqual(["Northwind", "northwind "]);
+    // every other field saves under the shared name (also with only its case changed)
+    expect(upsertBrand({ id: "northwind-2", name: "northwind", collections: ["Deckhand"], logoScale: 1.2 })).toMatchObject({ name: "northwind", collections: ["Deckhand"], logoScale: 1.2 });
+    expect(upsertBrand({ id: "northwind", name: "Northwind", collections: ["Harbor Line", "Lighthouse"] }).collections).toEqual(["Harbor Line", "Lighthouse"]);
+    expect(upsertBrand({ id: "northwind-2", name: "NORTHWIND" }).name).toBe("NORTHWIND");
+    // renaming one of them to a free name works; renaming it back to the other's name now is refused
+    expect(upsertBrand({ id: "northwind-2", name: "Northwind Outlet" }).name).toBe("Northwind Outlet");
+    expect(() => upsertBrand({ id: "northwind-2", name: "NorthWind" })).toThrow("Another brand is already called “Northwind”.");
+    expect(listBrands().map((x) => x.name)).toEqual(["Northwind", "Northwind Outlet"]);
   });
   it("says whether a save added a brand or updated one", () => {
     expect(upsertBrand({ name: "Lumen!" })).toMatchObject({ id: "lumen", created: true });
@@ -211,6 +242,16 @@ describe("local server only answers this computer's own pages", () => {
     const post = async (name: string) => JSON.parse((await call("POST", "/api/brands", { "content-type": "application/json" }, JSON.stringify({ name }))).body) as { id: string; name: string; created: boolean };
     expect(await post(" Quill & Co ")).toMatchObject({ id: "quill-and-co", name: "Quill & Co", created: true });
     expect(await post("quill & co")).toMatchObject({ id: "quill-and-co", name: "Quill & Co", created: false });
+  });
+  it("refuses to rename a brand to a name another brand has, and keeps the old name", async () => {
+    const post = (body: object) => call("POST", "/api/brands", { "content-type": "application/json" }, JSON.stringify(body));
+    const made = JSON.parse((await post({ name: "Ferngate Co" })).body) as { id: string };
+    const r = await post({ id: made.id, name: " kestrel & VALE  " }); // the seed has "Kestrel & Vale"
+    expect(r.status).toBe(400);
+    expect(JSON.parse(r.body).error).toBe("Another brand is already called “Kestrel & Vale”.");
+    const names = (JSON.parse((await call("GET", "/api/state")).body) as { brands: { id: string; name: string }[] }).brands;
+    expect(names.find((b) => b.id === made.id)?.name).toBe("Ferngate Co");
+    expect(names.filter((b) => b.name.toLowerCase() === "kestrel & vale")).toHaveLength(1);
   });
   it("refuses a hostile domain pointed at 127.0.0.1 (wrong Host)", async () => {
     expect((await call("GET", "/api/state", { host: `evil.example:${port}` })).status).toBe(403);

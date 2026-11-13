@@ -353,7 +353,9 @@ export function TemplatesTab({
   );
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_20rem] lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[15rem_minmax(0,1fr)_21rem]"
+    // the inspector is 20rem up to 1280 px (21rem beside the list from there), which leaves the canvas
+    // card room for its toolbar on one row at 1024
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[15rem_minmax(0,1fr)_21rem]"
       style={{ "--chrome": `${chromeH}px` } as React.CSSProperties}>
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
       {/* ------- template list (wide screens): as tall as the window at most, scrolls on its own */}
@@ -408,23 +410,29 @@ export function TemplatesTab({
       )}
       <Card className="gap-0 overflow-visible pt-0">
         {/* title, Save / Discard and the toolbar stay in view under the app header while the page scrolls */}
-        <div data-canvas-head className="z-[2] flex flex-col gap-3 rounded-t-xl bg-card pt-4 pb-3 md:sticky md:top-(--chrome)">
-        <CardHeader>
-          <CardTitle className="flex min-w-0 items-center gap-2 @max-md/card-header:col-span-2">
-            <span className="truncate">{draft.name || "Untitled"}</span>
-            {isBuiltin(draft.id) && <Badge variant="secondary">built in</Badge>}
-            {dirty && <Badge variant="outline">unsaved</Badge>}
-          </CardTitle>
-          <CardDescription className="@max-md/card-header:col-span-2">{usage(draft.id) ? `${count(usage(draft.id), "sign")} in the batch use this. Saving updates them all.` : "Not used in the current batch."}</CardDescription>
-          {/* a narrow card (iPad portrait, phone) puts the buttons under the title instead of squeezing the text beside them */}
-          <CardAction className="flex flex-wrap items-center justify-end gap-2 @max-md/card-header:col-span-2 @max-md/card-header:col-start-1 @max-md/card-header:row-span-1 @max-md/card-header:row-start-3 @max-md/card-header:justify-self-start @max-md/card-header:justify-start">
+        <div data-canvas-head className="z-[2] flex flex-col gap-2 rounded-t-xl bg-card pt-4 pb-2 md:sticky md:top-(--chrome)">
+        {/* one row: name, badges and the batch note on the left (the note goes under the name when the row is
+            short of room), Discard / Save on the right. A narrow card (phone) puts the buttons on their own line. */}
+        <CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-[min(100%,12rem)] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+            <CardTitle className="flex min-w-0 max-w-full items-center gap-2">
+              <span className="truncate">{draft.name || "Untitled"}</span>
+              {isBuiltin(draft.id) && <Badge variant="secondary">built in</Badge>}
+              {dirty && <Badge variant="outline">unsaved</Badge>}
+            </CardTitle>
+            <CardDescription>{usage(draft.id) ? `${count(usage(draft.id), "sign")} in the batch use this.` : "Not used in the current batch."}</CardDescription>
+          </div>
+          <CardAction className="ml-auto flex flex-wrap items-center justify-end gap-2 self-center">
             <Button type="button" variant="outline" size="sm" disabled={!dirty} onClick={revert}>Discard changes</Button>
             <Button type="button" size="sm" disabled={!dirty} onClick={save}><SaveIcon data-icon="inline-start" />Save template</Button>
             {resettable && <IconTip label="Reset to the original layout" onClick={() => setConfirmReset(true)}><RotateCcwIcon /></IconTip>}
             {!isBuiltin(draft.id) && <IconTip label="Delete template" className="text-destructive" onClick={() => setConfirmDelete(true)}><Trash2Icon /></IconTip>}
           </CardAction>
         </CardHeader>
-          <div className="flex flex-wrap items-center gap-1 px-(--card-spacing)">
+          {/* one row from 1024 px: when the toolbar is short of room (under 40rem; 42rem on touch, where buttons are
+              44 px), Snap and Boxes show only their icons (their names stay for screen readers and in a tooltip) */}
+          <div data-designer-toolbar className="@container/tb px-(--card-spacing)">
+          <div className="flex flex-wrap items-center gap-1">
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button type="button" size="sm" variant="outline" />}><TypeIcon data-icon="inline-start" />Add text</DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -444,19 +452,25 @@ export function TemplatesTab({
               </TooltipTrigger>
               <TooltipContent>{draft.objects.some((o) => o.type === "logo") ? "This template already has a logo box. Select it to move or resize it." : "Add a box for the brand's logo"}</TooltipContent>
             </Tooltip>
-            <span className="mx-0.5 h-5 w-px bg-border" />
-            <IconTip label="Undo (Ctrl+Z)" disabled={!past.current.length} onClick={undo}><Undo2Icon /></IconTip>
+            <IconTip label="Undo (Ctrl+Z)" className="ml-1" disabled={!past.current.length} onClick={undo}><Undo2Icon /></IconTip>
             <IconTip label="Redo (Ctrl+Shift+Z)" disabled={!future.current.length} onClick={redo}><Redo2Icon /></IconTip>
-            <span className="mx-0.5 h-5 w-px bg-border" />
             <Tooltip>
-              <TooltipTrigger render={<Toggle size="sm" variant="outline" pressed={snap} onPressedChange={setSnap} aria-label="Snap" />}><GridIcon />Snap</TooltipTrigger>
+              <TooltipTrigger render={<Toggle size="sm" variant="outline" className="ml-1" pressed={snap} onPressedChange={setSnap} aria-label="Snap" />}>
+                <GridIcon /><span className="@max-[40rem]/tb:sr-only pointer-coarse:@max-[42rem]/tb:sr-only">Snap</span>
+              </TooltipTrigger>
               <TooltipContent>Snap to 0.5 mm, the centre and other objects. Hold Alt to drag freely.</TooltipContent>
             </Tooltip>
-            <Toggle size="sm" variant="outline" pressed={showBoxes} onPressedChange={setShowBoxes} aria-label="Show boxes"><SquareDashedIcon />Boxes</Toggle>
+            <Tooltip>
+              <TooltipTrigger render={<Toggle size="sm" variant="outline" pressed={showBoxes} onPressedChange={setShowBoxes} aria-label="Show boxes" />}>
+                <SquareDashedIcon /><span className="@max-[40rem]/tb:sr-only pointer-coarse:@max-[42rem]/tb:sr-only">Boxes</span>
+              </TooltipTrigger>
+              <TooltipContent>Show boxes</TooltipContent>
+            </Tooltip>
             <ToggleGroup variant="outline" size="sm" spacing={0} className="ml-auto" value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "design" | "print")}>
               <ToggleGroupItem value="design">Design</ToggleGroupItem>
               <ToggleGroupItem value="print"><ScanEyeIcon />Print preview</ToggleGroupItem>
             </ToggleGroup>
+          </div>
           </div>
         </div>
 

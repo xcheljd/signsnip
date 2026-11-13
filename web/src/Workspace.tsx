@@ -159,9 +159,11 @@ export function SavingStatusBar() {
   const unsaved = st.changed > st.backup;
   return (
     <div className="border-b bg-card">{/* opaque base: the tint below is translucent, and this bar is sticky */}
-    <div role="status" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-sm sm:px-6 ${unsaved ? "bg-warning-surface/15 dark:bg-warning-surface/10" : "bg-muted/50"}`}>
+    {/* the words wrap inside their own column, so the two buttons stay beside them (one bar row) until
+        that column would be narrower than 15rem; a phone puts the buttons on a second line */}
+    <div role="status" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1 text-sm sm:px-6 ${unsaved ? "bg-warning-surface/15 dark:bg-warning-surface/10" : "bg-muted/50"}`}>
       {unsaved ? <CircleAlertIcon aria-hidden className="size-4 shrink-0 text-warning" /> : <CircleCheckIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
-      <span className="text-foreground">
+      <span className="min-w-0 flex-1 basis-60 text-foreground">
         <strong className="font-semibold">This site doesn't save your work.</strong>{" "}
         {!st.backup ? (st.changed ? "You haven't backed up yet." : "Back up to your computer to keep it.")
           : unsaved ? `You've made changes since your last backup at ${when(st.backup)}.` : `Last backup ${when(st.backup)}, nothing changed since.`}
@@ -205,23 +207,28 @@ export function StartPage({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** Header buttons: Back up / Restore / Start over, each one click away and labelled. */
+/**
+ * Header buttons: Back up / Restore / Start over, each one click away and labelled (never a menu).
+ * Quiet (ghost, neutral colours) so the tabs lead; Start over is only red in its dialog. Each name is
+ * its visible text. 768-1023 px (iPad portrait): the icon sits above a short label ("Restore"), so the
+ * header stays on one row. Phone: icons only (the names stay for screen readers and as a tooltip).
+ */
+const WORK_BTN = "text-muted-foreground md:max-lg:h-auto md:max-lg:flex-col md:max-lg:gap-0.5 md:max-lg:px-2 md:max-lg:py-1 md:max-lg:text-xs md:max-lg:has-data-[icon=inline-start]:pl-2";
 export function WorkspaceButtons({ showBackup }: { showBackup: boolean }) {
   const [open, setOpen] = useState<"" | "restore" | "start">("");
   const done = () => { setOpen(""); window.location.reload(); };
   return (
-    <div className="flex items-center gap-2" role="group" aria-label="Your work">
+    <div className="flex items-center gap-2 md:max-lg:gap-1" role="group" aria-label="Your work">
       {showBackup && (
-        <Button type="button" variant="outline" size="sm" onClick={downloadBackup} aria-label="Back up" title="Back up everything (download a file)">
-          <DownloadIcon data-icon="inline-start" /><span className="hidden sm:inline">Back up</span>
+        <Button type="button" variant="ghost" size="sm" className={WORK_BTN} onClick={downloadBackup} title="Back up everything (download a file)">
+          <DownloadIcon data-icon="inline-start" /><span className="max-sm:sr-only">Back up</span>
         </Button>
       )}
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen("restore")} aria-label="Restore backup" title="Restore a backup file">
-        <ArchiveRestoreIcon data-icon="inline-start" /><span className="hidden sm:inline">Restore backup</span>
+      <Button type="button" variant="ghost" size="sm" className={WORK_BTN} onClick={() => setOpen("restore")} title="Restore a backup file">
+        <ArchiveRestoreIcon data-icon="inline-start" /><span className="max-sm:sr-only">Restore<span className="md:max-lg:sr-only"> backup</span></span>
       </Button>
-      <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-      <Button type="button" variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setOpen("start")} aria-label="Start over" title="Start over: empty, or with the samples">
-        <RotateCcwIcon data-icon="inline-start" /><span className="hidden sm:inline">Start over</span>
+      <Button type="button" variant="ghost" size="sm" className={WORK_BTN} onClick={() => setOpen("start")} title="Start over: empty, or with the samples">
+        <RotateCcwIcon data-icon="inline-start" /><span className="max-sm:sr-only">Start over</span>
       </Button>
       <Dialog open={!!open} onOpenChange={(o) => !o && setOpen("")}>
         <DialogContent className={open === "start" ? "sm:max-w-3xl" : "sm:max-w-lg"}>

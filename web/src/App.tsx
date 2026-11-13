@@ -13,7 +13,8 @@ import { latestOnly } from "./latest";
 import { closeNotice, nextNotice, noticeText, parseNoticeMemory, type NoticeMemory } from "./dataNotice";
 import { logosKey } from "./logoVersion";
 import { pdfKey, reusablePdf } from "./pdfKey";
-import { BatchPanel, PrintSettings, moveItem } from "./BatchPanel";
+import { BatchPanel, PrintSettings, moveItem, useHeaderHeight } from "./BatchPanel";
+import { useMedia } from "./designer/useMedia";
 import { BrandsTab } from "./BrandsTab";
 import { PdfView } from "./PdfView";
 import { downloadPdf, printPdf } from "./print";
@@ -41,6 +42,14 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const uid = () => crypto.randomUUID();
+/**
+ * The header tabs (shadcn Tabs, `line` variant): the full height of the header, in body colour (the workspace
+ * buttons beside them are muted), the open tab bold with a 3 px primary bar along the header's bottom edge (a
+ * faint one on hover). Primary, not teal: the bar marks where you are, and reads in light (deep blue on Snow
+ * Storm) and dark (light frost on Polar Night).
+ */
+const NAV_TAB = "h-auto rounded-none px-3 text-foreground md:flex-none md:max-lg:px-2 dark:text-foreground data-active:font-semibold "
+  + "after:rounded-t-sm after:bg-primary group-data-horizontal/tabs:after:bottom-0 group-data-horizontal/tabs:after:h-[3px] hover:after:opacity-30";
 /**
  * Keep the previous object when the new one says the same thing, so React skips the redraw.
  * Safe for brands: each logo carries `version` (a hash of its bytes), so a replaced logo changes the JSON.
@@ -151,6 +160,9 @@ function SignoApp() {
   const sheetPdf = usePdf(batch.items, batch.options, "sheet", logoKey);
 
   const set = (patch: Partial<Sign>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  /** sticky header height (the preview sticks just under it); 768-1023 px the preview column is narrower */
+  const chromeH = useHeaderHeight();
+  const narrowPreview = useMedia("(min-width: 48rem) and (max-width: 63.98rem)");
 
   // After Update or Cancel the page goes back to the row that was edited (centred; no smooth
   // scroll when the system asks for reduced motion). After Update the row is also highlighted
@@ -285,13 +297,15 @@ function SignoApp() {
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-screen gap-0">
       <div className="sticky top-0 z-10" data-app-chrome>
-      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b bg-card px-4 py-3 shadow-xs sm:px-6">
-        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><ScissorsIcon aria-hidden className="size-5 text-primary" /> SignSnip</h1>
-        <TabsList className="order-last w-full overflow-x-auto md:order-none md:w-fit">
-          <TabsTrigger value="make">Make signs</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-          <TabsTrigger value="rules">Text rules</TabsTrigger>
-          <TabsTrigger value="brands"><span className="sm:hidden">Brands</span><span className="hidden sm:inline">Brands &amp; logos</span></TabsTrigger>
+      {/* One row from 768 px. The tabs are the page's main navigation: as tall as the header, with a bar under the
+          open one. The workspace buttons beside them stay quieter (ghost). A phone puts the tabs on a second row. */}
+      <header className="flex flex-wrap items-center gap-x-4 border-b bg-card px-4 shadow-xs sm:px-6 md:max-lg:gap-x-3 md:max-lg:px-4">
+        <h1 className="flex min-h-14 items-center gap-2 text-lg font-semibold tracking-tight md:max-lg:text-base"><ScissorsIcon aria-hidden className="size-5 text-primary" /> SignSnip</h1>
+        <TabsList variant="line" className="order-last w-full items-stretch gap-0 self-stretch overflow-x-auto p-0 group-data-horizontal/tabs:h-auto md:order-none md:w-fit">
+          <TabsTrigger value="make" className={NAV_TAB}>Make signs</TabsTrigger>
+          <TabsTrigger value="templates" className={NAV_TAB}>Templates</TabsTrigger>
+          <TabsTrigger value="rules" className={NAV_TAB}>Text rules</TabsTrigger>
+          <TabsTrigger value="brands" className={NAV_TAB}><span className="lg:hidden">Brands</span><span className="hidden lg:inline">Brands &amp; logos</span></TabsTrigger>
         </TabsList>
         <span className="ml-auto"><WorkspaceButtons showBackup={api.MODE !== "browser"} /></span>
         <Tooltip>
@@ -323,8 +337,11 @@ function SignoApp() {
         <BrandsTab brands={brands} refresh={async () => { await refresh(); }} focusBrand={focusBrand} />
       </TabsContent>
 
-      <TabsContent value="make" className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-4 p-3 pb-16 sm:p-6 lg:grid-cols-[1fr_20rem]">
-        <div className="grid grid-cols-1 items-start gap-4 lg:col-span-2 lg:grid-cols-[1fr_20rem]">
+      <TabsContent value="make" className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-4 p-3 pb-16 sm:p-6 lg:grid-cols-[1fr_20rem]"
+        style={{ "--chrome": `${chromeH}px` } as React.CSSProperties}>
+        {/* the form and the preview side by side from 768 px (a narrower preview below 1024), so the sign stays
+            in view while it is changed; the preview stays under the header while the form scrolls */}
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_15rem] lg:col-span-2 lg:grid-cols-[1fr_20rem]">
         {draft && (
           <SignEditor
             draft={draft} set={set} brands={brands} presets={presets} templates={templates} editing={!!editing} editTitle={editTitle} canSubmit={canSubmit}
@@ -336,14 +353,14 @@ function SignoApp() {
           />
         )}
 
-        <Card className="lg:sticky lg:top-20">
+        <Card className="md:sticky md:top-[calc(var(--chrome)+1rem)]">
           <CardHeader>
             <CardTitle>Live preview</CardTitle>
             <CardDescription>Rendered by the same engine that prints</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-center rounded-lg bg-muted p-3">
-              <PdfView bytes={singlePdf.pdf?.bytes ?? null} width={246} label="sign preview" aspect={47 / 70} />
+            <div className="flex justify-center rounded-lg bg-muted p-3 md:max-lg:p-2">
+              <PdfView bytes={singlePdf.pdf?.bytes ?? null} width={narrowPreview ? 192 : 246} label="sign preview" aspect={47 / 70} />
             </div>
             {singlePdf.err && <p className="mt-2 text-sm text-destructive">{singlePdf.err}</p>}
           </CardContent>

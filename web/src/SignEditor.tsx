@@ -161,12 +161,12 @@ export function SignEditor({
               </Field>
             ) : (
               <>
-                {/* touch: the − / + buttons are bigger, so price boxes widen to keep room for 999998.99 */}
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem] md:pointer-coarse:grid-cols-[minmax(0,1fr)_12rem]">
+                {/* price boxes are wide enough for the widest price, 999998.99 (11rem; touch: 12rem, its − / + buttons are bigger) */}
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_11rem] md:pointer-coarse:grid-cols-[minmax(0,1fr)_12rem]">
                   <Field>
                     <FieldLabel htmlFor="price">Price</FieldLabel>
                     <div className="flex flex-wrap items-center gap-2">
-                      <NumField id="price" stepper="price" className="w-40 pointer-coarse:w-48" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
+                      <NumField id="price" stepper="price" className="w-44 pointer-coarse:w-48" before="$" decimals={2} value={draft.price} min={0.01} max={999999} onChange={(n) => n && set({ price: n })} />
                       <ToggleGroup variant="outline" spacing={1} className="flex-wrap" aria-label="Common prices" value={[String(draft.price ?? "")]}
                         onValueChange={(v) => { if (v[0]) set({ price: Number(v[0]) }); }}>
                         {PRICES.map((p) => <ToggleGroupItem key={p} value={String(p)} type="button">${p}</ToggleGroupItem>)}
