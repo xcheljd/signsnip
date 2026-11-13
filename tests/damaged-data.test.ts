@@ -96,7 +96,7 @@ describe("server faults are not blamed on the request", () => {
     fs.mkdirSync(path.join(data, "batch.json"));
     const r = await server!.call("GET", "/api/state");
     expect(r.status, r.body).toBe(500);
-    expect(JSON.parse(r.body).error).toBe("SignSnip couldn't read or save its data. Check the terminal it runs in for details.");
+    expect(JSON.parse(r.body).error).toBe("SignSnip couldn't read or save its data. Ask whoever set up SignSnip on this computer to have a look.");
     fs.rmdirSync(path.join(data, "batch.json"));
     expect((await server!.call("GET", "/api/state")).status).toBe(200);
   });

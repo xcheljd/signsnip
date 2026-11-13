@@ -13,15 +13,18 @@ interface Drawn { src: string; ver: number }
  * Only pages on or near the screen are drawn, so a 20-page batch costs about the
  * same as a 2-page one. On an edit, the visible pages are redrawn first and swapped in
  * together (no flicker); off-screen pages keep their old image until they scroll into view.
- * `overlay` draws interactive layers on top of a page.
+ * `overlay` draws interactive layers on top of a page. `only` shows that one page (the sheet
+ * pager): then it is the only page drawn, on each edit too.
  */
 export function PdfView({
-  bytes, width: fixed, label, overlay, aspect,
+  bytes, width: fixed, label, overlay, aspect, only,
 }: {
   bytes: Uint8Array | null; width: number | "fill"; label: string;
   overlay?: (page: number) => ReactNode;
   /** w/h of a page, so placeholders have the right shape before the first render */
   aspect?: number;
+  /** show just this page (0-based); undefined = every page */
+  only?: number;
 }) {
   const outer = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
@@ -112,16 +115,21 @@ export function PdfView({
   }, [ensure]);
   const observe = useCallback((el: HTMLDivElement | null) => { if (el) io.current?.observe(el); }, []);
 
+  // one page at a time: that page is the only one near the screen (an unmounted page never reports
+  // leaving it, so it would otherwise stay in `near` and be redrawn on every edit)
+  useEffect(() => { if (only !== undefined) { near.current = new Set([only]); void ensure(only); } }, [only, ensure]);
+
   // fill in visible pages that weren't part of a version's first batch
   useEffect(() => { for (const i of near.current) void ensure(i); }, [count, drawn, ensure]);
 
   const h = width / pageAspect;
+  const pages = Array.from({ length: count }, (_, i) => i).filter((i) => only === undefined || i === only);
   return (
     <div ref={outer} className="flex w-full flex-col items-center gap-4" aria-label={label}>
       {count === 0 && !err && width > 0 && aspect && (
         <Skeleton className="bg-background" style={{ width, height: width / aspect }} />
       )}
-      {width > 0 && Array.from({ length: count }, (_, i) => (
+      {width > 0 && pages.map((i) => (
         <div key={i} ref={observe} data-page={i} className="relative bg-white shadow-md" style={{ width, height: h }}>
           {drawn[i]
             ? <img src={drawn[i]!.src} alt={`${label} page ${i + 1}`} className="block size-full select-none" draggable={false} />

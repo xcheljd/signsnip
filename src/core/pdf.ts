@@ -159,7 +159,7 @@ export async function renderPdf(signs: Sign[], options: Options, mode: "sheet" |
  * measure 47 x 70 mm, the print dialog is scaling ("Fit to page") - switch to Actual size / 100%.
  */
 export async function renderCalibration(paper: Options["paper"] = "letter"): Promise<Uint8Array> {
-  const { doc, font } = await newDoc("SignSnip printer check");
+  const { doc, font } = await newDoc("SignSnip: check page");
   const g = sheetGeometry({ grid: "portrait-4x3", paper });
   const page = doc.addPage([mm(g.pageW), mm(g.pageH)]);
   const H = g.pageH;

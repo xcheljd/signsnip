@@ -8,12 +8,14 @@ import { cn } from "@/lib/utils";
 /**
  * The real print sheet with an interactive layer: click a sign to edit its row, drag a sign
  * onto another to reorder, click an empty slot to drop the sign you're building into it.
+ * `page`: show only that page (the pager); moving a sign onto another page needs all pages shown.
  */
 export function SheetView({
-  batch, bytes, editingId, selected, warned, onEdit, onMove, onAddHere,
+  batch, bytes, editingId, selected, warned, onEdit, onMove, onAddHere, page,
 }: {
   batch: Batch; bytes: Uint8Array | null; editingId: string | null; selected: Set<string>; warned: Set<number>;
   onEdit: (item: number) => void; onMove: (from: number, to: number) => void; onAddHere: () => void;
+  page?: number;
 }) {
   const g = sheetGeometry(batch.options);
   const owners = slotOwners(batch.items.map((s) => s.copies));
@@ -75,5 +77,5 @@ export function SheetView({
     </div>
   );
 
-  return <PdfView bytes={bytes} width="fill" label="print sheet" overlay={overlay} aspect={g.pageW / g.pageH} />;
+  return <PdfView bytes={bytes} width="fill" label="print sheet" overlay={overlay} aspect={g.pageW / g.pageH} only={page} />;
 }

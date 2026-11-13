@@ -24,7 +24,10 @@ import { editLabel } from "./editLabel";
 import { cn } from "@/lib/utils";
 import { useBatch } from "./useBatch";
 import { useTheme } from "./theme";
-import { DownloadIcon, MonitorIcon, MoonIcon, PrinterIcon, ScissorsIcon, SunIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, MonitorIcon, MoonIcon, PrinterIcon, ScissorsIcon, SunIcon } from "lucide-react";
+import { ALL_PAGES_KEY, clampPage, pageOfRow, pagesOneAtATime } from "./sheetPager";
+import { PRINT_SETTINGS_KEY } from "./printSummary";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DataNotice } from "./DataNotice";
 import { Toasts } from "./Toasts";
@@ -103,7 +106,15 @@ function SignoApp() {
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [presetDialog, setPresetDialog] = useState(false);
   const [presetName, setPresetName] = useState("");
-  const [focusBrand, setFocusBrand] = useState<string | null>(null);
+  /** a warning's "Open brand": the Brands & logos tab opens that row (`n` makes every jump new) */
+  const [focusBrand, setFocusBrand] = useState<{ id: string; n: number } | null>(null);
+  /** Print settings left open (closed by default), remembered */
+  const [printOpen, setPrintOpenState] = useState(() => localStorage.getItem(PRINT_SETTINGS_KEY) === "1");
+  const setPrintOpen = (v: boolean) => { try { localStorage.setItem(PRINT_SETTINGS_KEY, v ? "1" : "0"); } catch { /* storage blocked: this visit only */ } setPrintOpenState(v); };
+  /** the sheet preview: one page at a time from 3 pages, unless Show all pages is on (remembered) */
+  const [allPages, setAllPagesState] = useState(() => localStorage.getItem(ALL_PAGES_KEY) === "1");
+  const setAllPages = (v: boolean) => { try { localStorage.setItem(ALL_PAGES_KEY, v ? "1" : "0"); } catch { /* this visit only */ } setAllPagesState(v); };
+  const [sheetPage, setSheetPage] = useState(0);
   const [focusTemplate, setFocusTemplate] = useState<{ row: number; n: number } | null>(null);
   const [calibrated, setCalibratedState] = useState(() => (localStorage.getItem("signsnip.calibrated") ?? localStorage.getItem("signo.calibrated")) === "1");
   const setCalibrated = (v: boolean) => { localStorage.setItem("signsnip.calibrated", v ? "1" : "0"); setCalibratedState(v); };
@@ -189,20 +200,26 @@ function SignoApp() {
     return () => { clearTimeout(t); window.removeEventListener("scrollend", arrived); };
   }, [returnTo]);
 
+  /** the sheet pager shows the page row `i` starts on (a row about to be added: where it will land) */
+  const showRowPage = (i: number, items = batch.items) => setSheetPage(pageOfRow(items.map((s) => s.copies), i, sheetGeometry(batch.options).perPage));
   const submit = () => {
     if (!draft) return;
     if (editing) {
+      const row = batch.items.findIndex((s) => s.id === editing);
       if (update((b) => ({ ...b, items: b.items.map((i) => (i.id === editing ? { ...draft, id: editing } : i)) })) === false) return;
       setEditing(null); setDraft({ ...draft, id: uid() }); toast("Sign updated");
       setReturnTo({ id: editing, flash: true, n: Date.now() });
+      if (row >= 0) showRowPage(row);
     } else {
-      update((b) => ({ ...b, items: [...b.items, { ...draft, id: uid() }] }), { undo: `Added as row ${batch.items.length + 1}` });
+      if (update((b) => ({ ...b, items: [...b.items, { ...draft, id: uid() }] }), { undo: `Added as row ${batch.items.length + 1}` }) !== false) showRowPage(batch.items.length);
     }
   };
-  const edit = (i: number) => {
+  /** `fromSheet`: picked on the sheet itself, which already shows that sign's page (a row can run onto the next page) */
+  const edit = (i: number, fromSheet = false) => {
     const s = batch.items[i];
     if (!s) return;
     setTab("make"); setEditing(s.id); setDraft({ ...s });
+    if (!fromSheet) showRowPage(i);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const cancelEdit = () => {
@@ -290,6 +307,8 @@ function SignoApp() {
   const g = sheetGeometry(batch.options);
   const signCount = batch.items.reduce((a, s) => a + s.copies, 0);
   const pageCount = signCount ? Math.ceil(signCount / g.perPage) : 0;
+  const paged = pagesOneAtATime(pageCount, allPages);
+  const shownPage = clampPage(sheetPage, pageCount);
   const THEMES = ["light", "dark", "system"] as const;
   const themeName = { light: "Light", dark: "Dark", system: "Match system" } as const;
   const nextTheme = THEMES[(THEMES.indexOf(theme as (typeof THEMES)[number]) + 1) % THEMES.length]!;
@@ -299,8 +318,8 @@ function SignoApp() {
       <div className="sticky top-0 z-10" data-app-chrome>
       {/* One row from 768 px. The tabs are the page's main navigation: as tall as the header, with a bar under the
           open one. The workspace buttons beside them stay quieter (ghost). A phone puts the tabs on a second row. */}
-      <header className="flex flex-wrap items-center gap-x-4 border-b bg-card px-4 shadow-xs sm:px-6 md:max-lg:gap-x-3 md:max-lg:px-4">
-        <h1 className="flex min-h-14 items-center gap-2 text-lg font-semibold tracking-tight md:max-lg:text-base"><ScissorsIcon aria-hidden className="size-5 text-primary" /> SignSnip</h1>
+      <header className="flex flex-wrap items-center gap-x-4 border-b bg-card px-4 shadow-xs sm:px-6 md:max-lg:gap-x-3 md:max-lg:px-4 max-sm:gap-x-2 max-sm:px-3">
+        <h1 className="flex min-h-14 items-center gap-2 text-lg font-semibold tracking-tight max-lg:text-base"><ScissorsIcon aria-hidden className="size-5 text-primary" /> SignSnip</h1>
         <TabsList variant="line" className="order-last w-full items-stretch gap-0 self-stretch overflow-x-auto p-0 group-data-horizontal/tabs:h-auto md:order-none md:w-fit">
           <TabsTrigger value="make" className={NAV_TAB}>Make signs</TabsTrigger>
           <TabsTrigger value="templates" className={NAV_TAB}>Templates</TabsTrigger>
@@ -334,7 +353,7 @@ function SignoApp() {
       </TabsContent>
 
       <TabsContent value="brands" className="mx-auto w-full max-w-7xl p-3 sm:p-6">
-        <BrandsTab brands={brands} refresh={async () => { await refresh(); }} focusBrand={focusBrand} />
+        <BrandsTab brands={brands} refresh={async () => { await refresh(); }} focusBrand={focusBrand} onFocused={() => setFocusBrand(null)} />
       </TabsContent>
 
       <TabsContent value="make" className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-4 p-3 pb-16 sm:p-6 lg:grid-cols-[1fr_20rem]"
@@ -356,7 +375,7 @@ function SignoApp() {
         <Card className="md:sticky md:top-[calc(var(--chrome)+1rem)]">
           <CardHeader>
             <CardTitle>Live preview</CardTitle>
-            <CardDescription>Rendered by the same engine that prints</CardDescription>
+            <CardDescription>This is exactly what prints.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex justify-center rounded-lg bg-muted p-3 md:max-lg:p-2">
@@ -370,8 +389,10 @@ function SignoApp() {
         <BatchPanel
           batch={batch} update={update} undo={undo} canUndo={canUndo} brands={brands} saved={saved} warnings={warnings} templates={templates}
           editingId={editing} flashId={flashRow} selected={selected} setSelected={setSelected} onEdit={edit}
-          onPrint={() => print()} onExport={() => exportPdf()} onCalibrate={calibrate} onFixBg={fixBg}
-          onGoToBrand={(id) => { setFocusBrand(id); setTab("brands"); }} refresh={refresh}
+          onPrint={() => print()} onExport={() => exportPdf()} onFixBg={fixBg}
+          // the first-time notice prints the check page and opens Print settings, where the button lives from then on
+          onCalibrate={() => { setPrintOpen(true); void calibrate(); }}
+          onGoToBrand={(id) => { setFocusBrand({ id, n: Date.now() }); setTab("brands"); }} refresh={refresh}
           onOpenTemplate={(row) => { setFocusTemplate((f) => ({ row, n: (f?.n ?? 0) + 1 })); setTab("templates"); }}
           calibrated={calibrated} setCalibrated={setCalibrated}
         />
@@ -379,15 +400,31 @@ function SignoApp() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Print sheet</CardTitle>
-            <CardDescription>Click a sign to edit it · drag to rearrange · click an empty slot to add the sign you're building</CardDescription>
+            <CardDescription>Tap a sign to edit it, or an empty slot to add the new sign there.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <PrintSettings options={batch.options} update={update} onCalibrate={calibrate} />
+            <PrintSettings options={batch.options} update={update} onCalibrate={calibrate} open={printOpen} setOpen={setPrintOpen} />
             {batch.items.length ? (
-              <div className="mx-auto w-full max-w-4xl rounded-lg bg-muted p-3">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 rounded-lg bg-muted p-3">
+                {pageCount > 2 && (
+                  // 3 pages or more: one page at a time (Previous / Next), or all of them with the switch
+                  <div data-slot="sheet-pager" className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {paged && (
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" disabled={shownPage === 0} onClick={() => setSheetPage(shownPage - 1)}><ChevronLeftIcon data-icon="inline-start" />Previous</Button>
+                        <span role="status" className="min-w-24 text-center text-sm font-medium tabular-nums">Page {shownPage + 1} of {pageCount}</span>
+                        <Button type="button" variant="outline" disabled={shownPage >= pageCount - 1} onClick={() => setSheetPage(shownPage + 1)}>Next<ChevronRightIcon data-icon="inline-end" /></Button>
+                      </div>
+                    )}
+                    <Field orientation="horizontal" className="ml-auto w-auto items-center">
+                      <Switch id="all-pages" checked={allPages} onCheckedChange={(c) => setAllPages(c)} />
+                      <FieldLabel htmlFor="all-pages">Show all pages</FieldLabel>
+                    </Field>
+                  </div>
+                )}
                 <SheetView
                   batch={batch} bytes={sheetPdf.pdf?.bytes ?? null} editingId={editing} selected={selected} warned={warnedRows}
-                  onEdit={edit}
+                  onEdit={(i) => edit(i, true)} page={paged ? shownPage : undefined}
                   onMove={(from, to) => update((b) => ({ ...b, items: moveItem(b.items, from, to) }), { undo: "Moved sign" })}
                   onAddHere={() => { if (draft && brand && !editing) submit(); else if (editing) toast("Finish editing first"); }}
                 />

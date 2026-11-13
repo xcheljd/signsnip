@@ -46,11 +46,11 @@ export function InfoTip({ about, children }: { about: string; children: React.Re
   );
 }
 
-/** A titled group of inspector fields. */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** A titled group of inspector fields. `untitled`: the card above already says it (no second heading). */
+function Section({ title, untitled, children }: { title: string; untitled?: boolean; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-4 border-t pt-4 first:border-t-0 first:pt-0">
-      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
+      {!untitled && <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>}
       {children}
     </section>
   );
@@ -289,7 +289,8 @@ export function TemplateInspector({
   const fbItems = [{ value: "none", label: "None (just warn)" }, ...templates.filter((x) => x.id !== t.id && x.kind === t.kind).map((x) => ({ value: x.id, label: x.name }))];
   return (
     <FieldGroup>
-      <Section title="Template">
+      {/* the inspector card is titled "Template": no second "TEMPLATE" heading under it */}
+      <Section title="Template" untitled>
         <Field>
           <FieldLabel htmlFor="tpl-name">Template name</FieldLabel>
           <Input id="tpl-name" value={t.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />
@@ -318,7 +319,7 @@ export function TemplateInspector({
             <FieldLabel htmlFor="tpl-min">Readable minimum</FieldLabel>
             <InfoTip about="Readable minimum">Empty = the store setting ({storeMin}pt, on the Text rules tab). Text that would shrink below this gets your abbreviations, then the template below.</InfoTip>
           </div>
-          <NumField id="tpl-min" stepper="template readable minimum" emptyStart={storeMin} className="w-full" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={`${storeMin} (store setting)`}
+          <NumField id="tpl-min" stepper="template readable minimum" emptyStart={storeMin} className="w-full" after="pt" decimals={1} step={0.5} min={4} max={40} allowEmpty placeholder={`Store setting: ${storeMin}`}
             value={t.readableMin} onChange={(v) => set({ readableMin: v })} />
         </Field>
         <Field>

@@ -61,7 +61,7 @@ app.use("*", async (c, next) => {
 app.onError((err, c) => {
   if (err instanceof z.ZodError) return c.json({ error: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, 400);
   const sys = typeof (err as NodeJS.ErrnoException).code === "string" || err instanceof SyntaxError || err instanceof TypeError || err instanceof RangeError;
-  if (sys) { console.error(err); return c.json({ error: "SignSnip couldn't read or save its data. Check the terminal it runs in for details." }, 500); }
+  if (sys) { console.error(err); return c.json({ error: "SignSnip couldn't read or save its data. Ask whoever set up SignSnip on this computer to have a look." }, 500); }
   return c.json({ error: err.message }, 400);
 });
 

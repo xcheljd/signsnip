@@ -26,7 +26,7 @@ let live: { draft: () => Rules; change: (fn: (r: Rules) => Rules) => void } | nu
  * since, nothing is put back and the toast says so (the newer one stays).
  */
 async function undoRemove(a: Abbreviation, i: number, refresh: () => Promise<unknown>) {
-  const conflict = () => toast(`“${a.from}” was added again since, so the removed one wasn't put back`);
+  const conflict = () => toast(`“${a.from}” was added again since, so the deleted one wasn't put back`);
   try {
     if (live) {
       if (!putBack(live.draft().abbreviations, i, a, sameWord)) return conflict();
@@ -109,7 +109,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
     const gone = draft.abbreviations[i];
     if (!gone) return;
     change((r) => ({ ...r, abbreviations: r.abbreviations.filter((_, j) => j !== i) }));
-    toast(`Removed “${gone.from}”`, { action: { label: "Undo", onClick: () => void undoRemove(gone, i, refresh) } });
+    toast(`Deleted “${gone.from}”`, { action: { label: "Undo", onClick: () => void undoRemove(gone, i, refresh) } });
   };
 
   const [from, setFrom] = useState("");
@@ -198,7 +198,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
                         <Input aria-label={`Word ${i + 1}`} className="col-span-3 @lg/abbr:col-span-1" value={a.from} maxLength={40} onChange={(e) => setAbbr(i, { from: e.target.value })} />
                         <Input aria-label={`Short form of ${a.from}`} value={a.to} maxLength={40} placeholder="(removed)" onChange={(e) => setAbbr(i, { to: e.target.value })} />
                         <span className="text-xs">{n ? <Badge variant="secondary">used on {count(n, "sign")}</Badge> : <span className="text-muted-foreground">not needed</span>}</span>
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${a.from}`}
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Delete ${a.from}`}
                           onClick={() => remove(i)}><Trash2Icon /></Button>
                       </li>
                     );

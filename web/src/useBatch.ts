@@ -118,7 +118,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
       .then(() => {
         serverJson.current = mine; seenJson.current = mine; saves.current++;
         if (ref.current === b) toast.dismiss(UNSAVED_TOAST);
-        if (replaces) toast.warning("Your edits replaced a change made elsewhere", { duration: 15000, description: "The batch was also changed outside this tab (for example with the signsnip command) before your edits were saved. This tab's version was kept." });
+        if (replaces) toast.warning("Your edits replaced a change made elsewhere", { duration: 15000, description: "The batch was also changed in another window before your edits were saved. This tab's version was kept." });
         return true;
       })
       .catch((e: Error) => {
@@ -160,7 +160,7 @@ export function useBatch(onRemote: (s: api.State) => void) {
         if (JSON.stringify(ref.current) === serverJson.current) toast.dismiss(UNSAVED_TOAST);
         if (saved && wasOffline) toast.success("SignSnip is back - your edits are saved");
       },
-      () => { if (++misses === 3) toast.error("SignSnip isn't answering", { id: OFFLINE_TOAST, duration: Infinity, description: "Keep this tab open: edits you make now are saved when it's back. If you closed it, start it again (pnpm start)." }); },
+      () => { if (++misses === 3) toast.error("SignSnip on this computer isn't answering", { id: OFFLINE_TOAST, duration: Infinity, description: "Your edits are kept in this tab and saved when it's back, so keep this tab open. If it stays like this, ask whoever set up SignSnip to start it again." }); },
     );
     const t = setInterval(tick, 2500);
     window.addEventListener("focus", tick);

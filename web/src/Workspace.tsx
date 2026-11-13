@@ -3,6 +3,7 @@ import { describeSummary } from "../../src/core/workspace";
 import { ArchiveRestoreIcon, CircleAlertIcon, RotateCcwIcon, CircleCheckIcon, DatabaseIcon, DownloadIcon, FilePlus2Icon, InfoIcon, ServerOffIcon, ScissorsIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as api from "./api";
+import { backupTime } from "./backupTime";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,14 +90,14 @@ export function StartChoices({ replacing, onDone, only }: { replacing: boolean; 
             <DialogTitle>Restore this backup?</DialogTitle>
             <DialogDescription render={<div />}>
               <p className="break-all font-medium text-foreground">{pending?.name}</p>
-              <p className="mt-1">Made {pending ? new Date(pending.summary.exportedAt).toLocaleString() : ""}</p>
+              <p className="mt-1">Made {pending ? backupTime(pending.summary.exportedAt) : ""}</p>
               <p className="mt-2">{pending ? describe(pending.summary) : ""}</p>
               {replacing && <p className="mt-2 font-medium text-destructive">Everything currently here is replaced.</p>}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPending(null)}>Cancel</Button>
-            <Button disabled={busy === "backup"} onClick={restore}>{busy === "backup" ? "Restoring…" : "Restore"}</Button>
+            <Button disabled={busy === "backup"} onClick={restore}>{busy === "backup" ? "Restoring…" : "Restore backup"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -118,7 +119,7 @@ export function HowSavingWorks({ compact = false }: { compact?: boolean }) {
         <span>
           <strong className={strong}>Download a backup to pick up where you left off</strong>: <strong className={`${strong} whitespace-nowrap`}>Back up</strong> (top of the app) saves
           your brands, logos, templates, text rules, presets and batches to your computer.
-          Next time, choose <strong className={`${strong} whitespace-nowrap`}>Continue your work</strong> here, or <strong className={`${strong} whitespace-nowrap`}>Restore</strong> inside the app, and pick that file.
+          Next time, choose <strong className={`${strong} whitespace-nowrap`}>Continue your work</strong> here, or <strong className={`${strong} whitespace-nowrap`}>Restore backup</strong> inside the app, and pick that file.
         </span>
       </p>
       <div className="flex items-start gap-2">
@@ -208,39 +209,119 @@ export function StartPage({ onDone }: { onDone: () => void }) {
 }
 
 /**
- * Header buttons: Back up / Restore / Start over, each one click away and labelled (never a menu).
+ * Header buttons: Back up / Restore backup / Start over, each one click away and labelled (never a menu).
  * Quiet (ghost, neutral colours) so the tabs lead; Start over is only red in its dialog. Each name is
- * its visible text. 768-1023 px (iPad portrait): the icon sits above a short label ("Restore"), so the
- * header stays on one row. Phone: icons only (the names stay for screen readers and as a tooltip).
+ * its visible text. Below 1024 px (iPad portrait and phones) the icon sits above a short label
+ * ("Restore"), so the header keeps its height: one row on an iPad, the tabs on a second row on a phone.
  */
-const WORK_BTN = "text-muted-foreground md:max-lg:h-auto md:max-lg:flex-col md:max-lg:gap-0.5 md:max-lg:px-2 md:max-lg:py-1 md:max-lg:text-xs md:max-lg:has-data-[icon=inline-start]:pl-2";
+const WORK_BTN = "text-muted-foreground max-lg:h-auto max-lg:flex-col max-lg:gap-0.5 max-lg:px-2 max-lg:py-1 max-lg:text-xs max-lg:has-data-[icon=inline-start]:pl-2 max-sm:px-1.5 max-sm:has-data-[icon=inline-start]:pl-1.5";
 export function WorkspaceButtons({ showBackup }: { showBackup: boolean }) {
   const [open, setOpen] = useState<"" | "restore" | "start">("");
   const done = () => { setOpen(""); window.location.reload(); };
   return (
-    <div className="flex items-center gap-2 md:max-lg:gap-1" role="group" aria-label="Your work">
+    <div className="flex items-center gap-2 max-lg:gap-1 max-sm:gap-0.5" role="group" aria-label="Your work">
       {showBackup && (
         <Button type="button" variant="ghost" size="sm" className={WORK_BTN} onClick={downloadBackup} title="Back up everything (download a file)">
-          <DownloadIcon data-icon="inline-start" /><span className="max-sm:sr-only">Back up</span>
+          <DownloadIcon data-icon="inline-start" /><span>Back up</span>
         </Button>
       )}
       <Button type="button" variant="ghost" size="sm" className={WORK_BTN} onClick={() => setOpen("restore")} title="Restore a backup file">
-        <ArchiveRestoreIcon data-icon="inline-start" /><span className="max-sm:sr-only">Restore<span className="md:max-lg:sr-only"> backup</span></span>
+        <ArchiveRestoreIcon data-icon="inline-start" /><span>Restore<span className="max-lg:sr-only"> backup</span></span>
       </Button>
       <Button type="button" variant="ghost" size="sm" className={WORK_BTN} onClick={() => setOpen("start")} title="Start over: empty, or with the samples">
-        <RotateCcwIcon data-icon="inline-start" /><span className="max-sm:sr-only">Start over</span>
+        <RotateCcwIcon data-icon="inline-start" /><span>Start over</span>
       </Button>
       <Dialog open={!!open} onOpenChange={(o) => !o && setOpen("")}>
-        <DialogContent className={open === "start" ? "sm:max-w-3xl" : "sm:max-w-lg"}>
-          <DialogHeader>
-            <DialogTitle>{open === "start" ? "Start over" : "Restore a backup"}</DialogTitle>
-            <DialogDescription>
-              {open === "start" ? "Begin again with an empty workspace, or with the made-up samples." : "Load a .signsnip-backup.json file to pick up where you left off."}
-            </DialogDescription>
-          </DialogHeader>
-          {open && <StartChoices replacing onDone={done} only={open === "start" ? ["scratch", "samples"] : ["backup"]} />}
+        <DialogContent className={open === "start" ? "sm:max-w-3xl" : "sm:max-w-xl"}>
+          {open === "start" && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Start over</DialogTitle>
+                <DialogDescription>Begin again with an empty workspace, or with the made-up samples.</DialogDescription>
+              </DialogHeader>
+              <StartChoices replacing onDone={done} only={["scratch", "samples"]} />
+            </>
+          )}
+          {open === "restore" && <RestoreBackup onDone={done} onCancel={() => setOpen("")} />}
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * "Restore backup" from the header: one dialog in two steps. First pick a file; then, in the same
+ * dialog, what the backup holds, the warning, and a red "Replace everything with this backup".
+ * A file that isn't a backup, or a restore that fails, shows its error here too.
+ */
+function RestoreBackup({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const file = useRef<HTMLInputElement>(null);
+  const [picked, setPicked] = useState<{ raw: unknown; summary: api.BackupSummary; name: string } | null>(null);
+  const [error, setError] = useState<{ name: string; message: string } | null>(null);
+  const [busy, setBusy] = useState<"" | "reading" | "restoring">("");
+  const choose = () => file.current?.click();
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy("reading");
+    try {
+      const raw = JSON.parse(await f.text());
+      const summary = await api.inspectBackup(raw);
+      setPicked({ raw, summary, name: f.name }); setError(null);
+    } catch (e) {
+      setPicked(null);
+      setError({ name: f.name, message: e instanceof SyntaxError ? "That file isn't a SignSnip backup." : (e as Error).message });
+    } finally { setBusy(""); if (file.current) file.current.value = ""; }
+  };
+  const restore = async () => {
+    if (!picked) return;
+    setBusy("restoring");
+    try { await api.restoreBackup(picked.raw); onDone(); } catch (e) {
+      setError({ name: picked.name, message: (e as Error).message }); setPicked(null); setBusy("");
+    }
+  };
+  return (
+    <>
+      <input ref={file} type="file" accept=".json,application/json" className="sr-only" aria-label="Backup file" tabIndex={-1} onChange={(e) => pick(e.target.files?.[0])} />
+      <DialogHeader>
+        <DialogTitle>{picked ? "Restore this backup?" : "Restore backup"}</DialogTitle>
+        <DialogDescription>
+          {picked ? "Check that this is the file you meant." : <>Pick a backup file (<code className="whitespace-nowrap text-xs">.signsnip-backup.json</code>) made by SignSnip on this or any other computer.</>}
+        </DialogDescription>
+      </DialogHeader>
+      {error && (
+        <Alert variant="destructive">
+          <CircleAlertIcon />
+          <AlertTitle className="break-all">Couldn't use {error.name}</AlertTitle>
+          <AlertDescription>{error.message} Nothing here was changed.</AlertDescription>
+        </Alert>
+      )}
+      {picked && (
+        <div data-slot="backup-summary" className="flex flex-col gap-1 rounded-lg border bg-muted/50 p-3 text-sm">
+          <p className="break-all font-medium">{picked.name}</p>
+          <p className="text-muted-foreground">Made {backupTime(picked.summary.exportedAt)}</p>
+          <p className="text-muted-foreground">{describe(picked.summary)}</p>
+        </div>
+      )}
+      <Alert variant="destructive">
+        <TriangleAlertIcon />
+        <AlertTitle>This replaces everything here</AlertTitle>
+        {/* the button on its own line under the words, not inside the sentence */}
+        <AlertDescription className="flex flex-col items-start gap-2">
+          <span>Brands, logos, templates, text rules, presets and saved batches. Download a backup first if you might want them back.</span>
+          <Button type="button" variant="outline" size="sm" onClick={downloadBackup}><DownloadIcon data-icon="inline-start" />Back up first</Button>
+        </AlertDescription>
+      </Alert>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        {picked ? (
+          <>
+            <Button type="button" variant="outline" disabled={!!busy} onClick={choose}>Choose another file</Button>
+            <Button type="button" variant="destructive" disabled={!!busy} onClick={restore}>{busy === "restoring" ? "Restoring…" : "Replace everything with this backup"}</Button>
+          </>
+        ) : (
+          <Button type="button" disabled={!!busy} onClick={choose}>{busy === "reading" ? "Reading…" : error ? "Choose another file" : "Choose backup file…"}</Button>
+        )}
+      </DialogFooter>
+    </>
   );
 }

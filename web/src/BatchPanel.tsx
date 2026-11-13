@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { count } from "../../src/core/words";
 import {
-  ArchiveIcon, ChevronDownIcon, CopyIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, ImageOffIcon, InfoIcon, PencilIcon, RulerIcon, Trash2Icon,
+  ArchiveIcon, ChevronDownIcon, CopyIcon, FileDownIcon, FileUpIcon, GripVerticalIcon, ImageOffIcon, InfoIcon, PencilIcon, RulerIcon, SlidersHorizontalIcon, Trash2Icon,
   TriangleAlertIcon, Undo2Icon, WandSparklesIcon, XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import type { Batch, SavedBatch, Sign, Template, Warning } from "../../src/core/
 import * as api from "./api";
 import { logoThumb } from "./logoThumb";
 import { pageMeter } from "./pageMeter";
+import { printSummary } from "./printSummary";
 import { PANEL_LIMIT, lineCount, panelGroups, panelTitle, visibleGroups, type PanelGroup } from "./warningPanel";
 import { OpenBatchFile, ShareBatchDialog } from "./BatchFile";
 import { NumField } from "./NumField";
@@ -114,7 +115,7 @@ export function BatchPanel({
             <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
               <div className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-0.5">
                 <AlertTitle>First time printing on this printer?</AlertTitle>
-                <AlertDescription>Print the one-page printer check and measure the box. If it isn't 47 × 70 mm, your print dialog is shrinking the page.</AlertDescription>
+                <AlertDescription>Print the check page and measure the box. If it isn't 47 × 70 mm, your print dialog is shrinking the page.</AlertDescription>
               </div>
               <AlertAction className="static ml-auto flex flex-wrap gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={onCalibrate}>Print check page</Button>
@@ -147,7 +148,7 @@ export function BatchPanel({
               <div data-slot="bulk-bar" className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border bg-muted/50 px-2.5 py-1.5">
                 <div className="flex items-center gap-0.5 text-sm font-medium">
                   {count(sel.length, "row")} selected
-                  <IconButton label="Clear selection" size="icon" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
+                  <IconButton label="Deselect all" size="icon" onClick={() => setSelected(new Set())}><XIcon /></IconButton>
                 </div>
                 <BulkNumber label="Percent" className="w-28 pointer-coarse:w-36" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
                 <BulkNumber label="Price" className="w-44 pointer-coarse:w-48" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
@@ -225,15 +226,16 @@ export function BatchPanel({
                       // just updated: a primary tint and ring (not teal: teal means selected)
                       s.id === flashId && "bg-primary/10 ring-2 ring-primary ring-inset")}
                     onDragOver={(e) => { if (drag !== null) { e.preventDefault(); setOverRow(i); } }}
-                    onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) update((b) => ({ ...b, items: moveItem(b.items, drag, i) })); setDrag(null); setOverRow(null); }}
+                    onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) update((b) => ({ ...b, items: moveItem(b.items, drag, i) }), { undo: "Moved row" }); setDrag(null); setOverRow(null); }}
                   >
-                    <TableCell className="max-md:hidden">
+                    {/* the grip fills its whole cell (32 px wide with a mouse, 60 px on touch, the row's height) */}
+                    <TableCell className="relative p-0 max-md:hidden">
                       <span
                         draggable
                         role="button"
                         tabIndex={-1}
                         aria-label={`Drag row ${i + 1}`}
-                        className="flex cursor-grab text-muted-foreground active:cursor-grabbing"
+                        className="absolute inset-0 flex cursor-grab items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
                         onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
                         onDragEnd={() => { setDrag(null); setOverRow(null); }}
                       >
@@ -320,12 +322,12 @@ export function useHeaderHeight() {
 }
 
 /** A batch row's logo thumbnail, or a same-size "no logo" box when the brand has none or was deleted (nothing is requested then). */
-function RowLogo({ brand }: { brand: api.BrandWithLogo | undefined }) {
+export function RowLogo({ brand, className = "h-5 w-12" }: { brand: api.BrandWithLogo | undefined; className?: string }) {
   const t = logoThumb(brand);
-  if (t) return <img className="h-5 w-12 shrink-0 rounded-sm bg-white object-contain px-0.5" src={api.logoUrl(t.id, t.version)} alt="" />;
+  if (t) return <img className={cn("shrink-0 rounded-sm bg-white object-contain px-0.5", className)} src={api.logoUrl(t.id, t.version)} alt="" />;
   return (
     <span data-slot="logo-placeholder" title="No logo" aria-hidden
-      className="flex h-5 w-12 shrink-0 items-center justify-center rounded-sm border border-dashed text-muted-foreground">
+      className={cn("flex shrink-0 items-center justify-center rounded-sm border border-dashed text-muted-foreground", className)}>
       <ImageOffIcon className="size-3.5" />
     </span>
   );
@@ -430,11 +432,25 @@ function RowWarningButton({ row, list, act }: { row: number; list: RowWarning[];
   );
 }
 
-/** Paper, layout, cut lines and the printer check: they describe the print sheet, so they sit on it. */
-export function PrintSettings({ options, update, onCalibrate }: { options: Batch["options"]; update: Update; onCalibrate: () => void }) {
+/**
+ * Paper, layout, cut lines and the check page: they describe the print sheet, so they sit on it.
+ * Closed, they are one line ("Letter · 10 per page · cut lines off") beside a "Print settings"
+ * button that opens them in place; App remembers whether they were left open.
+ */
+export function PrintSettings({ options, update, onCalibrate, open, setOpen }: {
+  options: Batch["options"]; update: Update; onCalibrate: () => void; open: boolean; setOpen: (open: boolean) => void;
+}) {
   const setOptions = (patch: Partial<Batch["options"]>) => update((b) => ({ ...b, options: { ...b.options, ...patch } }));
+  const id = useId();
   return (
-    <div className="flex flex-wrap items-end gap-4">
+    <div className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <Button type="button" variant="outline" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+        <SlidersHorizontalIcon data-icon="inline-start" />Print settings<ChevronDownIcon data-icon="inline-end" className={cn("transition-transform", open && "rotate-180")} />
+      </Button>
+      <span data-slot="print-summary" className="text-sm text-muted-foreground">{printSummary(options)}</span>
+    </div>
+    <div id={id} className={cn("flex flex-wrap items-end gap-4", !open && "hidden")}>
       <Field className="w-40">
         <FieldLabel htmlFor="paper">Paper</FieldLabel>
         <Select value={options.paper} items={[{ value: "letter", label: "Letter" }, { value: "a4", label: "A4" }]} onValueChange={(v) => v && setOptions({ paper: v as "letter" | "a4" })}>
@@ -454,7 +470,8 @@ export function PrintSettings({ options, update, onCalibrate }: { options: Batch
         <Checkbox id="cut" checked={options.cutMarks} onCheckedChange={(c) => setOptions({ cutMarks: c === true })} />
         <FieldLabel htmlFor="cut">Cut lines</FieldLabel>
       </Field>
-      <Button type="button" variant="outline" className="ml-auto" onClick={onCalibrate}><RulerIcon data-icon="inline-start" />Printer check</Button>
+      <Button type="button" variant="outline" className="ml-auto" onClick={onCalibrate}><RulerIcon data-icon="inline-start" />Print check page</Button>
+    </div>
     </div>
   );
 }

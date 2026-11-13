@@ -128,7 +128,7 @@ const server: Backend = {
   },
   async fetchCalibration(paper) {
     const res = await fetch(`/api/calibration?paper=${paper}`);
-    if (!res.ok) throw new Error("Could not build the printer check page");
+    if (!res.ok) throw new Error("Couldn't make the check page");
     return new Uint8Array(await res.arrayBuffer());
   },
   async backup() {

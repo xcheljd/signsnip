@@ -207,7 +207,8 @@ export function SignEditor({
         </div>
         <SignFormButtons editing={editing} canSubmit={canSubmit} onCancel={onCancel} />
         <Button type="button" variant="outline" onClick={onSavePreset}>Save as preset</Button>
-        <span className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
+        {/* keyboard hints only where there is likely a keyboard: a fine pointer (not on an iPad or a phone) */}
+        <span data-slot="key-hints" className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground md:pointer-fine:flex">
           <Kbd>Enter</Kbd> {editing ? "update" : "add"}
           {editing && <><Kbd>Esc</Kbd> cancel</>}
           <Kbd>Ctrl+Z</Kbd> undo <Kbd>Ctrl+P</Kbd> print
