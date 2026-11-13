@@ -6,7 +6,7 @@ import { setImageOps } from "../../../src/core/images";
 import { checkSigns, expandCopies, renderCalibration, renderPdf, setFontSource } from "../../../src/core/pdf";
 import { repo, setRepo } from "../../../src/core/repo";
 import * as store from "../../../src/core/store";
-import { BatchSchema, RulesSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
+import { BatchSchema, PresetSchema, RulesSchema, SavedBatchSchema, TemplateSchema, type Brand, type Preset } from "../../../src/core/types";
 import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace, workspaceMeta } from "../../../src/core/workspace";
 import { exportBatchFile, importBatchFile, inspectBatchFile, parseBatchFile } from "../../../src/core/batch-file";
 import { toast } from "sonner";
@@ -90,6 +90,7 @@ export async function createBrowserBackend(): Promise<Backend> {
     },
     savePreset: (p) => run(() => { const { name, sign } = store.PresetInputSchema.parse(p); return store.upsertPreset(name, sign); }),
     removePreset: (id) => run(() => store.savePresets(store.listPresets().filter((x) => x.id !== id))),
+    restorePreset: (p, index) => run(() => store.restorePreset(PresetSchema.parse(p), index)),
     check: (items) => checkSigns(items),
     saveBatchAs: (name, batch) => run(() => store.saveNamedBatch(name, BatchSchema.parse(batch))),
     loadSaved: (id) => run(() => {
@@ -98,6 +99,7 @@ export async function createBrowserBackend(): Promise<Backend> {
       return b;
     }),
     deleteSaved: (id) => run(() => store.deleteSavedBatch(id)),
+    restoreSaved: (s) => run(() => store.restoreSavedBatch(SavedBatchSchema.parse(s))),
     saveRules: (x) => run(() => store.writeRules(RulesSchema.parse(x))),
     saveTemplate: (t) => run(() => store.saveTemplate(TemplateSchema.parse(t))),
     duplicateTemplate: (id, name) => run(() => store.duplicateTemplate(id, name)),

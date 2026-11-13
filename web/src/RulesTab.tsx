@@ -6,6 +6,7 @@ import { fitSign, resolveTemplate } from "../../src/core/template";
 import type { Abbreviation, Rules, Sign, Template } from "../../src/core/types";
 import * as api from "./api";
 import { browserMeasure, useSignFonts } from "./designer/measure";
+import { putBack, sameWord } from "./undoDelete";
 import { NumField } from "./NumField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,33 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+
+/** The Text rules tab while it is on screen: its draft is the newest copy of the rules then. */
+let live: { draft: () => Rules; change: (fn: (r: Rules) => Rules) => void } | null = null;
+
+/**
+ * Undo an abbreviation removal: put it back at its place. On screen, through the tab's draft (which
+ * autosaves); after the tab was left, through the stored rules. If the same word was added again
+ * since, nothing is put back and the toast says so (the newer one stays).
+ */
+async function undoRemove(a: Abbreviation, i: number, refresh: () => Promise<unknown>) {
+  const conflict = () => toast(`“${a.from}” was added again since, so the removed one wasn't put back`);
+  try {
+    if (live) {
+      if (!putBack(live.draft().abbreviations, i, a, sameWord)) return conflict();
+      live.change((r) => ({ ...r, abbreviations: putBack(r.abbreviations, i, a, sameWord) ?? r.abbreviations }));
+    } else {
+      const rules = (await api.getState()).rules;
+      const next = putBack(rules.abbreviations, i, a, sameWord);
+      if (!next) return conflict();
+      await api.saveRules({ ...rules, abbreviations: next });
+      await refresh();
+    }
+    toast(`“${a.from}” is back`);
+  } catch (e) {
+    toast.error(`Couldn't put “${a.from}” back: ${(e as Error).message}`);
+  }
+}
 
 /**
  * Store-wide text-fitting rules: the readable minimum and the abbreviation list, with a
@@ -34,6 +62,28 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
     return () => clearTimeout(t);
   }, [draft, refresh]);
   const change = (fn: (r: Rules) => Rules) => { dirtyRef.current = true; setDraft(fn); };
+
+  // leaving the tab within the 400 ms above would drop the last change: save it on the way out
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useEffect(() => {
+    live = { draft: () => draftRef.current, change };
+    return () => {
+      live = null;
+      if (dirtyRef.current) api.saveRules(draftRef.current).then(() => refreshRef.current(), (e: Error) => toast.error(e.message));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** One tap removes; the toast's Undo puts that abbreviation back in its place (and nothing else). */
+  const remove = (i: number) => {
+    const gone = draft.abbreviations[i];
+    if (!gone) return;
+    change((r) => ({ ...r, abbreviations: r.abbreviations.filter((_, j) => j !== i) }));
+    toast(`Removed “${gone.from}”`, { action: { label: "Undo", onClick: () => void undoRemove(gone, i, refresh) } });
+  };
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -122,7 +172,7 @@ export function RulesTab({ rules, templates, items, refresh }: { rules: Rules; t
                         <Input aria-label={`Short form of ${a.from}`} value={a.to} maxLength={40} placeholder="(removed)" onChange={(e) => setAbbr(i, { to: e.target.value })} />
                         <span className="text-xs">{n ? <Badge variant="secondary">used on {count(n, "sign")}</Badge> : <span className="text-muted-foreground">not needed</span>}</span>
                         <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${a.from}`}
-                          onClick={() => change((r) => ({ ...r, abbreviations: r.abbreviations.filter((_, j) => j !== i) }))}><Trash2Icon /></Button>
+                          onClick={() => remove(i)}><Trash2Icon /></Button>
                       </li>
                     );
                   })}

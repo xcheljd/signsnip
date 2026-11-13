@@ -9,13 +9,13 @@ import { checkSigns, expandCopies, renderCalibration, renderPdf } from "../core/
 import {
   MAX_ID, dataProblems, deleteBrand, deleteSavedBatch, getBrand, listBrands, listPresets, listSavedBatches, logoInfo,
   readBackground, saveBackground, readBatch, readLogo, removeLogoBackground, restoreLogo, saveLogo, saveNamedBatch, savePresets, upsertBrand, upsertPreset, PresetInputSchema, writeBatch,
-  readRules, writeRules,
+  readRules, writeRules, restorePreset, restoreSavedBatch,
   deleteTemplate, duplicateTemplate, exportTemplateSet, importTemplateSet, inspectTemplateSet, listTemplates, parseTemplateSet, resetTemplate, saveTemplate,
 } from "../core/store.js";
 import { seedSamples } from "../core/node.js";
 import { exportBatchFile, importBatchFile, inspectBatchFile, parseBatchFile } from "../core/batch-file.js";
 import { checkWorkspacePictures, exportWorkspace, parseWorkspace, restoreWorkspace, startFromScratch, startWithSamples, summarizeWorkspace } from "../core/workspace.js";
-import { BatchSchema, OptionsSchema, PaperSchema, RulesSchema, SignSchema, TemplateSchema } from "../core/types.js";
+import { BatchSchema, OptionsSchema, PaperSchema, PresetSchema, RulesSchema, SavedBatchSchema, SignSchema, TemplateSchema } from "../core/types.js";
 
 const app = new Hono();
 
@@ -151,6 +151,8 @@ app.get("/api/batches/:id", (c) => {
   return b ? c.json(b) : c.json({ error: "not found" }, 404);
 });
 app.delete("/api/batches/:id", (c) => { deleteSavedBatch(c.req.param("id")); return c.json({ ok: true }); });
+/** Undo a delete: the saved batch as it was (one saved under its name since is kept; see restoreSavedBatch) */
+app.post("/api/batches/restore", async (c) => c.json(restoreSavedBatch(SavedBatchSchema.parse(await c.req.json()))));
 
 app.put("/api/batch", async (c) => c.json(writeBatch(BatchSchema.parse(await c.req.json()))));
 
@@ -194,6 +196,11 @@ app.get("/api/backgrounds/:id", (c) => {
 app.post("/api/presets", async (c) => {
   const { name, sign } = PresetInputSchema.parse(await c.req.json());
   return c.json(upsertPreset(name, sign));
+});
+/** Undo a delete: the preset as it was, back at `index` (see restorePreset) */
+app.post("/api/presets/restore", async (c) => {
+  const { preset, index } = z.object({ preset: PresetSchema, index: z.number().int().min(0) }).parse(await c.req.json());
+  return c.json(restorePreset(preset, index));
 });
 app.delete("/api/presets/:id", (c) => { savePresets(listPresets().filter((x) => x.id !== c.req.param("id"))); return c.json({ ok: true }); });
 

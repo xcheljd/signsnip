@@ -1,10 +1,11 @@
 import { useRef } from "react";
-import { PencilRulerIcon, PlusIcon, SaveIcon, XIcon } from "lucide-react";
+import { PencilRulerIcon, PlusIcon, SaveIcon } from "lucide-react";
 import { resolveTemplate, usedFields, withTemplate } from "../../src/core/template";
 import type { Preset, Sign, Template } from "../../src/core/types";
 import type { BrandWithLogo } from "./api";
 import { ChoiceOrOwn } from "./ChoiceOrOwn";
 import { NumField } from "./NumField";
+import { PresetChips } from "./PresetChips";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -72,8 +73,9 @@ export function SignEditor({
 
   const submit = () => {
     onSubmit();
-    // ready for the next sign: jump back to the collection box
-    requestAnimationFrame(() => { collectionRef.current?.focus(); collectionRef.current?.select(); });
+    // after Add, ready for the next sign: jump back to the collection box. After Update the page
+    // goes back to the edited row instead (App), so focusing up here would scroll it away again.
+    if (!editing) requestAnimationFrame(() => { collectionRef.current?.focus(); collectionRef.current?.select(); });
   };
 
   return (
@@ -83,14 +85,8 @@ export function SignEditor({
           ? <CardTitle className="min-w-0 truncate" title={editTitle ?? undefined}>{editTitle ?? "Editing a sign"}</CardTitle>
           : <CardTitle>New sign</CardTitle>}
         {presets.length > 0 && (
-          <CardDescription className="flex flex-wrap items-center gap-2">
-            <span>Presets</span>
-            {presets.map((p) => (
-              <span key={p.id} className="inline-flex items-center">
-                <Button type="button" variant="secondary" size="sm" className="rounded-r-none" onClick={() => onPickPreset(p)}>{p.name}</Button>
-                <Button type="button" variant="secondary" size="icon-sm" className="rounded-l-none border-l" aria-label={`Delete preset ${p.name}`} onClick={() => onDeletePreset(p)}><XIcon /></Button>
-              </span>
-            ))}
+          <CardDescription>
+            <PresetChips presets={presets} onPick={onPickPreset} onDelete={onDeletePreset} />
           </CardDescription>
         )}
       </CardHeader>

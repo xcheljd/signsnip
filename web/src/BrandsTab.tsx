@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { ImageUpIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon, WandSparklesIcon } from "lucide-react";
+import { CheckIcon, ImageUpIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon, WandSparklesIcon } from "lucide-react";
 import { toast } from "sonner";
 import { fitLogo, maxLogoScale } from "../../src/core/layout";
 import type { Sign } from "../../src/core/types";
 import * as api from "./api";
+import { brandSaveDecision, type BrandFields } from "./brandEdit";
 import { logoVersion, logosKey } from "./logoVersion";
 import { usePdf } from "./App";
 import { PdfView } from "./PdfView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Slider } from "@/components/ui/slider";
@@ -51,24 +52,102 @@ export function BrandsTab({ brands, refresh, focusBrand }: { brands: api.BrandWi
         </CardContent>
       </Card>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-4">
-        {brands.map((b) => <BrandCard key={b.id} b={b} run={run} focused={focusBrand === b.id} />)}
+        {brands.map((b) => <BrandCard key={b.id} b={b} run={run} refresh={refresh} focused={focusBrand === b.id} />)}
       </div>
     </div>
   );
 }
 
-function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focused: boolean }) {
+type BrandField = "name" | "collections";
+
+/** The quiet confirmation next to a field that saved by itself (a live region, so screen readers hear it too). */
+function SavedNote({ show }: { show: boolean }) {
+  return (
+    <span role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
+      {show && <><CheckIcon aria-hidden className="size-3.5" />Saved</>}
+    </span>
+  );
+}
+
+function BrandCard({ b, run, refresh, focused }: { b: api.BrandWithLogo; run: Run; refresh: () => Promise<void>; focused: boolean }) {
+  const colsText = b.collections.join("\n");
   const [name, setName] = useState(b.name);
-  const [cols, setCols] = useState(b.collections.join("\n"));
+  const [cols, setCols] = useState(colsText);
   const [scale, setScale] = useState(b.logoScale);
   const [over, setOver] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** which fields just saved (the "Saved" note), and which failed and why */
+  const [saved, setSaved] = useState<{ fields: BrandField[]; at: number } | null>(null);
+  const [error, setError] = useState<{ fields: BrandField[]; message: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { setScale(b.logoScale); }, [b.logoScale]);
   useEffect(() => { if (focused) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [focused]);
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(null), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
+
+  // Name and Collections save by themselves: on blur, and when the tab or the page is left with an
+  // edit pending. `stored` is what the brand has, or what is already on its way there, so a blur and
+  // the flush on leaving never send the same edit twice. Saves run one after another (`queue`).
+  const stored = useRef<BrandFields>({ name: b.name, collections: b.collections });
+  const typed = useRef({ name, collections: cols });
+  typed.current = { name, collections: cols };
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const alive = useRef(true);
+  // follow the stored brand (after a save, or a change in another window) in each field without an edit of its own
+  useEffect(() => {
+    const prev = stored.current;
+    if (typed.current.name.trim() === prev.name.trim()) setName(b.name);
+    if (brandSaveDecision(prev, { name: prev.name, collections: typed.current.collections }).save === null) setCols(colsText);
+    stored.current = { name: b.name, collections: b.collections };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [b.name, colsText]);
+
+  /** how: "blur" (still on screen), "closing" (page hidden or closed: the save must outlive it), "gone" (the card unmounted) */
+  const commit = (how: "blur" | "closing" | "gone") => {
+    const d = brandSaveDecision(stored.current, typed.current);
+    const before = stored.current;
+    if (d.emptyName) {
+      if (how !== "gone") setName(before.name);
+      toast(`A brand needs a name, so it stays “${before.name}”`);
+    }
+    if (!d.save) return;
+    const next = d.save;
+    stored.current = next;
+    if (how !== "gone") setError(null);
+    queue.current = queue.current.then(async () => {
+      // the card went away because the brand was deleted: don't bring it back
+      if (how === "gone" && !(await api.getState()).brands.some((x) => x.id === b.id)) return;
+      await api.saveBrand({ id: b.id, name: next.name, collections: next.collections }, how === "closing");
+      if (alive.current) setSaved({ fields: d.changed, at: Date.now() });
+      await refresh().catch(() => {});
+    }).catch((e: Error) => {
+      // keep what was typed; the next blur tries again
+      if (stored.current === next) stored.current = before;
+      toast.error(`Couldn't save ${before.name}: ${e.message}`);
+      if (alive.current) setError({ fields: d.changed, message: e.message });
+    });
+  };
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  useEffect(() => {
+    alive.current = true;
+    const hide = () => { if (document.visibilityState === "hidden") commitRef.current("closing"); };
+    const leave = () => commitRef.current("closing");
+    document.addEventListener("visibilitychange", hide);
+    window.addEventListener("pagehide", leave);
+    return () => {
+      document.removeEventListener("visibilitychange", hide);
+      window.removeEventListener("pagehide", leave);
+      alive.current = false;
+      commitRef.current("gone"); // another tab was picked with an edit still in a field
+    };
+  }, []);
+  const failed = (f: BrandField) => (error?.fields.includes(f) ? error.message : null);
 
   const upload = (f?: File) => f && run(() => api.uploadLogo(b.id, f), "Logo updated");
-  const dirty = name !== b.name || cols !== b.collections.join("\n");
   const logo = b.logo;
   const maxScale = logo ? maxLogoScale(logo.aspect) : 1.6;
   const dpi = logo ? Math.round(logo.width / (fitLogo(logo.aspect, undefined, scale).w / 25.4)) : 0;
@@ -136,24 +215,36 @@ function BrandCard({ b, run, focused }: { b: api.BrandWithLogo; run: Run; focuse
                 onValueChange={(v) => setScale(Array.isArray(v) ? v[0]! : (v as number))}
                 onValueCommitted={(v) => {
                   const k = Math.round((Array.isArray(v) ? v[0]! : (v as number)) * 100) / 100;
-                  if (k !== b.logoScale) run(() => api.saveBrand({ id: b.id, name: b.name, logoScale: k }));
+                  // after any name save still on its way, and with that name (not the one on screen before it)
+                  if (k !== b.logoScale) queue.current = queue.current.then(() => run(() => api.saveBrand({ id: b.id, name: stored.current.name, logoScale: k })));
                 }} />
               <FieldDescription>Applies to every sign for this brand. Max {Math.round(maxScale * 100)}%: past that it would run into the text.</FieldDescription>
             </Field>
           )}
-          <Field>
-            <FieldLabel htmlFor={`n-${b.id}`}>Name</FieldLabel>
-            <Input id={`n-${b.id}`} value={name} onChange={(e) => setName(e.target.value)} />
+          <Field data-invalid={!!failed("name") || undefined}>
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabel htmlFor={`n-${b.id}`}>Name</FieldLabel>
+              <SavedNote show={!!saved?.fields.includes("name")} />
+            </div>
+            <Input id={`n-${b.id}`} value={name} aria-invalid={!!failed("name") || undefined} aria-describedby={failed("name") ? `n-${b.id}-error` : undefined}
+              onChange={(e) => setName(e.target.value)} onBlur={() => commit("blur")}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+            {failed("name") && <FieldError id={`n-${b.id}-error`}>Not saved: {failed("name")}</FieldError>}
           </Field>
-          <Field>
-            <FieldLabel htmlFor={`c-${b.id}`}>Collections</FieldLabel>
-            <Textarea id={`c-${b.id}`} rows={4} className="resize-none" value={cols} onChange={(e) => setCols(e.target.value)} />
-            <FieldDescription>One per line. These show up as suggestions when you type a collection.</FieldDescription>
+          <Field data-invalid={!!failed("collections") || undefined}>
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabel htmlFor={`c-${b.id}`}>Collections</FieldLabel>
+              <SavedNote show={!!saved?.fields.includes("collections")} />
+            </div>
+            <Textarea id={`c-${b.id}`} rows={4} className="resize-none" value={cols} aria-invalid={!!failed("collections") || undefined}
+              aria-describedby={failed("collections") ? `c-${b.id}-error` : undefined}
+              onChange={(e) => setCols(e.target.value)} onBlur={() => commit("blur")} />
+            {failed("collections") && <FieldError id={`c-${b.id}-error`}>Not saved: {failed("collections")}</FieldError>}
+            <FieldDescription>One per line. These show up as suggestions when you type a collection. Changes save by themselves.</FieldDescription>
           </Field>
         </FieldGroup>
       </CardContent>
       <CardFooter className="flex gap-2">
-        <Button disabled={!dirty} onClick={() => run(() => api.saveBrand({ id: b.id, name, collections: cols.split("\n").map((s) => s.trim()).filter(Boolean) }), "Saved")}>Save</Button>
         <Button variant="outline" className="text-destructive" onClick={() => setConfirmDelete(true)}><Trash2Icon data-icon="inline-start" />Delete</Button>
       </CardFooter>
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

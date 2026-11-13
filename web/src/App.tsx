@@ -152,13 +152,39 @@ function SignoApp() {
 
   const set = (patch: Partial<Sign>) => setDraft((d) => (d ? { ...d, ...patch } : d));
 
+  // After Update or Cancel the page goes back to the row that was edited (centred; no smooth
+  // scroll when the system asks for reduced motion). After Update the row is also highlighted
+  // (`flashRow`) for 1.5 s, counted from when the scroll arrives where the browser says so
+  // (scrollend), else from the Update. `n` makes every return a new value, so the same row can be returned to twice.
+  const [returnTo, setReturnTo] = useState<{ id: string; flash: boolean; n: number } | null>(null);
+  const [flashRow, setFlashRow] = useState<string | null>(null);
+  useEffect(() => {
+    if (!returnTo) return;
+    setFlashRow(returnTo.flash ? returnTo.id : null);
+    const row = document.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(returnTo.id)}"]`);
+    if (row) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      row.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      // keyboard users land on the row too (Tab goes on to its checkbox), without a second scroll;
+      // the row itself, not its Edit button, so no tooltip pops up over it
+      row.focus({ preventScroll: true });
+    }
+    if (!returnTo.flash) return;
+    const off = () => setFlashRow(null);
+    let t = setTimeout(off, 1500);
+    const arrived = () => { clearTimeout(t); t = setTimeout(off, 1500); };
+    window.addEventListener("scrollend", arrived, { once: true });
+    return () => { clearTimeout(t); window.removeEventListener("scrollend", arrived); };
+  }, [returnTo]);
+
   const submit = () => {
     if (!draft) return;
     if (editing) {
       if (update((b) => ({ ...b, items: b.items.map((i) => (i.id === editing ? { ...draft, id: editing } : i)) })) === false) return;
       setEditing(null); setDraft({ ...draft, id: uid() }); toast("Sign updated");
+      setReturnTo({ id: editing, flash: true, n: Date.now() });
     } else {
-      update((b) => ({ ...b, items: [...b.items, { ...draft, id: uid() }] }), { undo: "Added to batch" });
+      update((b) => ({ ...b, items: [...b.items, { ...draft, id: uid() }] }), { undo: `Added as row ${batch.items.length + 1}` });
     }
   };
   const edit = (i: number) => {
@@ -167,7 +193,29 @@ function SignoApp() {
     setTab("make"); setEditing(s.id); setDraft({ ...s });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const cancelEdit = () => { setEditing(null); setDraft((d) => (d ? { ...d, id: uid() } : d)); };
+  const cancelEdit = () => {
+    const id = editing;
+    setEditing(null); setDraft((d) => (d ? { ...d, id: uid() } : d));
+    if (id) setReturnTo({ id, flash: false, n: Date.now() });
+  };
+
+  /** One tap deletes a preset; the toast's Undo puts exactly that preset back in its place (nothing else changes). */
+  const deletePreset = async (p: Preset) => {
+    const index = presets.findIndex((x) => x.id === p.id);
+    try { await api.removePreset(p.id); await refresh(); } catch (e) { fail(e); return; }
+    toast(`Deleted preset “${p.name}”`, {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          try {
+            const back = await api.restorePreset(p, Math.max(0, index));
+            await refresh();
+            toast(back.renamed ? `A preset called “${p.name}” was made since, so the deleted one is back as “${back.name}”` : `Preset “${p.name}” is back`);
+          } catch (e) { toast.error(`Couldn't bring back preset “${p.name}”: ${(e as Error).message}`); }
+        },
+      },
+    });
+  };
 
   /** soft gate: if any sign would still print below the readable minimum, ask first */
   const gated = async (action: "print" | "download", force = false) => {
@@ -284,7 +332,7 @@ function SignoApp() {
             onSubmit={submit} onCancel={cancelEdit}
             onSavePreset={() => { setPresetName(`${draft.collection} ${draft.kind === "price" ? `$${draft.price}` : `${draft.percent}%`}`); setPresetDialog(true); }}
             onPickPreset={(p) => { setDraft({ ...p.sign, id: editing ?? uid(), copies: draft.copies }); }}
-            onDeletePreset={async (p) => { await api.removePreset(p.id); await refresh(); toast(`Deleted preset “${p.name}”`); }}
+            onDeletePreset={deletePreset}
           />
         )}
 
@@ -304,7 +352,7 @@ function SignoApp() {
 
         <BatchPanel
           batch={batch} update={update} undo={undo} canUndo={canUndo} brands={brands} saved={saved} warnings={warnings} templates={templates}
-          editingId={editing} selected={selected} setSelected={setSelected} onEdit={edit}
+          editingId={editing} flashId={flashRow} selected={selected} setSelected={setSelected} onEdit={edit}
           onPrint={() => print()} onExport={() => exportPdf()} onCalibrate={calibrate} onFixBg={fixBg}
           onGoToBrand={(id) => { setFocusBrand(id); setTab("brands"); }} refresh={refresh}
           onOpenTemplate={(row) => { setFocusTemplate((f) => ({ row, n: (f?.n ?? 0) + 1 })); setTab("templates"); }}

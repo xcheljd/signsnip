@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { MAX_PAGES, pageFill, sheetGeometry } from "../../src/core/geometry";
 import { money } from "../../src/core/layout";
 import { resolveTemplate, withKind, withTemplate } from "../../src/core/template";
-import type { Batch, Sign, Template, Warning } from "../../src/core/types";
+import type { Batch, SavedBatch, Sign, Template, Warning } from "../../src/core/types";
 import * as api from "./api";
 import { logoVersion } from "./logoVersion";
 import { OpenBatchFile, ShareBatchDialog } from "./BatchFile";
@@ -53,12 +53,13 @@ function IconButton({ label, children, ...props }: { label: string } & React.Com
 }
 
 export function BatchPanel({
-  batch, update, undo, canUndo, brands, saved, warnings, templates, editingId, selected, setSelected,
+  batch, update, undo, canUndo, brands, saved, warnings, templates, editingId, flashId, selected, setSelected,
   onEdit, onPrint, onExport, onCalibrate, onFixBg, onGoToBrand, onOpenTemplate, refresh, calibrated, setCalibrated,
 }: {
   batch: Batch; update: Update; undo: () => void; canUndo: boolean;
   brands: api.BrandWithLogo[]; saved: api.SavedSummary[]; warnings: Warning[]; templates: Template[];
-  editingId: string | null; selected: Set<string>; setSelected: (s: Set<string>) => void;
+  /** flashId: the row just updated, highlighted for a moment after the page returns to it */
+  editingId: string | null; flashId: string | null; selected: Set<string>; setSelected: (s: Set<string>) => void;
   onEdit: (i: number) => void; onPrint: () => void; onExport: () => void; onCalibrate: () => void;
   onFixBg: (brandId: string) => void; onGoToBrand: (brandId: string) => void; onOpenTemplate: (row: number) => void; refresh: () => Promise<unknown>;
   calibrated: boolean; setCalibrated: (v: boolean) => void;
@@ -220,9 +221,15 @@ export function BatchPanel({
                 {items.map((s, i) => (
                   <TableRow
                     key={s.id}
+                    data-row-id={s.id}
+                    data-flash={s.id === flashId || undefined}
+                    // focusable from script only: after Update/Cancel the page returns focus to the row
+                    tabIndex={-1}
                     data-state={s.id === editingId || selected.has(s.id) ? "selected" : undefined}
-                    className={cn("max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:items-center max-md:gap-x-2 max-md:gap-y-2 max-md:px-1 max-md:py-3",
-                      drag === i && "opacity-40", overRow === i && drag !== i && "border-t-2 border-t-primary")}
+                    className={cn("outline-none max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:items-center max-md:gap-x-2 max-md:gap-y-2 max-md:px-1 max-md:py-3",
+                      drag === i && "opacity-40", overRow === i && drag !== i && "border-t-2 border-t-primary",
+                      // just updated: a primary tint and ring (not teal: teal means selected)
+                      s.id === flashId && "bg-primary/10 ring-2 ring-primary ring-inset")}
                     onDragOver={(e) => { if (drag !== null) { e.preventDefault(); setOverRow(i); } }}
                     onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) update((b) => ({ ...b, items: moveItem(b.items, drag, i) })); setDrag(null); setOverRow(null); }}
                   >
@@ -399,6 +406,27 @@ function SavedBatches({ batch, saved, update, refresh }: { batch: Batch; saved: 
     if (!name.trim()) return;
     try { await api.saveBatchAs(name.trim(), batch); await refresh(); toast(`Saved “${name.trim()}”`); setCurrent(name.trim()); setName(""); } catch (e) { toast.error((e as Error).message); }
   };
+  /** One tap deletes; the toast's Undo writes back exactly what was deleted (see restoreSavedBatch for a name reused since). */
+  const remove = async (s: api.SavedSummary) => {
+    let full: SavedBatch;
+    try {
+      full = await api.loadSaved(s.id); // the whole thing, kept by the toast for Undo
+      await api.deleteSaved(s.id);
+      await refresh();
+    } catch (e) { toast.error((e as Error).message); return; }
+    toast(`Deleted “${s.name}”`, {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          try {
+            const back = await api.restoreSaved(full);
+            await refresh();
+            toast(back.renamed ? `A batch called “${full.name}” was saved since, so the deleted one is back as “${back.name}”` : `“${full.name}” is back`);
+          } catch (e) { toast.error(`Couldn't bring back “${full.name}”: ${(e as Error).message}`); }
+        },
+      },
+    });
+  };
   const load = async (s: api.SavedSummary) => {
     try {
       const full = await api.loadSaved(s.id);
@@ -431,7 +459,7 @@ function SavedBatches({ batch, saved, update, refresh }: { batch: Batch; saved: 
                     <span className="truncate text-sm font-medium">{s.name}</span>
                     <span className="text-xs text-muted-foreground">{count(s.signs, "sign")} · {new Date(s.savedAt).toLocaleDateString()}</span>
                   </button>
-                  <IconButton label={`Delete “${s.name}”`} onClick={async () => { await api.deleteSaved(s.id); await refresh(); toast(`Deleted “${s.name}”`); }}><Trash2Icon /></IconButton>
+                  <IconButton label={`Delete “${s.name}”`} onClick={() => remove(s)}><Trash2Icon /></IconButton>
                 </div>
               ))}
             </div>

@@ -23,8 +23,8 @@ export interface Backend {
   getState(): Promise<State>;
   /** `closing`: the page is being hidden or closed, so the save must outlive it */
   putBatch(b: Batch, closing?: boolean): Promise<Batch>;
-  /** `created`: false when a brand with this name already existed and was updated */
-  saveBrand(b: { id?: string; name: string; collections?: string[]; logoScale?: number }): Promise<Brand & { created: boolean }>;
+  /** `created`: false when a brand with this name already existed and was updated; `closing`: the page is being hidden or closed */
+  saveBrand(b: { id?: string; name: string; collections?: string[]; logoScale?: number }, closing?: boolean): Promise<Brand & { created: boolean }>;
   removeBrand(id: string): Promise<unknown>;
   uploadLogo(id: string, file: File): Promise<{ aspect: number }>;
   removeLogoBg(id: string): Promise<LogoInfo>;
@@ -36,10 +36,14 @@ export interface Backend {
   backgroundUrl(image: string): string;
   savePreset(p: { name: string; sign: Preset["sign"] }): Promise<Preset>;
   removePreset(id: string): Promise<unknown>;
+  /** undo a delete: the preset back at `index`; one made since under its name or id is kept and this one comes back renamed */
+  restorePreset(p: Preset, index: number): Promise<Preset & { renamed: boolean }>;
   check(items: Sign[]): Promise<Warning[]>;
   saveBatchAs(name: string, batch: Batch): Promise<SavedBatch>;
   loadSaved(id: string): Promise<SavedBatch>;
   deleteSaved(id: string): Promise<unknown>;
+  /** undo a delete: the saved batch as it was; one saved under its name since is kept and this one comes back renamed */
+  restoreSaved(s: SavedBatch): Promise<SavedBatch & { renamed: boolean }>;
   saveRules(r: Rules): Promise<Rules>;
   saveTemplate(t: Template): Promise<Template>;
   duplicateTemplate(id: string, name?: string): Promise<Template>;
@@ -88,7 +92,7 @@ const filename = (res: Response, fallback: string) => /filename="([^"]+)"/.exec(
 const server: Backend = {
   getState: () => fetch("/api/state", { cache: "no-store" }).then((r) => j<State>(r)),
   putBatch: (b, closing) => send("/api/batch", b, "PUT", closing).then((r) => j<Batch>(r)),
-  saveBrand: (b) => send("/api/brands", b).then((r) => j<Brand & { created: boolean }>(r)),
+  saveBrand: (b, closing) => send("/api/brands", b, "POST", closing).then((r) => j<Brand & { created: boolean }>(r)),
   removeBrand: (id) => send(`/api/brands/${id}`, undefined, "DELETE").then((r) => j(r)),
   uploadLogo: (id, file) => fetch(`/api/brands/${id}/logo`, { method: "POST", body: file }).then((r) => j<{ aspect: number }>(r)),
   removeLogoBg: (id) => send(`/api/brands/${id}/logo/remove-bg`).then((r) => j<LogoInfo>(r)),
@@ -98,10 +102,12 @@ const server: Backend = {
   backgroundUrl: (image) => `/api/backgrounds/${image}`,
   savePreset: (p) => send("/api/presets", p).then((r) => j<Preset>(r)),
   removePreset: (id) => send(`/api/presets/${id}`, undefined, "DELETE").then((r) => j(r)),
+  restorePreset: (p, index) => send("/api/presets/restore", { preset: p, index }).then((r) => j<Preset & { renamed: boolean }>(r)),
   check: (items) => send("/api/check", { items }).then((r) => j<Warning[]>(r)),
   saveBatchAs: (name, batch) => send("/api/batches", { name, batch }).then((r) => j<SavedBatch>(r)),
   loadSaved: (id) => fetch(`/api/batches/${id}`).then((r) => j<SavedBatch>(r)),
   deleteSaved: (id) => send(`/api/batches/${id}`, undefined, "DELETE").then((r) => j(r)),
+  restoreSaved: (s) => send("/api/batches/restore", s).then((r) => j<SavedBatch & { renamed: boolean }>(r)),
   saveRules: (r) => send("/api/rules", r, "PUT").then((res) => j<Rules>(res)),
   saveTemplate: (t) => send(`/api/templates/${t.id}`, t, "PUT").then((r) => j<Template>(r)),
   duplicateTemplate: (id, name) => send(`/api/templates/${id}/duplicate`, { name }).then((r) => j<Template>(r)),
@@ -151,7 +157,7 @@ const be = () => impl;
 
 export const getState = () => be().getState();
 export const putBatch = (b: Batch, closing?: boolean) => be().putBatch(b, closing);
-export const saveBrand: Backend["saveBrand"] = (b) => be().saveBrand(b);
+export const saveBrand: Backend["saveBrand"] = (b, closing) => be().saveBrand(b, closing);
 export const removeBrand = (id: string) => be().removeBrand(id);
 export const uploadLogo = (id: string, file: File) => be().uploadLogo(id, file);
 export const removeLogoBg = (id: string) => be().removeLogoBg(id);
@@ -161,10 +167,12 @@ export const uploadBackground = (file: File) => be().uploadBackground(file);
 export const backgroundUrl = (image: string) => be().backgroundUrl(image);
 export const savePreset = (p: { name: string; sign: Preset["sign"] }) => be().savePreset(p);
 export const removePreset = (id: string) => be().removePreset(id);
+export const restorePreset = (p: Preset, index: number) => be().restorePreset(p, index);
 export const check = (items: Sign[]) => be().check(items);
 export const saveBatchAs = (name: string, batch: Batch) => be().saveBatchAs(name, batch);
 export const loadSaved = (id: string) => be().loadSaved(id);
 export const deleteSaved = (id: string) => be().deleteSaved(id);
+export const restoreSaved = (s: SavedBatch) => be().restoreSaved(s);
 export const saveRules = (r: Rules) => be().saveRules(r);
 export const saveTemplate = (t: Template) => be().saveTemplate(t);
 export const duplicateTemplate = (id: string, name?: string) => be().duplicateTemplate(id, name);

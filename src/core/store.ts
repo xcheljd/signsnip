@@ -65,6 +65,21 @@ export function idForName(name: string, taken: { id: string; name: string }[], f
 }
 
 /**
+ * An id and name that nothing in `taken` has yet: "Friday sale", then "Friday sale (2)", "(3)"...
+ * (names cut to fit `max` with room for the suffix). Used when something comes back or comes in
+ * next to a thing that already owns its name or id, so neither is written over.
+ */
+export function freshName(name: string, taken: { id: string; name: string }[], fallback: string, max = 60): { id: string; name: string } {
+  const base = name.trim().slice(0, max).trim();
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? "" : ` (${n})`;
+    const candidate = `${base.slice(0, max - suffix.length).trim()}${suffix}`;
+    const id = idForName(candidate, taken, fallback);
+    if (!taken.some((t) => t.id === id)) return { id, name: candidate };
+  }
+}
+
+/**
  * Look something up by what a person typed (CSV cells): an exact id wins, then an exact
  * name; otherwise every name that contains it. Nothing typed matches nothing. Callers act only on a
  * single match, so a vague name can never pick (or delete) the wrong thing.
@@ -248,6 +263,19 @@ export function upsertPreset(name: string, sign: Preset["sign"]): Preset & { cre
   savePresets([...all.filter((x) => x.id !== id), preset]);
   return { ...preset, created: !all.some((x) => x.id === id) };
 }
+/**
+ * Undo a preset delete: put it back exactly (same id, name and sign) at `index` in the list.
+ * A preset made since under the same id or name is never replaced: the old one comes back
+ * next to it as "<name> (2)" (`renamed`). Nothing else in the list changes.
+ */
+export function restorePreset(p: Preset, index: number): Preset & { renamed: boolean } {
+  const all = listPresets();
+  const renamed = all.some((x) => x.id === p.id || sameName(x.name, p.name));
+  const back = PresetSchema.parse(renamed ? { ...p, ...freshName(p.name, all, "preset") } : p);
+  const at = Math.max(0, Math.min(Math.floor(index), all.length));
+  savePresets([...all.slice(0, at), back, ...all.slice(at)]);
+  return { ...back, renamed };
+}
 
 // ---------- batch (shared by every window on the local server)
 export const readBatch = (): Batch => readJson("batch", BatchSchema, { items: [], options: DEFAULT_OPTIONS });
@@ -287,6 +315,20 @@ export function saveNamedBatch(name: string, batch: Batch = readBatch()): SavedB
   return { ...saved, replaced };
 }
 export function deleteSavedBatch(id: string): void { repo().remove(`batches/${id}`); }
+/**
+ * Undo a saved-batch delete: write it back exactly (same id, name, savedAt and batch). If a batch
+ * was saved under its name or id since (or a damaged file still owns the id), that one is kept and
+ * the deleted one comes back as "<name> (2)" with its own id (`renamed`): nothing is written over.
+ */
+export function restoreSavedBatch(s: SavedBatch): SavedBatch & { renamed: boolean } {
+  const saved = listSavedBatches();
+  // a saved batch that can't be read still owns its id
+  const taken = [...saved, ...repo().list("batches/").filter((id) => !saved.some((x) => x.id === id)).map((id) => ({ id, name: "" }))];
+  const renamed = taken.some((t) => t.id === s.id || sameName(t.name, s.name));
+  const back = SavedBatchSchema.parse(renamed ? { ...s, ...freshName(s.name, taken, "batch") } : s);
+  writeJson(`batches/${back.id}`, back);
+  return { ...back, renamed };
+}
 
 // ---------- templates
 /** All templates. Built-ins are always present (restored from defaults if missing). */
