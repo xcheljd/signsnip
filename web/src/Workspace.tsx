@@ -8,6 +8,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 
 const describe = (s: api.BackupSummary) => describeSummary(s);
 
@@ -57,7 +59,7 @@ export function StartChoices({ replacing, onDone, only }: { replacing: boolean; 
           </AlertDescription>
         </Alert>
       )}
-      <div className={`grid gap-4 ${only?.length === 1 ? "" : only?.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+      <div className={cn("grid gap-4", only?.length === 1 ? "" : only?.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3")}>
         {show("scratch") && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><FilePlus2Icon className="size-4 text-primary" />Start from scratch</CardTitle>
@@ -117,9 +119,9 @@ export function HowSavingWorks({ compact = false }: { compact?: boolean }) {
       <p className="flex items-start gap-2">
         <DownloadIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <span>
-          <strong className={strong}>Download a backup to pick up where you left off</strong>: <strong className={`${strong} whitespace-nowrap`}>Back up</strong> (top of the app) saves
+          <strong className={strong}>Download a backup to pick up where you left off</strong>: <strong className={cn(strong, "whitespace-nowrap")}>Back up</strong> (top of the app) saves
           your brands, logos, templates, text rules, presets and batches to your computer.
-          Next time, choose <strong className={`${strong} whitespace-nowrap`}>Continue your work</strong> here, or <strong className={`${strong} whitespace-nowrap`}>Restore backup</strong> inside the app, and pick that file.
+          Next time, choose <strong className={cn(strong, "whitespace-nowrap")}>Continue your work</strong> here, or <strong className={cn(strong, "whitespace-nowrap")}>Restore backup</strong> inside the app, and pick that file.
         </span>
       </p>
       <div className="flex items-start gap-2">
@@ -162,7 +164,7 @@ export function SavingStatusBar() {
     <div className="border-b bg-card">{/* opaque base: the tint below is translucent, and this bar is sticky */}
     {/* the words wrap inside their own column, so the two buttons stay beside them (one bar row) until
         that column would be narrower than 15rem; a phone puts the buttons on a second line */}
-    <div role="status" className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1 text-sm sm:px-6 ${unsaved ? "bg-warning-surface/15 dark:bg-warning-surface/10" : "bg-muted/50"}`}>
+    <div role="status" className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1 text-sm sm:px-6", unsaved ? "bg-warning-surface/15 dark:bg-warning-surface/10" : "bg-muted/50")}>
       {unsaved ? <CircleAlertIcon aria-hidden className="size-4 shrink-0 text-warning" /> : <CircleCheckIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
       <span className="min-w-0 flex-1 basis-60 text-foreground">
         <strong className="font-semibold">This site doesn't save your work.</strong>{" "}
@@ -319,7 +321,7 @@ function RestoreBackup({ onDone, onCancel }: { onDone: () => void; onCancel: () 
             <Button type="button" variant="destructive" disabled={!!busy} onClick={restore}>{busy === "restoring" ? "Restoring…" : "Replace everything with this backup"}</Button>
           </>
         ) : (
-          <Button type="button" disabled={!!busy} onClick={choose}>{busy === "reading" ? "Reading…" : error ? "Choose another file" : "Choose backup file…"}</Button>
+          <Button type="button" disabled={!!busy} onClick={choose}>{busy === "reading" ? <><Spinner data-icon="inline-start" />Reading…</> : error ? "Choose another file" : "Choose backup file…"}</Button>
         )}
       </DialogFooter>
     </>

@@ -251,7 +251,7 @@ export function SignCanvas({
 /** Small static picture of a template (for lists and pickers). */
 export function TemplateThumb({ template, sign, logo, width = 56 }: { template: Template; sign: Sign; logo?: LogoSource | null; width?: number }) {
   return (
-    <div className="overflow-hidden rounded-sm border bg-white" style={{ width, height: (width * SIGN_H_MM) / SIGN_W_MM }}>
+    <div className="overflow-hidden rounded-sm border bg-paper" style={{ width, height: (width * SIGN_H_MM) / SIGN_W_MM }}>
       <svg viewBox={`0 0 ${SIGN_W_MM} ${SIGN_H_MM}`} width={width} height={(width * SIGN_H_MM) / SIGN_W_MM} aria-hidden>
         <ThumbBody template={template} sign={sign} logo={logo} />
       </svg>

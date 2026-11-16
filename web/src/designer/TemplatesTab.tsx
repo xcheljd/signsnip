@@ -26,7 +26,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
-import { Label } from "@/components/ui/label";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -367,15 +367,19 @@ export function TemplatesTab({
           </CardHeader>
           <CardContent ref={listRef} className="flex min-h-0 flex-col gap-1 overflow-y-auto py-0.5">
             {templates.map((t) => (
-              <button key={t.id} type="button" onClick={() => requestOpen(t.id)} data-template={t.id} title={nameOf(t)}
-                className={cn("flex shrink-0 items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50", t.id === currentId && "bg-accent text-accent-foreground hover:bg-accent")}>
-                {fontsReady ? <TemplateThumb template={t.id === currentId ? draft : t} sign={sampleSign(t, brand, false)} logo={logoSource(brand)} width={38} /> : <Skeleton className="h-14 w-[38px]" />}
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span data-template-name className="line-clamp-2 text-sm font-medium break-words">{nameOf(t)}</span>
-                  <span className={cn("text-xs", t.id === currentId ? "text-accent-foreground" : "text-muted-foreground")}>{kindLine(t)}</span>
-                </span>
-                {t.id === currentId && dirty && <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="unsaved changes" />}
-              </button>
+              // border-0 and p-2: the row keeps the box the plain button had (Item's transparent border would add 2 px per row)
+              <Item key={t.id} render={<button type="button" />} onClick={() => requestOpen(t.id)} data-template={t.id} title={nameOf(t)}
+                className={cn("shrink-0 gap-3 border-0 p-2 text-left hover:bg-muted", t.id === currentId && "bg-accent text-accent-foreground hover:bg-accent")}>
+                {/* the thumbnail stays centred beside the name (ItemMedia otherwise drops 2 px and to the top beside a description) */}
+                <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
+                  {fontsReady ? <TemplateThumb template={t.id === currentId ? draft : t} sign={sampleSign(t, brand, false)} logo={logoSource(brand)} width={38} /> : <Skeleton className="h-14 w-[38px]" />}
+                </ItemMedia>
+                <ItemContent className="min-w-0 gap-0">
+                  <ItemTitle data-template-name className="line-clamp-2 w-full leading-5 break-words">{nameOf(t)}</ItemTitle>
+                  <ItemDescription className={cn("text-xs leading-4", t.id === currentId && "text-accent-foreground")}>{kindLine(t)}</ItemDescription>
+                </ItemContent>
+                {t.id === currentId && dirty && <ItemActions><span className="size-2 shrink-0 rounded-full bg-primary" aria-label="unsaved changes" /></ItemActions>}
+              </Item>
             ))}
           </CardContent>
           <CardFooter className="flex flex-wrap gap-2">{listActions}</CardFooter>
@@ -386,7 +390,9 @@ export function TemplatesTab({
       <div ref={column} className="flex min-w-0 flex-col gap-4">
       {!wide && (
         <div className="flex flex-wrap items-center gap-2" data-template-bar>
-          <Label htmlFor="template-picker" className="text-sm text-muted-foreground">Template</Label>
+          {/* contents: the label and the picker stay items of this wrapping row, so they wrap and share the room as before */}
+          <Field orientation="horizontal" className="contents *:data-[slot=field-label]:flex-none">
+          <FieldLabel htmlFor="template-picker" className="text-sm text-muted-foreground">Template</FieldLabel>
           <Select value={currentId} items={templates.map((t) => ({ value: t.id, label: nameOf(t) }))} onValueChange={(v) => v && requestOpen(v as string)}>
             <SelectTrigger id="template-picker" data-template-picker title={draft.name || "Untitled"} className="min-w-0 flex-1 basis-56 bg-card"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -405,6 +411,7 @@ export function TemplatesTab({
               </SelectGroup>
             </SelectContent>
           </Select>
+          </Field>
           <div className="flex flex-wrap gap-2">{listActions}</div>
         </div>
       )}
@@ -494,11 +501,13 @@ export function TemplatesTab({
 
           {/* under the canvas, so the whole sign fits on short screens */}
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2">
-            <Label htmlFor="sample-brand" className="text-sm text-muted-foreground">Preview with</Label>
+            <Field orientation="horizontal" className="contents *:data-[slot=field-label]:flex-none">
+            <FieldLabel htmlFor="sample-brand" className="text-sm text-muted-foreground">Preview with</FieldLabel>
             <Select value={brand?.id ?? ""} items={brands.map((b) => ({ value: b.id, label: b.name }))} onValueChange={(v) => v && setBrandId(v)}>
               <SelectTrigger id="sample-brand" className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent><SelectGroup>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectGroup></SelectContent>
             </Select>
+            </Field>
             <Toggle variant="outline" pressed={long && !row} onPressedChange={(v) => { setLong(v); setPreviewRow(null); }}>Test a long name</Toggle>
             {row && (
               <span className="flex items-center gap-2 text-sm">
@@ -516,9 +525,11 @@ export function TemplatesTab({
             <ul className="flex flex-col gap-1 text-sm">
               {issues.filter((i) => i.level !== "info").map((i, k) => (
                 <li key={k}>
-                  <button type="button" className={cn("flex items-start gap-2 text-left", i.level === "error" ? "text-destructive" : "text-foreground")} onClick={() => i.objectId && setSelected(i.objectId)}>
-                    <TriangleAlertIcon className={cn("mt-0.5 size-4 shrink-0", i.level === "warn" && "text-warning")} />{i.message}
-                  </button>
+                  {/* border-0 p-0 w-fit: a line of text as wide as its words, as before (Item's border and padding would move every line) */}
+                  <Item render={<button type="button" />} className={cn("w-fit items-start gap-2 border-0 p-0 text-left", i.level === "error" ? "text-destructive" : "text-foreground")} onClick={() => i.objectId && setSelected(i.objectId)}>
+                    <ItemMedia variant="icon" className="mt-0.5"><TriangleAlertIcon className={cn(i.level === "warn" && "text-warning")} /></ItemMedia>
+                    <ItemContent>{i.message}</ItemContent>
+                  </Item>
                 </li>
               ))}
             </ul>

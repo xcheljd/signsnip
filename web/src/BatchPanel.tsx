@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
@@ -85,7 +86,6 @@ export function BatchPanel({
   const [overRow, setOverRow] = useState<number | null>(null);
   /** the bulk bar's "More" (Brand, Template): stays as it was left while this tab is open */
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreId = useId();
 
   const patchSelected = (patch: Partial<Sign>, label: string) =>
     update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...s, ...patch } : s)) }), { undo: `${label} on ${count(sel.length, "row")}` });
@@ -153,10 +153,13 @@ export function BatchPanel({
                 <BulkNumber label="Percent" className="w-28 pointer-coarse:w-36" after="%" emptyStart={50} min={1} max={99} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "percent", templates), percent: n } : s)) }), { undo: `Set ${n}% off on ${count(sel.length, "row")}` })} />
                 <BulkNumber label="Price" className="w-44 pointer-coarse:w-48" before="$" decimals={2} emptyStart={100} min={0.01} max={999999} onApply={(n) => update((b) => ({ ...b, items: b.items.map((s) => (selected.has(s.id) ? { ...withKind(s, "price", templates), price: n } : s)) }), { undo: `Set price ${money(n)} on ${count(sel.length, "row")}` })} />
                 <BulkNumber label="Copies" className="w-28 pointer-coarse:w-36" emptyStart={1} min={1} max={200} onApply={(n) => patchSelected({ copies: n }, `Set ${n} copies`)} />
-                <Button type="button" variant="ghost" aria-expanded={moreOpen} aria-controls={moreId} onClick={() => setMoreOpen((o) => !o)}>
+                {/* contents: the trigger and the opened fields stay items of this bar, as before; keepMounted: the closed
+                    fields stay in the page, hidden, as they did */}
+                <Collapsible open={moreOpen} onOpenChange={setMoreOpen} className="contents">
+                <CollapsibleTrigger render={<Button type="button" variant="ghost" />}>
                   More<ChevronDownIcon data-icon="inline-end" className={cn("transition-transform", moreOpen && "rotate-180")} />
-                </Button>
-                <div id={moreId} className={cn("contents", !moreOpen && "hidden")}>
+                </CollapsibleTrigger>
+                <CollapsibleContent keepMounted className="contents">
                 <Field orientation="horizontal" className="w-auto gap-1">
                   <FieldLabel htmlFor="bulk-brand">Brand</FieldLabel>
                   <Select items={brands.map((b) => ({ value: b.id, label: b.name }))} value={null as unknown as string}
@@ -178,7 +181,8 @@ export function BatchPanel({
                     <SelectContent><SelectGroup>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
                 </Field>
-                </div>
+                </CollapsibleContent>
+                </Collapsible>
                 <div className="ml-auto flex gap-1.5">
                   <Button type="button" variant="outline" onClick={() => update((b) => ({ ...b, items: b.items.flatMap((s) => (selected.has(s.id) ? [s, { ...s, id: uid() }] : [s])) }), { undo: `Duplicated ${count(sel.length, "row")}` })}>
                     <CopyIcon data-icon="inline-start" />Duplicate
@@ -324,7 +328,7 @@ export function useHeaderHeight() {
 /** A batch row's logo thumbnail, or a same-size "no logo" box when the brand has none or was deleted (nothing is requested then). */
 export function RowLogo({ brand, className = "h-5 w-12" }: { brand: api.BrandWithLogo | undefined; className?: string }) {
   const t = logoThumb(brand);
-  if (t) return <img className={cn("shrink-0 rounded-sm bg-white object-contain px-0.5", className)} src={api.logoUrl(t.id, t.version)} alt="" />;
+  if (t) return <img className={cn("shrink-0 rounded-sm bg-paper object-contain px-0.5", className)} src={api.logoUrl(t.id, t.version)} alt="" />;
   return (
     <span data-slot="logo-placeholder" title="No logo" aria-hidden
       className={cn("flex shrink-0 items-center justify-center rounded-sm border border-dashed text-muted-foreground", className)}>
@@ -441,16 +445,16 @@ export function PrintSettings({ options, update, onCalibrate, open, setOpen }: {
   options: Batch["options"]; update: Update; onCalibrate: () => void; open: boolean; setOpen: (open: boolean) => void;
 }) {
   const setOptions = (patch: Partial<Batch["options"]>) => update((b) => ({ ...b, options: { ...b.options, ...patch } }));
-  const id = useId();
   return (
-    <div className="flex flex-col gap-3">
+    // controlled: App keeps `open` (and remembers it); keepMounted: the closed settings stay in the page, hidden, as they did
+    <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col gap-3">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <Button type="button" variant="outline" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+      <CollapsibleTrigger render={<Button type="button" variant="outline" />}>
         <SlidersHorizontalIcon data-icon="inline-start" />Print settings<ChevronDownIcon data-icon="inline-end" className={cn("transition-transform", open && "rotate-180")} />
-      </Button>
+      </CollapsibleTrigger>
       <span data-slot="print-summary" className="text-sm text-muted-foreground">{printSummary(options)}</span>
     </div>
-    <div id={id} className={cn("flex flex-wrap items-end gap-4", !open && "hidden")}>
+    <CollapsibleContent keepMounted className="flex flex-wrap items-end gap-4">
       <Field className="w-40">
         <FieldLabel htmlFor="paper">Paper</FieldLabel>
         <Select value={options.paper} items={[{ value: "letter", label: "Letter" }, { value: "a4", label: "A4" }]} onValueChange={(v) => v && setOptions({ paper: v as "letter" | "a4" })}>
@@ -471,8 +475,8 @@ export function PrintSettings({ options, update, onCalibrate, open, setOpen }: {
         <FieldLabel htmlFor="cut">Cut lines</FieldLabel>
       </Field>
       <Button type="button" variant="outline" className="ml-auto" onClick={onCalibrate}><RulerIcon data-icon="inline-start" />Print check page</Button>
-    </div>
-    </div>
+    </CollapsibleContent>
+    </Collapsible>
   );
 }
 

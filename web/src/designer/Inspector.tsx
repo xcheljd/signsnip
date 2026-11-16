@@ -12,6 +12,7 @@ import { NumField } from "../NumField";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Item, ItemActions, ItemContent, ItemMedia } from "@/components/ui/item";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
@@ -253,7 +254,7 @@ function BackgroundFields({ t, set }: { t: Template; set: (p: Partial<Template>)
       ) : (
         <>
           <div className="flex items-start gap-3">
-            <svg viewBox={`0 0 ${SIGN_W_MM} ${SIGN_H_MM}`} className="h-20 shrink-0 rounded-sm border bg-white" aria-label="Background preview" role="img">
+            <svg viewBox={`0 0 ${SIGN_W_MM} ${SIGN_H_MM}`} className="h-20 shrink-0 rounded-sm border bg-paper" aria-label="Background preview" role="img">
               <clipPath id="bg-inspector-clip"><rect width={SIGN_W_MM} height={SIGN_H_MM} /></clipPath>
               <image href={api.backgroundUrl(bg.image)} x={r.x} y={r.y} width={r.w} height={r.h} preserveAspectRatio="none" opacity={bg.opacity} clipPath="url(#bg-inspector-clip)" />
             </svg>
@@ -337,12 +338,12 @@ export function TemplateInspector({
       <Section title="Objects">
         <div className="flex flex-col gap-1">
           {objects.map((o) => (
-            <button key={o.id} type="button" onClick={() => onPick(o.id)}
-              className="flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
-              {o.type === "logo" ? <ImageIcon className="size-4 text-muted-foreground" /> : <TypeIcon className="size-4 text-muted-foreground" />}
-              <span className="min-w-0 flex-1 truncate">{objectLabel(o)}</span>
-              {o.type === "text" && <span className="text-xs tabular-nums text-muted-foreground">{o.size}pt</span>}
-            </button>
+            // border-0 h-8 px-2 py-0: the 32 px row the plain button was (44 px on touch, from styles.css)
+            <Item key={o.id} render={<button type="button" />} onClick={() => onPick(o.id)} className="h-8 gap-2 rounded-md border-0 px-2 py-0 text-left hover:bg-muted">
+              <ItemMedia variant="icon">{o.type === "logo" ? <ImageIcon className="text-muted-foreground" /> : <TypeIcon className="text-muted-foreground" />}</ItemMedia>
+              <ItemContent className="min-w-0"><span className="truncate">{objectLabel(o)}</span></ItemContent>
+              {o.type === "text" && <ItemActions><span className="text-xs tabular-nums text-muted-foreground">{o.size}pt</span></ItemActions>}
+            </Item>
           ))}
         </div>
         <FieldDescription><MoveVerticalIcon className="inline size-3" /> Click an object on the sign, or here, to edit it.</FieldDescription>

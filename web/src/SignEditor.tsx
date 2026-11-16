@@ -9,7 +9,6 @@ import { PresetChips } from "./PresetChips";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
@@ -201,10 +200,11 @@ export function SignEditor({
         </form>
       </CardContent>
       <CardFooter className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="copies">Copies</Label>
+        <Field orientation="horizontal" className="w-auto">
+          {/* leading-none: the box the plain Label had (FieldLabel's own line height makes it 5 px taller) */}
+          <FieldLabel htmlFor="copies" className="leading-none">Copies</FieldLabel>
           <NumField id="copies" form="sign-form" stepper="copies" stepWords={["Fewer", "More"]} className="w-40" value={draft.copies} min={1} max={200} onChange={(n) => n && set({ copies: n })} />
-        </div>
+        </Field>
         <SignFormButtons editing={editing} canSubmit={canSubmit} onCancel={onCancel} />
         <Button type="button" variant="outline" onClick={onSavePreset}>Save as preset</Button>
         {/* keyboard hints only where there is likely a keyboard: a fine pointer (not on an iPad or a phone) */}

@@ -4,6 +4,7 @@ import { count } from "../../src/core/words";
 import type { Preset } from "../../src/core/types";
 import { chipsThatFit } from "./chipRows";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 /** One preset: its name (picks it) and an X (deletes it; the toast can undo). Long names truncate, the full name is the title. */
 function Chip({ p, onPick, onDelete }: { p: Preset; onPick?: (p: Preset) => void; onDelete?: (p: Preset) => void }) {
@@ -53,15 +54,22 @@ export function PresetChips({ presets, onPick, onDelete }: { presets: Preset[]; 
   }, [presets, moreText]);
 
   const capped = fit < presets.length;
-  const shown = expanded || !capped ? presets : presets.slice(0, fit);
+  // the chips that always show sit in the row; the rest are the panel, which is `contents` so its chips
+  // flow on in the same flex-wrap row (the two-row measuring copy below is not part of it)
+  const always = capped ? presets.slice(0, fit) : presets;
   return (
-    <div ref={row} className="relative flex flex-wrap items-center gap-2" data-slot="preset-chips">
+    <Collapsible open={expanded} onOpenChange={setExpanded} ref={row} className="relative flex flex-wrap items-center gap-2" data-slot="preset-chips">
       <span>Presets</span>
-      {shown.map((p) => <Chip key={p.id} p={p} onPick={onPick} onDelete={onDelete} />)}
+      {always.map((p) => <Chip key={p.id} p={p} onPick={onPick} onDelete={onDelete} />)}
       {capped && (
-        <Button type="button" variant="link" size="sm" aria-expanded={expanded} onClick={() => setExpanded((x) => !x)}>
-          {expanded ? "Show fewer" : moreText}
-        </Button>
+        <>
+          <CollapsibleContent className="contents">
+            {presets.slice(fit).map((p) => <Chip key={p.id} p={p} onPick={onPick} onDelete={onDelete} />)}
+          </CollapsibleContent>
+          <CollapsibleTrigger render={<Button type="button" variant="link" size="sm" />}>
+            {expanded ? "Show fewer" : moreText}
+          </CollapsibleTrigger>
+        </>
       )}
       {/* the measuring copy: lays out like the row above, never seen, never focused */}
       <div ref={measure} aria-hidden inert className="invisible absolute inset-x-0 top-0 flex h-0 flex-wrap items-center gap-2 overflow-hidden">
@@ -69,6 +77,6 @@ export function PresetChips({ presets, onPick, onDelete }: { presets: Preset[]; 
         {presets.map((p) => <Chip key={p.id} p={p} />)}
         <Button type="button" variant="link" size="sm" tabIndex={-1}>{moreText}</Button>
       </div>
-    </div>
+    </Collapsible>
   );
 }

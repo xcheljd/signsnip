@@ -1,5 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { CheckIcon, ChevronDownIcon, ImageUpIcon, PlusIcon, RotateCcwIcon, SearchIcon, Trash2Icon, TriangleAlertIcon, WandSparklesIcon } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CheckIcon, ImageUpIcon, PlusIcon, RotateCcwIcon, SearchIcon, Trash2Icon, TriangleAlertIcon, WandSparklesIcon } from "lucide-react";
 import { toast } from "sonner";
 import { fitLogo, maxLogoScale } from "../../src/core/layout";
 import type { Sign } from "../../src/core/types";
@@ -11,6 +11,7 @@ import { logoVersion, logosKey } from "./logoVersion";
 import { usePdf } from "./App";
 import { RowLogo, useHeaderHeight } from "./BatchPanel";
 import { PdfView } from "./PdfView";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,7 +142,9 @@ export function BrandsTab({ brands, refresh, focusBrand, onFocused }: {
         </Empty>
       )}
 
-      <ul className="flex flex-col gap-2" aria-label="Brands">
+      {/* Controlled: a tap only asks (each row's onOpenChange); `go` saves the open editor first and then
+          decides which one is open (nextOpen), and the accordion shows exactly that. */}
+      <Accordion value={open ? [open] : []} render={<ul />} aria-label="Brands" className="gap-2">
         {shown.map((b) => (
           <BrandRow key={b.id} b={b} open={open === b.id} landed={landed === b.id} scrollMargin={headerH + 12} onTap={() => void go(tapTarget(open, b.id))}>
             {open === b.id && (
@@ -150,22 +153,26 @@ export function BrandsTab({ brands, refresh, focusBrand, onFocused }: {
             )}
           </BrandRow>
         ))}
-      </ul>
+      </Accordion>
     </div>
   );
 }
 
-/** One brand in the list: a row that opens and closes its editor (the editor sits right under it). */
+/**
+ * One brand in the list: an accordion item whose trigger is the row and whose panel holds the editor.
+ * A tap calls `onTap` (the list decides; the accordion is controlled). The trigger keeps the row's
+ * old look: no border, underline, bold or transition of its own; the panel opens at once (no height
+ * animation, so rows land where they did) and adds no padding of its own.
+ */
 function BrandRow({ b, open, landed, scrollMargin, onTap, children }: {
   b: api.BrandWithLogo; open: boolean; landed: boolean; scrollMargin: number; onTap: () => void; children: React.ReactNode;
 }) {
-  const panel = useId();
   const problems = brandProblems(b);
   return (
-    <li data-brand-row={b.id} style={{ scrollMarginTop: scrollMargin }}>
+    <AccordionItem value={b.id} render={<li />} data-brand-row={b.id} style={{ scrollMarginTop: scrollMargin }} onOpenChange={onTap} className="not-last:border-b-0">
       <Card className={cn("gap-0 py-0", landed && "ring-3 ring-primary")}>
-        <button type="button" aria-expanded={open} aria-controls={open ? panel : undefined} onClick={onTap}
-          className={cn("flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50", open && "rounded-b-none border-b")}>
+        <AccordionTrigger
+          className={cn("items-center gap-3 rounded-xl border-0 px-4 py-2.5 font-normal transition-none hover:bg-muted/50 hover:no-underline", open && "rounded-b-none border-b border-border")}>
           <RowLogo brand={b} className="h-8 w-20" />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span data-slot="brand-name" className="line-clamp-2 font-medium wrap-break-word" title={b.name}>{b.name}</span>
@@ -174,11 +181,13 @@ function BrandRow({ b, open, landed, scrollMargin, onTap, children }: {
               {problems.map((p) => <Badge key={p} variant="destructive">{p}</Badge>)}
             </span>
           </span>
-          <ChevronDownIcon aria-hidden className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-        </button>
-        {open && <div id={panel}>{children}</div>}
+        </AccordionTrigger>
+        {/* keepMounted={false}: a closed row keeps no editor. The editor itself is mounted by the list only while its
+            row is open (`children`), and `go` has saved it before the row closes; its unmount still saves anything left
+            in a field (the search hiding it, another tab). */}
+        <AccordionContent keepMounted={false} style={{ animation: "none" }} className="pb-0 [&_p:not(:last-child)]:mb-0">{children}</AccordionContent>
       </Card>
-    </li>
+    </AccordionItem>
   );
 }
 
@@ -330,7 +339,7 @@ function BrandEditor({ b, run, refresh, handle, onHeld, onDeleted }: {
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files[0]); }}
           >
-            {logo ? <img className="max-h-16 max-w-full rounded-sm bg-white object-contain p-1" src={api.logoUrl(b.id, logoVersion(b))} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
+            {logo ? <img className="max-h-16 max-w-full rounded-sm bg-paper object-contain p-1" src={api.logoUrl(b.id, logoVersion(b))} alt={`${b.name} logo`} /> : <ImageUpIcon className="size-6" />}
             <span>{logo ? "Drop a new logo to replace" : "Drop a logo here or click to choose"}</span>
             <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; upload(f); }} />
           </label>

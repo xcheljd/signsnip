@@ -130,10 +130,10 @@ export function PdfView({
         <Skeleton className="bg-background" style={{ width, height: width / aspect }} />
       )}
       {width > 0 && pages.map((i) => (
-        <div key={i} ref={observe} data-page={i} className="relative bg-white shadow-md" style={{ width, height: h }}>
+        <div key={i} ref={observe} data-page={i} className="relative bg-paper shadow-md" style={{ width, height: h }}>
           {drawn[i]
             ? <img src={drawn[i]!.src} alt={`${label} page ${i + 1}`} className="block size-full select-none" draggable={false} />
-            : <Skeleton className="size-full rounded-none bg-white" />}
+            : <Skeleton className="size-full rounded-none bg-paper" />}
           {overlay?.(i)}
         </div>
       ))}

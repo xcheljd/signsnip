@@ -28,6 +28,7 @@
     --color-warning: var(--warning);
     --color-warning-surface: var(--warning-surface);
     --color-guide: var(--guide);
+    --color-paper: var(--paper);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -98,6 +99,8 @@
     --warning: var(--nord12-deep);
     --warning-surface: var(--nord12); /* tints + borders of warning boxes: the real Aurora orange (text/icons use the deep shade) */
     --guide: var(--nord15);
+    /* the printed sign is always black on white paper: previews of a sign or a logo sit on this, in both themes (.dark doesn't change it) */
+    --paper: #ffffff;
     --chart-1: var(--nord10);
     --chart-2: var(--nord8);
     --chart-3: var(--nord14);
